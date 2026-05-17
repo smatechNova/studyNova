@@ -19,6 +19,9 @@ import type { PlanSession, StudyPlanRequest, StudyPlanResponse } from "@/types";
 import { colors, spacing } from "@/theme";
 
 const RESOURCE_OPTIONS = ["Textbook", "Class notes", "Notebook", "Online notes", "Past questions"];
+const STEPS = ["Profile", "Exam", "Pace", "Subjects", "Review"] as const;
+
+type StepName = (typeof STEPS)[number];
 
 type TopicForm = {
   id: string;
@@ -53,11 +56,12 @@ type PlanForm = {
 export default function StudentScreen() {
   const [form, setForm] = useState<PlanForm>(() => createDefaultForm());
   const [plan, setPlan] = useState<StudyPlanResponse | null>(null);
+  const [stepIndex, setStepIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    void submitPlan(form);
+    void submitPlan(form, { stayOnStep: true });
     // Generate one starter plan from the default values when the screen opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -66,8 +70,14 @@ export default function StudentScreen() {
   const completion = todayPlan
     ? Math.min(100, Math.round((todayPlan.total_minutes / plan.metadata.available_daily_minutes) * 100))
     : 0;
+  const currentStep = STEPS[stepIndex];
+  const topicCount = form.subjects.reduce((total, subject) => total + subject.topics.length, 0);
+  const pageCount = form.subjects.reduce(
+    (total, subject) => total + subject.topics.reduce((sum, topic) => sum + toNumber(topic.pages), 0),
+    0
+  );
 
-  async function submitPlan(nextForm = form) {
+  async function submitPlan(nextForm = form, options?: { stayOnStep?: boolean }) {
     const request = buildRequest(nextForm);
     if (!request) {
       return;
@@ -79,6 +89,9 @@ export default function StudentScreen() {
     try {
       const response = await generateStudyPlan(request);
       setPlan(response);
+      if (!options?.stayOnStep) {
+        setStepIndex(STEPS.length - 1);
+      }
     } catch {
       setError("Could not generate the plan. Check the API connection and exam dates.");
     } finally {
@@ -154,6 +167,16 @@ export default function StudentScreen() {
       study_strength_note: nextForm.studyStrengthNote.trim(),
       subjects
     };
+  }
+
+  function goNext() {
+    setError("");
+    setStepIndex((current) => Math.min(current + 1, STEPS.length - 1));
+  }
+
+  function goBack() {
+    setError("");
+    setStepIndex((current) => Math.max(current - 1, 0));
   }
 
   function updateField(field: keyof Omit<PlanForm, "subjects">, value: string) {
@@ -236,7 +259,7 @@ export default function StudentScreen() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <View>
-            <Text style={styles.kicker}>Today</Text>
+            <Text style={styles.kicker}>Guided setup</Text>
             <Text style={styles.title}>Student plan</Text>
           </View>
           <Pressable style={styles.iconButton} accessibilityRole="button">
@@ -244,177 +267,239 @@ export default function StudentScreen() {
           </Pressable>
         </View>
 
-        <View style={styles.panel}>
-          <View style={styles.panelHeader}>
-            <Text style={styles.sectionTitle}>Student profile</Text>
-            <Pressable
-              accessibilityRole="button"
-              disabled={isLoading}
-              onPress={() => void submitPlan()}
-              style={[styles.primaryButton, isLoading ? styles.disabledButton : null]}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <>
-                  <MaterialCommunityIcons name="calendar-refresh-outline" size={18} color="#FFFFFF" />
-                  <Text style={styles.primaryButtonText}>Generate</Text>
-                </>
-              )}
-            </Pressable>
-          </View>
-
-          <View style={styles.formStack}>
-            <FormField
-              label="Student name"
-              value={form.studentName}
-              onChangeText={(value) => updateField("studentName", value)}
-            />
-            <FormField
-              label="Class"
-              value={form.classLevel}
-              onChangeText={(value) => updateField("classLevel", value)}
-            />
-            <FormField
-              keyboardType="number-pad"
-              label="Age"
-              value={form.age}
-              onChangeText={(value) => updateField("age", value)}
-            />
-            <FormField
-              label="Parent or guardian"
-              value={form.parentName}
-              onChangeText={(value) => updateField("parentName", value)}
-            />
-            <FormField
-              keyboardType="phone-pad"
-              label="Parent contact"
-              value={form.parentContact}
-              onChangeText={(value) => updateField("parentContact", value)}
-            />
-          </View>
-        </View>
+        <WizardProgress currentStep={stepIndex} />
 
         <View style={styles.panel}>
-          <Text style={styles.sectionTitle}>Study plan data</Text>
-          <View style={styles.formStack}>
-            <FormField
-              label="Exam start date"
-              value={form.examStartDate}
-              onChangeText={(value) => updateField("examStartDate", value)}
-              placeholder="YYYY-MM-DD"
-            />
-            <FormField
-              label="Exam end date"
-              value={form.examEndDate}
-              onChangeText={(value) => updateField("examEndDate", value)}
-              placeholder="YYYY-MM-DD"
-            />
-            <FormField
-              keyboardType="number-pad"
-              label="Daily study minutes"
-              value={form.availableDailyMinutes}
-              onChangeText={(value) => updateField("availableDailyMinutes", value)}
-            />
-            <FormField
-              keyboardType="number-pad"
-              label="Minutes to read one page"
-              value={form.minutesPerPage}
-              onChangeText={(value) => updateField("minutesPerPage", value)}
-            />
-            <FormField
-              keyboardType="number-pad"
-              label="Study session minutes"
-              value={form.sessionMinutes}
-              onChangeText={(value) => updateField("sessionMinutes", value)}
-            />
-            <FormField
-              keyboardType="number-pad"
-              label="Break minutes"
-              value={form.breakMinutes}
-              onChangeText={(value) => updateField("breakMinutes", value)}
-            />
-            <FormField
-              label="Study strength note"
-              multiline
-              value={form.studyStrengthNote}
-              onChangeText={(value) => updateField("studyStrengthNote", value)}
-            />
-          </View>
-        </View>
-
-        <View style={styles.subjectList}>
-          <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>Subjects and topics</Text>
-            <Pressable accessibilityRole="button" onPress={addSubject} style={styles.secondaryButton}>
-              <MaterialCommunityIcons name="plus" size={18} color={colors.brand} />
-              <Text style={styles.secondaryButtonText}>Subject</Text>
-            </Pressable>
+          <View style={styles.stepHeader}>
+            <View style={styles.stepBadge}>
+              <Text style={styles.stepBadgeText}>
+                {stepIndex + 1}/{STEPS.length}
+              </Text>
+            </View>
+            <View style={styles.stepCopy}>
+              <Text style={styles.sectionTitle}>{currentStep}</Text>
+              <Text style={styles.helper}>{stepSubtitle(currentStep)}</Text>
+            </View>
           </View>
 
-          {form.subjects.map((subject, subjectIndex) => (
-            <View key={subject.id} style={styles.subjectCard}>
-              <View style={styles.subjectHeader}>
-                <View style={styles.subjectNameField}>
-                  <FormField
-                    label={`Subject ${subjectIndex + 1}`}
-                    value={subject.name}
-                    onChangeText={(value) => updateSubject(subject.id, value)}
-                  />
-                </View>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => removeSubject(subject.id)}
-                  style={styles.removeButton}
-                >
-                  <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.warning} />
+          {currentStep === "Profile" ? (
+            <View style={styles.formStack}>
+              <FormField
+                label="Student name"
+                value={form.studentName}
+                onChangeText={(value) => updateField("studentName", value)}
+              />
+              <FormField
+                label="Class"
+                value={form.classLevel}
+                onChangeText={(value) => updateField("classLevel", value)}
+              />
+              <FormField
+                keyboardType="number-pad"
+                label="Age"
+                value={form.age}
+                onChangeText={(value) => updateField("age", value)}
+              />
+              <FormField
+                label="Parent or guardian"
+                value={form.parentName}
+                onChangeText={(value) => updateField("parentName", value)}
+              />
+              <FormField
+                keyboardType="phone-pad"
+                label="Parent contact"
+                value={form.parentContact}
+                onChangeText={(value) => updateField("parentContact", value)}
+              />
+            </View>
+          ) : null}
+
+          {currentStep === "Exam" ? (
+            <View style={styles.formStack}>
+              <FormField
+                label="Exam start date"
+                value={form.examStartDate}
+                onChangeText={(value) => updateField("examStartDate", value)}
+                placeholder="YYYY-MM-DD"
+              />
+              <FormField
+                label="Exam end date"
+                value={form.examEndDate}
+                onChangeText={(value) => updateField("examEndDate", value)}
+                placeholder="YYYY-MM-DD"
+              />
+              <FormField
+                keyboardType="number-pad"
+                label="Daily study minutes"
+                value={form.availableDailyMinutes}
+                onChangeText={(value) => updateField("availableDailyMinutes", value)}
+              />
+            </View>
+          ) : null}
+
+          {currentStep === "Pace" ? (
+            <View style={styles.formStack}>
+              <FormField
+                keyboardType="number-pad"
+                label="Minutes to read one page"
+                value={form.minutesPerPage}
+                onChangeText={(value) => updateField("minutesPerPage", value)}
+              />
+              <FormField
+                keyboardType="number-pad"
+                label="Study session minutes"
+                value={form.sessionMinutes}
+                onChangeText={(value) => updateField("sessionMinutes", value)}
+              />
+              <FormField
+                keyboardType="number-pad"
+                label="Break minutes"
+                value={form.breakMinutes}
+                onChangeText={(value) => updateField("breakMinutes", value)}
+              />
+              <FormField
+                label="Study strength note"
+                multiline
+                value={form.studyStrengthNote}
+                onChangeText={(value) => updateField("studyStrengthNote", value)}
+              />
+            </View>
+          ) : null}
+
+          {currentStep === "Subjects" ? (
+            <View style={styles.subjectList}>
+              <View style={styles.sectionRow}>
+                <Text style={styles.helper}>
+                  {form.subjects.length} subjects, {topicCount} topics, {pageCount} pages
+                </Text>
+                <Pressable accessibilityRole="button" onPress={addSubject} style={styles.secondaryButton}>
+                  <MaterialCommunityIcons name="plus" size={18} color={colors.brand} />
+                  <Text style={styles.secondaryButtonText}>Subject</Text>
                 </Pressable>
               </View>
 
-              {subject.topics.map((topic, topicIndex) => (
-                <View key={topic.id} style={styles.topicCard}>
-                  <View style={styles.topicHeader}>
-                    <Text style={styles.topicTitle}>Topic {topicIndex + 1}</Text>
+              {form.subjects.map((subject, subjectIndex) => (
+                <View key={subject.id} style={styles.subjectCard}>
+                  <View style={styles.subjectHeader}>
+                    <View style={styles.subjectNameField}>
+                      <FormField
+                        label={`Subject ${subjectIndex + 1}`}
+                        value={subject.name}
+                        onChangeText={(value) => updateSubject(subject.id, value)}
+                      />
+                    </View>
                     <Pressable
                       accessibilityRole="button"
-                      onPress={() => removeTopic(subject.id, topic.id)}
-                      style={styles.smallIconButton}
+                      onPress={() => removeSubject(subject.id)}
+                      style={styles.removeButton}
                     >
-                      <MaterialCommunityIcons name="minus-circle-outline" size={20} color={colors.muted} />
+                      <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.warning} />
                     </Pressable>
                   </View>
-                  <FormField
-                    label="Topic name"
-                    value={topic.name}
-                    onChangeText={(value) => updateTopic(subject.id, topic.id, "name", value)}
-                  />
-                  <FormField
-                    keyboardType="number-pad"
-                    label="Pages in this topic"
-                    value={topic.pages}
-                    onChangeText={(value) => updateTopic(subject.id, topic.id, "pages", value)}
-                  />
-                  <ResourcePicker
-                    selected={topic.resourceType}
-                    onSelect={(value) => updateTopic(subject.id, topic.id, "resourceType", value)}
-                  />
+
+                  {subject.topics.map((topic, topicIndex) => (
+                    <View key={topic.id} style={styles.topicCard}>
+                      <View style={styles.topicHeader}>
+                        <Text style={styles.topicTitle}>Topic {topicIndex + 1}</Text>
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={() => removeTopic(subject.id, topic.id)}
+                          style={styles.smallIconButton}
+                        >
+                          <MaterialCommunityIcons name="minus-circle-outline" size={20} color={colors.muted} />
+                        </Pressable>
+                      </View>
+                      <FormField
+                        label="Topic name"
+                        value={topic.name}
+                        onChangeText={(value) => updateTopic(subject.id, topic.id, "name", value)}
+                      />
+                      <FormField
+                        keyboardType="number-pad"
+                        label="Pages in this topic"
+                        value={topic.pages}
+                        onChangeText={(value) => updateTopic(subject.id, topic.id, "pages", value)}
+                      />
+                      <ResourcePicker
+                        selected={topic.resourceType}
+                        onSelect={(value) => updateTopic(subject.id, topic.id, "resourceType", value)}
+                      />
+                    </View>
+                  ))}
+
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => addTopic(subject.id)}
+                    style={styles.addTopicButton}
+                  >
+                    <MaterialCommunityIcons name="plus-circle-outline" size={18} color={colors.brand} />
+                    <Text style={styles.secondaryButtonText}>Add topic</Text>
+                  </Pressable>
                 </View>
               ))}
-
-              <Pressable accessibilityRole="button" onPress={() => addTopic(subject.id)} style={styles.addTopicButton}>
-                <MaterialCommunityIcons name="plus-circle-outline" size={18} color={colors.brand} />
-                <Text style={styles.secondaryButtonText}>Add topic</Text>
-              </Pressable>
             </View>
-          ))}
-        </View>
+          ) : null}
 
-        {error ? (
-          <View style={styles.warningPanel}>
-            <MaterialCommunityIcons name="alert-circle-outline" size={22} color={colors.warning} />
-            <Text style={styles.warningText}>{error}</Text>
+          {currentStep === "Review" ? (
+            <View style={styles.reviewGrid}>
+              <ReviewItem label="Student" value={`${form.studentName} - ${form.classLevel}`} />
+              <ReviewItem label="Exam window" value={`${form.examStartDate} to ${form.examEndDate}`} />
+              <ReviewItem label="Daily study time" value={`${form.availableDailyMinutes} minutes`} />
+              <ReviewItem label="Reading pace" value={`${form.minutesPerPage} minutes per page`} />
+              <ReviewItem label="Subjects" value={`${form.subjects.length}`} />
+              <ReviewItem label="Topics" value={`${topicCount}`} />
+              <ReviewItem label="Total pages" value={`${pageCount}`} />
+              {plan ? (
+                <>
+                  <ReviewItem label="Countdown" value={`${plan.metadata.days_until_exam} days`} />
+                  <ReviewItem label="Required daily" value={`${plan.metadata.required_daily_minutes} minutes`} />
+                </>
+              ) : null}
+            </View>
+          ) : null}
+
+          {error ? (
+            <View style={styles.warningPanel}>
+              <MaterialCommunityIcons name="alert-circle-outline" size={22} color={colors.warning} />
+              <Text style={styles.warningText}>{error}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.wizardActions}>
+            <Pressable
+              accessibilityRole="button"
+              disabled={stepIndex === 0}
+              onPress={goBack}
+              style={[styles.secondaryButton, stepIndex === 0 ? styles.disabledButton : null]}
+            >
+              <MaterialCommunityIcons name="chevron-left" size={18} color={colors.brand} />
+              <Text style={styles.secondaryButtonText}>Back</Text>
+            </Pressable>
+
+            {currentStep === "Review" ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={isLoading}
+                onPress={() => void submitPlan()}
+                style={[styles.primaryButton, isLoading ? styles.disabledButton : null]}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <>
+                    <MaterialCommunityIcons name="calendar-refresh-outline" size={18} color="#FFFFFF" />
+                    <Text style={styles.primaryButtonText}>Generate</Text>
+                  </>
+                )}
+              </Pressable>
+            ) : (
+              <Pressable accessibilityRole="button" onPress={goNext} style={styles.primaryButton}>
+                <Text style={styles.primaryButtonText}>Next</Text>
+                <MaterialCommunityIcons name="chevron-right" size={18} color="#FFFFFF" />
+              </Pressable>
+            )}
           </View>
-        ) : null}
+        </View>
 
         {plan ? (
           <>
@@ -527,6 +612,60 @@ function ResourcePicker({ selected, onSelect }: ResourcePickerProps) {
       </View>
     </View>
   );
+}
+
+type ReviewItemProps = {
+  label: string;
+  value: string;
+};
+
+function ReviewItem({ label, value }: ReviewItemProps) {
+  return (
+    <View style={styles.reviewItem}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <Text style={styles.reviewValue}>{value}</Text>
+    </View>
+  );
+}
+
+type WizardProgressProps = {
+  currentStep: number;
+};
+
+function WizardProgress({ currentStep }: WizardProgressProps) {
+  return (
+    <View style={styles.progressPanel}>
+      {STEPS.map((step, index) => {
+        const isActive = index === currentStep;
+        const isDone = index < currentStep;
+        return (
+          <View key={step} style={styles.progressStep}>
+            <View style={[styles.progressDot, isActive || isDone ? styles.progressDotActive : null]}>
+              {isDone ? <MaterialCommunityIcons name="check" size={13} color="#FFFFFF" /> : null}
+            </View>
+            <Text style={[styles.progressText, isActive ? styles.progressTextActive : null]} numberOfLines={1}>
+              {step}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function stepSubtitle(step: StepName) {
+  switch (step) {
+    case "Profile":
+      return "These details will later become the student's login profile.";
+    case "Exam":
+      return "Set the exam window and the daily time the student can commit.";
+    case "Pace":
+      return "Capture how fast the student reads and what helps them study well.";
+    case "Subjects":
+      return "Add subjects, topics, page counts, and the resources being used.";
+    case "Review":
+      return "Check the summary, then generate the plan.";
+  }
 }
 
 function createDefaultForm(): PlanForm {
@@ -651,7 +790,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl
   },
   disabledButton: {
-    opacity: 0.7
+    opacity: 0.55
   },
   field: {
     gap: spacing.xs,
@@ -739,6 +878,40 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800"
   },
+  progressDot: {
+    alignItems: "center",
+    backgroundColor: colors.border,
+    borderRadius: 999,
+    height: 22,
+    justifyContent: "center",
+    width: 22
+  },
+  progressDotActive: {
+    backgroundColor: colors.brand
+  },
+  progressPanel: {
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  progressStep: {
+    alignItems: "center",
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 0
+  },
+  progressText: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: "700"
+  },
+  progressTextActive: {
+    color: colors.brand
+  },
   removeButton: {
     alignItems: "center",
     backgroundColor: colors.surface,
@@ -777,6 +950,22 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm
+  },
+  reviewGrid: {
+    gap: spacing.sm
+  },
+  reviewItem: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: spacing.xs,
+    padding: spacing.md
+  },
+  reviewValue: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: "800"
   },
   secondaryButton: {
     alignItems: "center",
@@ -859,6 +1048,28 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: spacing.sm
   },
+  stepBadge: {
+    alignItems: "center",
+    backgroundColor: colors.brandSoft,
+    borderRadius: 8,
+    height: 48,
+    justifyContent: "center",
+    width: 54
+  },
+  stepBadgeText: {
+    color: colors.brand,
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  stepCopy: {
+    flex: 1,
+    gap: spacing.xs
+  },
+  stepHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.md
+  },
   subjectCard: {
     backgroundColor: colors.panel,
     borderColor: colors.border,
@@ -919,5 +1130,9 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     lineHeight: 20
+  },
+  wizardActions: {
+    flexDirection: "row",
+    justifyContent: "space-between"
   }
 });
