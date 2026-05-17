@@ -7,7 +7,8 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View
+  View,
+  type TextInputProps
 } from "react-native";
 
 import { ProgressBar } from "@/components/ProgressBar";
@@ -17,11 +18,14 @@ import { generateStudyPlan } from "@/lib/api";
 import type { PlanSession, StudyPlanRequest, StudyPlanResponse } from "@/types";
 import { colors, spacing } from "@/theme";
 
+const RESOURCE_OPTIONS = ["Textbook", "Class notes", "Notebook", "Online notes", "Past questions"];
+
 type TopicForm = {
   id: string;
   name: string;
   pages: string;
   priority: string;
+  resourceType: string;
 };
 
 type SubjectForm = {
@@ -32,11 +36,17 @@ type SubjectForm = {
 
 type PlanForm = {
   studentName: string;
-  examDate: string;
+  classLevel: string;
+  age: string;
+  parentName: string;
+  parentContact: string;
+  examStartDate: string;
+  examEndDate: string;
   availableDailyMinutes: string;
   minutesPerPage: string;
   sessionMinutes: string;
   breakMinutes: string;
+  studyStrengthNote: string;
   subjects: SubjectForm[];
 };
 
@@ -48,7 +58,7 @@ export default function StudentScreen() {
 
   useEffect(() => {
     void submitPlan(form);
-    // The initial demo values should generate a plan once when the screen opens.
+    // Generate one starter plan from the default values when the screen opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -70,13 +80,14 @@ export default function StudentScreen() {
       const response = await generateStudyPlan(request);
       setPlan(response);
     } catch {
-      setError("Could not generate the plan. Check that the API is running and the exam date is valid.");
+      setError("Could not generate the plan. Check the API connection and exam dates.");
     } finally {
       setIsLoading(false);
     }
   }
 
   function buildRequest(nextForm: PlanForm): StudyPlanRequest | null {
+    const age = toNumber(nextForm.age);
     const subjects = nextForm.subjects
       .map((subject) => ({
         name: subject.name.trim(),
@@ -84,7 +95,8 @@ export default function StudentScreen() {
           .map((topic) => ({
             name: topic.name.trim(),
             pages: toNumber(topic.pages),
-            priority: toNumber(topic.priority)
+            priority: clamp(toNumber(topic.priority), 1, 5),
+            resource_type: topic.resourceType
           }))
           .filter((topic) => topic.name && topic.pages > 0)
       }))
@@ -95,8 +107,28 @@ export default function StudentScreen() {
       return null;
     }
 
-    if (!isFutureDate(nextForm.examDate)) {
-      setError("Enter a future exam date in YYYY-MM-DD format.");
+    if (!nextForm.classLevel.trim()) {
+      setError("Enter the student's class.");
+      return null;
+    }
+
+    if (age <= 0) {
+      setError("Enter the student's age.");
+      return null;
+    }
+
+    if (!nextForm.parentName.trim() || !nextForm.parentContact.trim()) {
+      setError("Enter parent or guardian details.");
+      return null;
+    }
+
+    if (!isFutureDate(nextForm.examStartDate)) {
+      setError("Enter a future exam start date in YYYY-MM-DD format.");
+      return null;
+    }
+
+    if (!isValidDate(nextForm.examEndDate) || !isDateOnOrAfter(nextForm.examEndDate, nextForm.examStartDate)) {
+      setError("Enter an exam end date that is on or after the start date.");
       return null;
     }
 
@@ -106,12 +138,20 @@ export default function StudentScreen() {
     }
 
     return {
-      student_name: nextForm.studentName.trim(),
-      exam_date: nextForm.examDate,
+      student_profile: {
+        name: nextForm.studentName.trim(),
+        class_level: nextForm.classLevel.trim(),
+        age,
+        parent_name: nextForm.parentName.trim(),
+        parent_contact: nextForm.parentContact.trim()
+      },
+      exam_start_date: nextForm.examStartDate,
+      exam_end_date: nextForm.examEndDate,
       available_daily_minutes: clamp(toNumber(nextForm.availableDailyMinutes), 30, 720),
       minutes_per_page: clamp(toNumber(nextForm.minutesPerPage), 1, 30),
       session_minutes: clamp(toNumber(nextForm.sessionMinutes), 20, 90),
       break_minutes: clamp(toNumber(nextForm.breakMinutes), 5, 30),
+      study_strength_note: nextForm.studyStrengthNote.trim(),
       subjects
     };
   }
@@ -132,7 +172,7 @@ export default function StudentScreen() {
   function addSubject() {
     setForm((current) => ({
       ...current,
-      subjects: [...current.subjects, createSubject("New subject", [createTopic("New topic", "10", "3")])]
+      subjects: [...current.subjects, createSubject("New subject", [createTopic("New topic", "10", "Textbook")])]
     }));
   }
 
@@ -169,7 +209,7 @@ export default function StudentScreen() {
       ...current,
       subjects: current.subjects.map((subject) =>
         subject.id === subjectId
-          ? { ...subject, topics: [...subject.topics, createTopic("New topic", "10", "3")] }
+          ? { ...subject, topics: [...subject.topics, createTopic("New topic", "10", "Textbook")] }
           : subject
       )
     }));
@@ -206,7 +246,7 @@ export default function StudentScreen() {
 
         <View style={styles.panel}>
           <View style={styles.panelHeader}>
-            <Text style={styles.sectionTitle}>Plan setup</Text>
+            <Text style={styles.sectionTitle}>Student profile</Text>
             <Pressable
               accessibilityRole="button"
               disabled={isLoading}
@@ -224,33 +264,67 @@ export default function StudentScreen() {
             </Pressable>
           </View>
 
-          <View style={styles.formGrid}>
+          <View style={styles.formStack}>
             <FormField
               label="Student name"
               value={form.studentName}
               onChangeText={(value) => updateField("studentName", value)}
             />
             <FormField
-              label="Exam date"
-              value={form.examDate}
-              onChangeText={(value) => updateField("examDate", value)}
+              label="Class"
+              value={form.classLevel}
+              onChangeText={(value) => updateField("classLevel", value)}
+            />
+            <FormField
+              keyboardType="number-pad"
+              label="Age"
+              value={form.age}
+              onChangeText={(value) => updateField("age", value)}
+            />
+            <FormField
+              label="Parent or guardian"
+              value={form.parentName}
+              onChangeText={(value) => updateField("parentName", value)}
+            />
+            <FormField
+              keyboardType="phone-pad"
+              label="Parent contact"
+              value={form.parentContact}
+              onChangeText={(value) => updateField("parentContact", value)}
+            />
+          </View>
+        </View>
+
+        <View style={styles.panel}>
+          <Text style={styles.sectionTitle}>Study plan data</Text>
+          <View style={styles.formStack}>
+            <FormField
+              label="Exam start date"
+              value={form.examStartDate}
+              onChangeText={(value) => updateField("examStartDate", value)}
+              placeholder="YYYY-MM-DD"
+            />
+            <FormField
+              label="Exam end date"
+              value={form.examEndDate}
+              onChangeText={(value) => updateField("examEndDate", value)}
               placeholder="YYYY-MM-DD"
             />
             <FormField
               keyboardType="number-pad"
-              label="Daily minutes"
+              label="Daily study minutes"
               value={form.availableDailyMinutes}
               onChangeText={(value) => updateField("availableDailyMinutes", value)}
             />
             <FormField
               keyboardType="number-pad"
-              label="Minutes per page"
+              label="Minutes to read one page"
               value={form.minutesPerPage}
               onChangeText={(value) => updateField("minutesPerPage", value)}
             />
             <FormField
               keyboardType="number-pad"
-              label="Session minutes"
+              label="Study session minutes"
               value={form.sessionMinutes}
               onChangeText={(value) => updateField("sessionMinutes", value)}
             />
@@ -259,6 +333,12 @@ export default function StudentScreen() {
               label="Break minutes"
               value={form.breakMinutes}
               onChangeText={(value) => updateField("breakMinutes", value)}
+            />
+            <FormField
+              label="Study strength note"
+              multiline
+              value={form.studyStrengthNote}
+              onChangeText={(value) => updateField("studyStrengthNote", value)}
             />
           </View>
         </View>
@@ -275,11 +355,13 @@ export default function StudentScreen() {
           {form.subjects.map((subject, subjectIndex) => (
             <View key={subject.id} style={styles.subjectCard}>
               <View style={styles.subjectHeader}>
-                <FormField
-                  label={`Subject ${subjectIndex + 1}`}
-                  value={subject.name}
-                  onChangeText={(value) => updateSubject(subject.id, value)}
-                />
+                <View style={styles.subjectNameField}>
+                  <FormField
+                    label={`Subject ${subjectIndex + 1}`}
+                    value={subject.name}
+                    onChangeText={(value) => updateSubject(subject.id, value)}
+                  />
+                </View>
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => removeSubject(subject.id)}
@@ -290,37 +372,32 @@ export default function StudentScreen() {
               </View>
 
               {subject.topics.map((topic, topicIndex) => (
-                <View key={topic.id} style={styles.topicRow}>
-                  <View style={styles.topicName}>
-                    <FormField
-                      label={`Topic ${topicIndex + 1}`}
-                      value={topic.name}
-                      onChangeText={(value) => updateTopic(subject.id, topic.id, "name", value)}
-                    />
+                <View key={topic.id} style={styles.topicCard}>
+                  <View style={styles.topicHeader}>
+                    <Text style={styles.topicTitle}>Topic {topicIndex + 1}</Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => removeTopic(subject.id, topic.id)}
+                      style={styles.smallIconButton}
+                    >
+                      <MaterialCommunityIcons name="minus-circle-outline" size={20} color={colors.muted} />
+                    </Pressable>
                   </View>
-                  <View style={styles.smallInput}>
-                    <FormField
-                      keyboardType="number-pad"
-                      label="Pages"
-                      value={topic.pages}
-                      onChangeText={(value) => updateTopic(subject.id, topic.id, "pages", value)}
-                    />
-                  </View>
-                  <View style={styles.smallInput}>
-                    <FormField
-                      keyboardType="number-pad"
-                      label="Priority"
-                      value={topic.priority}
-                      onChangeText={(value) => updateTopic(subject.id, topic.id, "priority", value)}
-                    />
-                  </View>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => removeTopic(subject.id, topic.id)}
-                    style={styles.removeButton}
-                  >
-                    <MaterialCommunityIcons name="minus-circle-outline" size={20} color={colors.muted} />
-                  </Pressable>
+                  <FormField
+                    label="Topic name"
+                    value={topic.name}
+                    onChangeText={(value) => updateTopic(subject.id, topic.id, "name", value)}
+                  />
+                  <FormField
+                    keyboardType="number-pad"
+                    label="Pages in this topic"
+                    value={topic.pages}
+                    onChangeText={(value) => updateTopic(subject.id, topic.id, "pages", value)}
+                  />
+                  <ResourcePicker
+                    selected={topic.resourceType}
+                    onSelect={(value) => updateTopic(subject.id, topic.id, "resourceType", value)}
+                  />
                 </View>
               ))}
 
@@ -373,7 +450,7 @@ export default function StudentScreen() {
                   <View style={styles.sessionCopy}>
                     <Text style={styles.sessionTitle}>{sessionTitle(session, index, sessions)}</Text>
                     <Text style={styles.sessionMeta}>
-                      {session.subject} - {session.minutes} minutes
+                      {session.subject} - {session.resource_type} - {session.minutes} minutes
                     </Text>
                   </View>
                   <Text style={styles.sessionKind}>{session.kind}</Text>
@@ -391,23 +468,63 @@ type FormFieldProps = {
   label: string;
   value: string;
   onChangeText: (value: string) => void;
-  keyboardType?: "default" | "number-pad";
+  keyboardType?: TextInputProps["keyboardType"];
   placeholder?: string;
+  multiline?: boolean;
 };
 
-function FormField({ label, value, onChangeText, keyboardType = "default", placeholder }: FormFieldProps) {
+function FormField({
+  label,
+  value,
+  onChangeText,
+  keyboardType = "default",
+  placeholder,
+  multiline = false
+}: FormFieldProps) {
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
-        autoCapitalize="words"
+        autoCapitalize={keyboardType === "default" ? "words" : "none"}
         keyboardType={keyboardType}
+        multiline={multiline}
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={colors.muted}
-        style={styles.input}
+        style={[styles.input, multiline ? styles.textArea : null]}
+        textAlignVertical={multiline ? "top" : "center"}
         value={value}
       />
+    </View>
+  );
+}
+
+type ResourcePickerProps = {
+  selected: string;
+  onSelect: (value: string) => void;
+};
+
+function ResourcePicker({ selected, onSelect }: ResourcePickerProps) {
+  return (
+    <View style={styles.resourceBlock}>
+      <Text style={styles.fieldLabel}>Study resource</Text>
+      <View style={styles.resourceGrid}>
+        {RESOURCE_OPTIONS.map((resource) => {
+          const isSelected = resource === selected;
+          return (
+            <Pressable
+              accessibilityRole="button"
+              key={resource}
+              onPress={() => onSelect(resource)}
+              style={[styles.resourceChip, isSelected ? styles.resourceChipActive : null]}
+            >
+              <Text style={[styles.resourceChipText, isSelected ? styles.resourceChipTextActive : null]}>
+                {resource}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -415,23 +532,29 @@ function FormField({ label, value, onChangeText, keyboardType = "default", place
 function createDefaultForm(): PlanForm {
   return {
     studentName: "Alliyah",
-    examDate: futureDate(30),
+    classLevel: "SS2",
+    age: "15",
+    parentName: "Mrs Adewale",
+    parentContact: "08000000000",
+    examStartDate: futureDate(30),
+    examEndDate: futureDate(35),
     availableDailyMinutes: "180",
     minutesPerPage: "5",
     sessionMinutes: "45",
     breakMinutes: "10",
+    studyStrengthNote: "I read faster in the morning and understand better after writing short notes.",
     subjects: [
       createSubject("Mathematics", [
-        createTopic("Algebra", "25", "5"),
-        createTopic("Geometry", "18", "4")
+        createTopic("Algebra", "25", "Textbook"),
+        createTopic("Geometry", "18", "Class notes")
       ]),
       createSubject("English", [
-        createTopic("Comprehension", "15", "3"),
-        createTopic("Essay Writing", "10", "4")
+        createTopic("Comprehension", "15", "Class notes"),
+        createTopic("Essay Writing", "10", "Notebook")
       ]),
       createSubject("Biology", [
-        createTopic("Cell Structure", "20", "4"),
-        createTopic("Nutrition", "12", "3")
+        createTopic("Cell Structure", "20", "Textbook"),
+        createTopic("Nutrition", "12", "Online notes")
       ])
     ]
   };
@@ -445,12 +568,13 @@ function createSubject(name: string, topics: TopicForm[]): SubjectForm {
   };
 }
 
-function createTopic(name: string, pages: string, priority: string): TopicForm {
+function createTopic(name: string, pages: string, resourceType: string): TopicForm {
   return {
     id: createId("topic"),
     name,
     pages,
-    priority
+    priority: "3",
+    resourceType
   };
 }
 
@@ -473,15 +597,27 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
+function isValidDate(value: string) {
+  return !Number.isNaN(new Date(`${value}T00:00:00`).getTime());
+}
+
 function isFutureDate(value: string) {
-  const parsed = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) {
+  if (!isValidDate(value)) {
     return false;
   }
 
+  const parsed = new Date(`${value}T00:00:00`);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return parsed > today;
+}
+
+function isDateOnOrAfter(value: string, comparison: string) {
+  if (!isValidDate(value) || !isValidDate(comparison)) {
+    return false;
+  }
+
+  return new Date(`${value}T00:00:00`) >= new Date(`${comparison}T00:00:00`);
 }
 
 function sessionTitle(session: PlanSession, index: number, sessions: PlanSession[]) {
@@ -507,7 +643,7 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     flexDirection: "row",
     gap: spacing.xs,
-    minHeight: 40,
+    minHeight: 44,
     paddingHorizontal: spacing.sm
   },
   content: {
@@ -518,9 +654,8 @@ const styles = StyleSheet.create({
     opacity: 0.7
   },
   field: {
-    flex: 1,
     gap: spacing.xs,
-    minWidth: 132
+    width: "100%"
   },
   fieldLabel: {
     color: colors.muted,
@@ -528,14 +663,13 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textTransform: "uppercase"
   },
-  formGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+  formStack: {
     gap: spacing.md
   },
   header: {
     alignItems: "center",
     flexDirection: "row",
+    gap: spacing.md,
     justifyContent: "space-between"
   },
   helper: {
@@ -562,7 +696,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     minHeight: 48,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm
+    paddingVertical: spacing.sm,
+    width: "100%"
   },
   kicker: {
     color: colors.muted,
@@ -586,6 +721,7 @@ const styles = StyleSheet.create({
   panelHeader: {
     alignItems: "center",
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.md,
     justifyContent: "space-between"
   },
@@ -611,8 +747,36 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     height: 44,
     justifyContent: "center",
-    marginTop: 22,
     width: 44
+  },
+  resourceBlock: {
+    gap: spacing.xs
+  },
+  resourceChip: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    minHeight: 40,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  resourceChipActive: {
+    backgroundColor: colors.brandSoft,
+    borderColor: colors.brand
+  },
+  resourceChipText: {
+    color: colors.muted,
+    fontSize: 14,
+    fontWeight: "700"
+  },
+  resourceChipTextActive: {
+    color: colors.brand
+  },
+  resourceGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
   },
   secondaryButton: {
     alignItems: "center",
@@ -631,6 +795,8 @@ const styles = StyleSheet.create({
   sectionRow: {
     alignItems: "center",
     flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
     justifyContent: "space-between"
   },
   sectionTitle: {
@@ -678,9 +844,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700"
   },
-  smallInput: {
-    flexBasis: 90,
-    flexGrow: 1
+  smallIconButton: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 40,
+    justifyContent: "center",
+    width: 40
   },
   statsGrid: {
     flexDirection: "row",
@@ -696,27 +868,41 @@ const styles = StyleSheet.create({
     padding: spacing.md
   },
   subjectHeader: {
-    alignItems: "flex-start",
+    alignItems: "flex-end",
     flexDirection: "row",
     gap: spacing.sm
   },
   subjectList: {
     gap: spacing.md
   },
+  subjectNameField: {
+    flex: 1
+  },
+  textArea: {
+    minHeight: 92
+  },
   title: {
     color: colors.text,
     fontSize: 24,
     fontWeight: "800"
   },
-  topicName: {
-    flexBasis: 180,
-    flexGrow: 2
+  topicCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md
   },
-  topicRow: {
-    alignItems: "flex-start",
+  topicHeader: {
+    alignItems: "center",
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm
+    justifyContent: "space-between"
+  },
+  topicTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: "800"
   },
   warningPanel: {
     alignItems: "center",

@@ -21,8 +21,12 @@ create table if not exists public.students (
   id uuid primary key default gen_random_uuid(),
   profile_id uuid not null unique references public.profiles(id) on delete cascade,
   class_level text,
-  exam_date date,
+  age integer check (age is null or age between 3 and 30),
+  exam_start_date date,
+  exam_end_date date,
   available_daily_minutes integer not null default 180 check (available_daily_minutes between 30 and 720),
+  minutes_per_page integer not null default 5 check (minutes_per_page between 1 and 30),
+  study_strength_note text default '',
   created_at timestamptz not null default now()
 );
 
@@ -56,13 +60,15 @@ create table if not exists public.topics (
   name text not null,
   pages integer not null check (pages > 0),
   priority integer not null default 3 check (priority between 1 and 5),
+  resource_type text not null default 'Textbook',
   created_at timestamptz not null default now()
 );
 
 create table if not exists public.study_plans (
   id uuid primary key default gen_random_uuid(),
   student_id uuid not null references public.students(id) on delete cascade,
-  exam_date date not null,
+  exam_start_date date not null,
+  exam_end_date date,
   metadata jsonb not null,
   created_at timestamptz not null default now()
 );
@@ -165,4 +171,3 @@ create policy "linked parents can read student check-ins"
       and links.status = 'active'
     )
   );
-
