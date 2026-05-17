@@ -23,6 +23,12 @@ npm run mobile
 
 6. Open the Expo QR code with Expo Go on an Android phone.
 
+For Codespaces phone testing, use tunnel mode and disable the desktop React Native debugger:
+
+```bash
+npm run mobile:codespace -- --clear
+```
+
 ## Mobile API URL
 
 When testing on a phone, `localhost` points to the phone, not the Codespace.
@@ -50,4 +56,3 @@ curl -X POST http://localhost:8000/api/v1/study-plans/generate \
   -H "Content-Type: application/json" \
   -d @docs/sample-plan-request.json
 ```
-
