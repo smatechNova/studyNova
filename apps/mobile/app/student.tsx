@@ -624,9 +624,11 @@ function GeneratedPlanView({ plan, onBack, onEdit }: GeneratedPlanViewProps) {
               <View style={styles.panelHeader}>
                 <View>
                   <Text style={styles.sessionTitle}>{formatReadableDate(day.study_date)}</Text>
-                  <Text style={styles.sessionMeta}>{formatHours(day.total_minutes)} planned</Text>
+                  <Text style={styles.sessionMeta}>
+                    {day.sessions.length ? `${formatHours(day.total_minutes)} planned` : "Flexible study window"}
+                  </Text>
                 </View>
-                <Text style={styles.sessionKind}>{day.sessions.length ? `${day.sessions.length} sessions` : "buffer"}</Text>
+                <Text style={styles.sessionKind}>{day.sessions.length ? `${day.sessions.length} sessions` : "flex day"}</Text>
               </View>
 
               {day.sessions.length ? (
@@ -649,7 +651,7 @@ function GeneratedPlanView({ plan, onBack, onEdit }: GeneratedPlanViewProps) {
                   </View>
                 ))
               ) : (
-                <Text style={styles.helper}>No reading session is needed on this day.</Text>
+                <Text style={styles.helper}>A calm catch-up day for light revision, missed pages, or rest.</Text>
               )}
             </View>
           ))}
