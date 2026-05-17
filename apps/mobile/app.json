@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "StudyNova",
+    "slug": "studynova",
+    "scheme": "studynova",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "android": {
+      "package": "com.smatech.studynova",
+      "permissions": ["POST_NOTIFICATIONS"]
+    },
+    "plugins": ["expo-router", "expo-notifications"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
+

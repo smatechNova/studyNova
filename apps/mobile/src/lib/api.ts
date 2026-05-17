@@ -1,0 +1,20 @@
+import type { StudyPlanRequest, StudyPlanResponse } from "@/types";
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
+
+export async function generateStudyPlan(payload: StudyPlanRequest): Promise<StudyPlanResponse> {
+  const response = await fetch(`${API_URL}/api/v1/study-plans/generate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Study plan request failed with ${response.status}`);
+  }
+
+  return response.json() as Promise<StudyPlanResponse>;
+}
+
