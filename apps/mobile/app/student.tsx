@@ -636,7 +636,7 @@ function GeneratedPlanView({ plan, onBack, onEdit }: GeneratedPlanViewProps) {
                   <View key={`${day.study_date}-${session.subject}-${session.topic}-${index}`} style={styles.sessionRow}>
                     <View style={styles.sessionIcon}>
                       <MaterialCommunityIcons
-                        name={session.kind === "revision" ? "repeat-variant" : "book-open-page-variant-outline"}
+                        name={sessionIcon(session.kind)}
                         size={22}
                         color={colors.brand}
                       />
@@ -647,7 +647,7 @@ function GeneratedPlanView({ plan, onBack, onEdit }: GeneratedPlanViewProps) {
                         {session.subject} - {session.resource_type} - {session.minutes} minutes
                       </Text>
                     </View>
-                    <Text style={styles.sessionKind}>{session.kind}</Text>
+                    <Text style={styles.sessionKind}>{sessionKindLabel(session.kind)}</Text>
                   </View>
                 ))
               ) : (
@@ -1049,6 +1049,26 @@ function formatHours(minutes: number) {
   const hours = minutes / 60;
   const formatted = Number.isInteger(hours) ? `${hours}` : hours.toFixed(1);
   return `${formatted}h`;
+}
+
+function sessionIcon(kind: PlanSession["kind"]): keyof typeof MaterialCommunityIcons.glyphMap {
+  if (kind === "revision") {
+    return "repeat-variant";
+  }
+
+  if (kind === "practice") {
+    return "clipboard-text-outline";
+  }
+
+  return "book-open-page-variant-outline";
+}
+
+function sessionKindLabel(kind: PlanSession["kind"]) {
+  if (kind === "practice") {
+    return "practice";
+  }
+
+  return kind;
 }
 
 function sessionTitle(session: PlanSession, index: number, sessions: PlanSession[]) {

@@ -54,3 +54,13 @@ def test_build_study_plan_includes_study_sessions() -> None:
     assert first_day.total_minutes <= 180
     assert any(session.kind == "study" for session in first_day.sessions)
     assert all(session.minutes > 0 for session in first_day.sessions)
+
+
+def test_build_study_plan_fills_flex_days_with_practice() -> None:
+    plan = build_study_plan(_sample_request())
+    sessions = [session for day in plan.schedule for session in day.sessions]
+
+    assert all(day.total_minutes > 0 for day in plan.schedule)
+    assert any(session.kind == "practice" for session in sessions)
+    assert any(session.resource_type == "Past questions" for session in sessions)
+    assert any(session.topic.startswith("Weak-area study:") for session in sessions)

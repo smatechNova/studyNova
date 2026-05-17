@@ -57,7 +57,7 @@ export type SubjectDistribution = {
 };
 
 export type PlanSession = {
-  kind: "study" | "revision";
+  kind: "study" | "revision" | "practice";
   subject: string;
   topic: string;
   resource_type: string;

@@ -27,6 +27,7 @@ class TopicWork:
 
 REVISION_OFFSETS = (1, 3, 7)
 REVISION_SESSION_MINUTES = 20
+PRACTICE_SESSION_MINUTES = 30
 
 
 def build_study_plan(payload: StudyPlanRequest) -> StudyPlanResponse:
@@ -224,6 +225,9 @@ def _build_schedule(
                     if due_date < exam_start_date:
                         revision_due[due_date].append((next_item.subject, next_item.topic))
 
+        if not sessions:
+            sessions = _build_flex_sessions(payload, work_items, offset)
+
         total_minutes = sum(session.minutes for session in sessions)
         schedule.append(
             DailyPlan(
@@ -234,6 +238,55 @@ def _build_schedule(
         )
 
     return schedule
+
+
+def _build_flex_sessions(
+    payload: StudyPlanRequest,
+    work_items: list[TopicWork],
+    offset: int,
+) -> list[PlanSession]:
+    sessions: list[PlanSession] = []
+    minutes_left = payload.available_daily_minutes
+    if not work_items or minutes_left < REVISION_SESSION_MINUTES:
+        return sessions
+
+    first_item = work_items[offset % len(work_items)]
+    first_mode = "revision" if offset % 2 == 0 else "study"
+    second_mode = "practice" if offset % 2 == 0 else "revision"
+    sessions.append(_flex_session(first_item, payload, minutes_left, first_mode))
+    minutes_left -= sessions[-1].minutes
+
+    if minutes_left >= REVISION_SESSION_MINUTES:
+        second_item = work_items[(offset + 1) % len(work_items)]
+        sessions.append(_flex_session(second_item, payload, minutes_left, second_mode))
+
+    return sessions
+
+
+def _flex_session(
+    item: TopicWork,
+    payload: StudyPlanRequest,
+    minutes_left: int,
+    mode: str,
+) -> PlanSession:
+    if mode == "revision":
+        return PlanSession(
+            kind="revision",
+            subject=item.subject,
+            topic=f"Quick revision: {item.topic}",
+            resource_type=item.resource_type,
+            minutes=min(REVISION_SESSION_MINUTES, minutes_left),
+            break_after_minutes=payload.break_minutes,
+        )
+
+    return PlanSession(
+        kind="practice" if mode == "practice" else "study",
+        subject=item.subject,
+        topic=f"Past questions: {item.topic}" if mode == "practice" else f"Weak-area study: {item.topic}",
+        resource_type="Past questions" if mode == "practice" else item.resource_type,
+        minutes=min(PRACTICE_SESSION_MINUTES, minutes_left),
+        break_after_minutes=payload.break_minutes,
+    )
 
 
 def _find_topic(work_items: list[TopicWork], subject: str, topic: str) -> TopicWork | None:

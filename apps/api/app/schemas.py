@@ -63,7 +63,7 @@ class SubjectDistribution(BaseModel):
 
 
 class PlanSession(BaseModel):
-    kind: Literal["study", "revision"]
+    kind: Literal["study", "revision", "practice"]
     subject: str
     topic: str
     resource_type: str = "Textbook"
