@@ -12,17 +12,16 @@
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
     "expo": "~55.0.0",
-    "expo-notifications": "~0.33.0",
-    "expo-router": "~7.0.0",
-    "expo-status-bar": "~3.0.0",
+    "expo-notifications": "~0.32.12",
+    "expo-router": "~55.0.14",
+    "expo-status-bar": "~55.0.4",
     "react": "19.2.0",
     "react-native": "0.83.0",
-    "react-native-safe-area-context": "~5.6.0",
-    "react-native-screens": "~4.17.0"
+    "react-native-safe-area-context": "~5.6.2",
+    "react-native-screens": "~4.23.0"
   },
   "devDependencies": {
     "@types/react": "~19.2.0",
     "typescript": "~5.9.2"
   }
 }
-
