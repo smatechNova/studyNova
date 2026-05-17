@@ -67,8 +67,9 @@ export default function StudentScreen() {
   }, []);
 
   const todayPlan = useMemo(() => plan?.schedule[0], [plan]);
-  const completion = todayPlan
-    ? Math.min(100, Math.round((todayPlan.total_minutes / plan.metadata.available_daily_minutes) * 100))
+  const availableDailyMinutes = plan?.metadata.available_daily_minutes ?? 0;
+  const completion = todayPlan && availableDailyMinutes > 0
+    ? Math.min(100, Math.round((todayPlan.total_minutes / availableDailyMinutes) * 100))
     : 0;
   const currentStep = STEPS[stepIndex];
   const topicCount = form.subjects.reduce((total, subject) => total + subject.topics.length, 0);
