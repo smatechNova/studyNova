@@ -1,5 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -20,8 +20,10 @@ import { colors, spacing } from "@/theme";
 
 const RESOURCE_OPTIONS = ["Textbook", "Class notes", "Notebook", "Online notes", "Past questions"];
 const STEPS = ["Profile", "Exam", "Pace", "Subjects", "Review"] as const;
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 type StepName = (typeof STEPS)[number];
+type DateFieldName = "examStartDate" | "examEndDate";
 
 type TopicForm = {
   id: string;
@@ -57,28 +59,20 @@ export default function StudentScreen() {
   const [form, setForm] = useState<PlanForm>(() => createDefaultForm());
   const [plan, setPlan] = useState<StudyPlanResponse | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
+  const [activeCalendar, setActiveCalendar] = useState<DateFieldName | null>(null);
+  const [isPlanVisible, setIsPlanVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    void submitPlan(form, { stayOnStep: true });
-    // Generate one starter plan from the default values when the screen opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const todayPlan = useMemo(() => plan?.schedule[0], [plan]);
-  const availableDailyMinutes = plan?.metadata.available_daily_minutes ?? 0;
-  const completion = todayPlan && availableDailyMinutes > 0
-    ? Math.min(100, Math.round((todayPlan.total_minutes / availableDailyMinutes) * 100))
-    : 0;
   const currentStep = STEPS[stepIndex];
   const topicCount = form.subjects.reduce((total, subject) => total + subject.topics.length, 0);
   const pageCount = form.subjects.reduce(
     (total, subject) => total + subject.topics.reduce((sum, topic) => sum + toNumber(topic.pages), 0),
     0
   );
+  const estimatedReadingMinutes = pageCount * clamp(toNumber(form.minutesPerPage), 1, 30);
 
-  async function submitPlan(nextForm = form, options?: { stayOnStep?: boolean }) {
+  async function submitPlan(nextForm = form) {
     const request = buildRequest(nextForm);
     if (!request) {
       return;
@@ -90,9 +84,8 @@ export default function StudentScreen() {
     try {
       const response = await generateStudyPlan(request);
       setPlan(response);
-      if (!options?.stayOnStep) {
-        setStepIndex(STEPS.length - 1);
-      }
+      setIsPlanVisible(true);
+      setStepIndex(STEPS.length - 1);
     } catch {
       setError("Could not generate the plan. Check the API connection and exam dates.");
     } finally {
@@ -137,12 +130,12 @@ export default function StudentScreen() {
     }
 
     if (!isFutureDate(nextForm.examStartDate)) {
-      setError("Enter a future exam start date in YYYY-MM-DD format.");
+      setError("Choose a future exam start date.");
       return null;
     }
 
     if (!isValidDate(nextForm.examEndDate) || !isDateOnOrAfter(nextForm.examEndDate, nextForm.examStartDate)) {
-      setError("Enter an exam end date that is on or after the start date.");
+      setError("Choose an exam end date that is on or after the start date.");
       return null;
     }
 
@@ -172,16 +165,29 @@ export default function StudentScreen() {
 
   function goNext() {
     setError("");
+    setActiveCalendar(null);
     setStepIndex((current) => Math.min(current + 1, STEPS.length - 1));
   }
 
   function goBack() {
     setError("");
+    setActiveCalendar(null);
     setStepIndex((current) => Math.max(current - 1, 0));
   }
 
   function updateField(field: keyof Omit<PlanForm, "subjects">, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateDateField(field: DateFieldName, value: string) {
+    setForm((current) => {
+      if (field === "examStartDate" && !isDateOnOrAfter(current.examEndDate, value)) {
+        return { ...current, examStartDate: value, examEndDate: value };
+      }
+
+      return { ...current, [field]: value };
+    });
+    setActiveCalendar(null);
   }
 
   function updateSubject(subjectId: string, name: string) {
@@ -255,6 +261,19 @@ export default function StudentScreen() {
     }));
   }
 
+  if (isPlanVisible && plan) {
+    return (
+      <GeneratedPlanView
+        onBack={() => setIsPlanVisible(false)}
+        onEdit={() => {
+          setIsPlanVisible(false);
+          setStepIndex(STEPS.length - 1);
+        }}
+        plan={plan}
+      />
+    );
+  }
+
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -317,17 +336,25 @@ export default function StudentScreen() {
 
           {currentStep === "Exam" ? (
             <View style={styles.formStack}>
-              <FormField
+              <CalendarField
+                isOpen={activeCalendar === "examStartDate"}
                 label="Exam start date"
+                minDate={futureDate(1)}
+                onSelect={(value) => updateDateField("examStartDate", value)}
+                onToggle={() =>
+                  setActiveCalendar((current) => (current === "examStartDate" ? null : "examStartDate"))
+                }
                 value={form.examStartDate}
-                onChangeText={(value) => updateField("examStartDate", value)}
-                placeholder="YYYY-MM-DD"
               />
-              <FormField
+              <CalendarField
+                isOpen={activeCalendar === "examEndDate"}
                 label="Exam end date"
+                minDate={form.examStartDate}
+                onSelect={(value) => updateDateField("examEndDate", value)}
+                onToggle={() =>
+                  setActiveCalendar((current) => (current === "examEndDate" ? null : "examEndDate"))
+                }
                 value={form.examEndDate}
-                onChangeText={(value) => updateField("examEndDate", value)}
-                placeholder="YYYY-MM-DD"
               />
               <FormField
                 keyboardType="number-pad"
@@ -444,18 +471,13 @@ export default function StudentScreen() {
           {currentStep === "Review" ? (
             <View style={styles.reviewGrid}>
               <ReviewItem label="Student" value={`${form.studentName} - ${form.classLevel}`} />
-              <ReviewItem label="Exam window" value={`${form.examStartDate} to ${form.examEndDate}`} />
+              <ReviewItem label="Exam window" value={`${formatReadableDate(form.examStartDate)} to ${formatReadableDate(form.examEndDate)}`} />
               <ReviewItem label="Daily study time" value={`${form.availableDailyMinutes} minutes`} />
               <ReviewItem label="Reading pace" value={`${form.minutesPerPage} minutes per page`} />
               <ReviewItem label="Subjects" value={`${form.subjects.length}`} />
               <ReviewItem label="Topics" value={`${topicCount}`} />
               <ReviewItem label="Total pages" value={`${pageCount}`} />
-              {plan ? (
-                <>
-                  <ReviewItem label="Countdown" value={`${plan.metadata.days_until_exam} days`} />
-                  <ReviewItem label="Required daily" value={`${plan.metadata.required_daily_minutes} minutes`} />
-                </>
-              ) : null}
+              <ReviewItem label="Estimated reading time" value={formatHours(estimatedReadingMinutes)} />
             </View>
           ) : null}
 
@@ -501,50 +523,137 @@ export default function StudentScreen() {
             )}
           </View>
         </View>
+      </ScrollView>
+    </Screen>
+  );
+}
 
-        {plan ? (
-          <>
-            <View style={styles.statsGrid}>
-              <StatCard
-                label="Required daily"
-                value={`${plan.metadata.required_daily_minutes}m`}
-                icon="clock-outline"
-              />
-              <StatCard label="Status" value={plan.metadata.status.replace("_", " ")} icon="target" />
-              <StatCard label="Exam countdown" value={`${plan.metadata.days_until_exam}d`} icon="calendar-star" />
-            </View>
+type GeneratedPlanViewProps = {
+  plan: StudyPlanResponse;
+  onBack: () => void;
+  onEdit: () => void;
+};
 
-            <View style={styles.panel}>
-              <View style={styles.panelHeader}>
-                <Text style={styles.sectionTitle}>Today&apos;s timetable</Text>
-                <Text style={styles.metric}>{completion}%</Text>
-              </View>
-              <ProgressBar value={completion} />
-              <Text style={styles.helper}>{plan.metadata.recommendation}</Text>
-            </View>
+function GeneratedPlanView({ plan, onBack, onEdit }: GeneratedPlanViewProps) {
+  const todayPlan = plan.schedule[0];
+  const averageDailyMinutes =
+    plan.metadata.average_daily_minutes ??
+    Math.ceil(plan.metadata.total_study_minutes / Math.max(plan.metadata.days_until_exam, 1));
+  const completion = todayPlan
+    ? Math.min(100, Math.round((todayPlan.total_minutes / plan.metadata.available_daily_minutes) * 100))
+    : 0;
 
-            <View style={styles.sessionList}>
-              {todayPlan?.sessions.map((session, index, sessions) => (
-                <View key={`${session.subject}-${session.topic}-${index}`} style={styles.sessionRow}>
-                  <View style={styles.sessionIcon}>
-                    <MaterialCommunityIcons
-                      name={session.kind === "revision" ? "repeat-variant" : "book-open-page-variant-outline"}
-                      size={22}
-                      color={colors.brand}
-                    />
-                  </View>
-                  <View style={styles.sessionCopy}>
-                    <Text style={styles.sessionTitle}>{sessionTitle(session, index, sessions)}</Text>
-                    <Text style={styles.sessionMeta}>
-                      {session.subject} - {session.resource_type} - {session.minutes} minutes
-                    </Text>
-                  </View>
-                  <Text style={styles.sessionKind}>{session.kind}</Text>
+  return (
+    <Screen>
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.header}>
+          <Pressable accessibilityRole="button" onPress={onBack} style={styles.backButton}>
+            <MaterialCommunityIcons name="arrow-left" size={22} color={colors.text} />
+            <Text style={styles.backButtonText}>Setup</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={onEdit} style={styles.secondaryButton}>
+            <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.brand} />
+            <Text style={styles.secondaryButtonText}>Edit</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.generatedHero}>
+          <Text style={styles.kicker}>Generated plan</Text>
+          <Text style={styles.title}>{plan.metadata.student_name}</Text>
+          <Text style={styles.helper}>{plan.metadata.recommendation}</Text>
+        </View>
+
+        <View style={styles.statsGrid}>
+          <StatCard
+            label="Total reading"
+            value={formatHours(plan.metadata.total_study_minutes)}
+            icon="book-open-page-variant-outline"
+          />
+          <StatCard
+            label="Needed daily"
+            value={formatHours(averageDailyMinutes)}
+            icon="clock-outline"
+          />
+          <StatCard label="Countdown" value={`${plan.metadata.days_until_exam}d`} icon="calendar-star" />
+        </View>
+
+        <View style={styles.panel}>
+          <View style={styles.panelHeader}>
+            <Text style={styles.sectionTitle}>Hours breakdown</Text>
+            <Text style={styles.metric}>{formatHours(averageDailyMinutes)}/day</Text>
+          </View>
+          <Text style={styles.helper}>
+            {formatHours(plan.metadata.total_study_minutes)} total reading time divided across{" "}
+            {plan.metadata.days_until_exam} days before the exam starts.
+          </Text>
+          <View style={styles.reviewGrid}>
+            <ReviewItem label="Exam starts" value={formatReadableDate(plan.metadata.exam_start_date)} />
+            <ReviewItem label="Exam ends" value={formatReadableDate(plan.metadata.exam_end_date ?? plan.metadata.exam_start_date)} />
+            <ReviewItem label="Available daily" value={formatHours(plan.metadata.available_daily_minutes)} />
+            <ReviewItem label="Current status" value={plan.metadata.status.replace("_", " ")} />
+          </View>
+        </View>
+
+        <View style={styles.panel}>
+          <Text style={styles.sectionTitle}>Subject distribution</Text>
+          <View style={styles.distributionList}>
+            {plan.subject_distribution.map((subject) => (
+              <View key={subject.subject} style={styles.distributionItem}>
+                <View style={styles.panelHeader}>
+                  <Text style={styles.sessionTitle}>{subject.subject}</Text>
+                  <Text style={styles.sessionMeta}>{formatHours(subject.estimated_minutes)}</Text>
                 </View>
-              ))}
+                <ProgressBar value={subject.percentage} />
+              </View>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.panel}>
+          <View style={styles.panelHeader}>
+            <Text style={styles.sectionTitle}>Today's timetable</Text>
+            <Text style={styles.metric}>{completion}%</Text>
+          </View>
+          <ProgressBar value={completion} />
+        </View>
+
+        <View style={styles.sessionList}>
+          <Text style={styles.sectionTitle}>Full timetable</Text>
+          {plan.schedule.map((day) => (
+            <View key={day.study_date} style={styles.dayCard}>
+              <View style={styles.panelHeader}>
+                <View>
+                  <Text style={styles.sessionTitle}>{formatReadableDate(day.study_date)}</Text>
+                  <Text style={styles.sessionMeta}>{formatHours(day.total_minutes)} planned</Text>
+                </View>
+                <Text style={styles.sessionKind}>{day.sessions.length ? `${day.sessions.length} sessions` : "buffer"}</Text>
+              </View>
+
+              {day.sessions.length ? (
+                day.sessions.map((session, index, sessions) => (
+                  <View key={`${day.study_date}-${session.subject}-${session.topic}-${index}`} style={styles.sessionRow}>
+                    <View style={styles.sessionIcon}>
+                      <MaterialCommunityIcons
+                        name={session.kind === "revision" ? "repeat-variant" : "book-open-page-variant-outline"}
+                        size={22}
+                        color={colors.brand}
+                      />
+                    </View>
+                    <View style={styles.sessionCopy}>
+                      <Text style={styles.sessionTitle}>{sessionTitle(session, index, sessions)}</Text>
+                      <Text style={styles.sessionMeta}>
+                        {session.subject} - {session.resource_type} - {session.minutes} minutes
+                      </Text>
+                    </View>
+                    <Text style={styles.sessionKind}>{session.kind}</Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.helper}>No reading session is needed on this day.</Text>
+              )}
             </View>
-          </>
-        ) : null}
+          ))}
+        </View>
       </ScrollView>
     </Screen>
   );
@@ -581,6 +690,104 @@ function FormField({
         textAlignVertical={multiline ? "top" : "center"}
         value={value}
       />
+    </View>
+  );
+}
+
+type CalendarFieldProps = {
+  label: string;
+  value: string;
+  minDate: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  onSelect: (value: string) => void;
+};
+
+function CalendarField({ label, value, minDate, isOpen, onToggle, onSelect }: CalendarFieldProps) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <Pressable accessibilityRole="button" onPress={onToggle} style={styles.calendarButton}>
+        <View>
+          <Text style={styles.calendarValue}>{formatReadableDate(value)}</Text>
+          <Text style={styles.sessionMeta}>{value}</Text>
+        </View>
+        <MaterialCommunityIcons name={isOpen ? "chevron-up" : "calendar-outline"} size={22} color={colors.brand} />
+      </Pressable>
+      {isOpen ? <CalendarPicker minDate={minDate} onSelect={onSelect} selectedDate={value} /> : null}
+    </View>
+  );
+}
+
+type CalendarPickerProps = {
+  selectedDate: string;
+  minDate: string;
+  onSelect: (value: string) => void;
+};
+
+function CalendarPicker({ selectedDate, minDate, onSelect }: CalendarPickerProps) {
+  const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(toLocalDate(selectedDate) ?? new Date()));
+  const days = useMemo(() => calendarDays(visibleMonth), [visibleMonth]);
+
+  return (
+    <View style={styles.calendarPanel}>
+      <View style={styles.calendarHeader}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setVisibleMonth((current) => addMonths(current, -1))}
+          style={styles.smallIconButton}
+        >
+          <MaterialCommunityIcons name="chevron-left" size={20} color={colors.text} />
+        </Pressable>
+        <Text style={styles.calendarMonth}>{monthLabel(visibleMonth)}</Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setVisibleMonth((current) => addMonths(current, 1))}
+          style={styles.smallIconButton}
+        >
+          <MaterialCommunityIcons name="chevron-right" size={20} color={colors.text} />
+        </Pressable>
+      </View>
+
+      <View style={styles.calendarGrid}>
+        {WEEKDAYS.map((day) => (
+          <Text key={day} style={styles.weekdayText}>
+            {day}
+          </Text>
+        ))}
+        {days.map((day, index) => {
+          if (!day) {
+            return <View key={`blank-${index}`} style={styles.calendarDayBlank} />;
+          }
+
+          const value = toDateValue(day);
+          const isSelected = value === selectedDate;
+          const isDisabled = isBeforeDate(value, minDate);
+          return (
+            <Pressable
+              accessibilityRole="button"
+              disabled={isDisabled}
+              key={value}
+              onPress={() => onSelect(value)}
+              style={[
+                styles.calendarDay,
+                isSelected ? styles.calendarDaySelected : null,
+                isDisabled ? styles.calendarDayDisabled : null
+              ]}
+            >
+              <Text
+                style={[
+                  styles.calendarDayText,
+                  isSelected ? styles.calendarDaySelectedText : null,
+                  isDisabled ? styles.calendarDayDisabledText : null
+                ]}
+              >
+                {day.getDate()}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -659,13 +866,13 @@ function stepSubtitle(step: StepName) {
     case "Profile":
       return "These details will later become the student's login profile.";
     case "Exam":
-      return "Set the exam window and the daily time the student can commit.";
+      return "Choose the exam dates and the daily time the student can commit.";
     case "Pace":
       return "Capture how fast the student reads and what helps them study well.";
     case "Subjects":
       return "Add subjects, topics, page counts, and the resources being used.";
     case "Review":
-      return "Check the summary, then generate the plan.";
+      return "Check the summary, then generate the full timetable.";
   }
 }
 
@@ -725,7 +932,7 @@ function createId(prefix: string) {
 function futureDate(daysFromToday: number) {
   const date = new Date();
   date.setDate(date.getDate() + daysFromToday);
-  return date.toISOString().slice(0, 10);
+  return toDateValue(date);
 }
 
 function toNumber(value: string) {
@@ -738,26 +945,108 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function isValidDate(value: string) {
-  return !Number.isNaN(new Date(`${value}T00:00:00`).getTime());
+  return toLocalDate(value) !== null;
 }
 
 function isFutureDate(value: string) {
-  if (!isValidDate(value)) {
+  const parsed = toLocalDate(value);
+  if (!parsed) {
     return false;
   }
 
-  const parsed = new Date(`${value}T00:00:00`);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return parsed > today;
 }
 
 function isDateOnOrAfter(value: string, comparison: string) {
-  if (!isValidDate(value) || !isValidDate(comparison)) {
+  const parsed = toLocalDate(value);
+  const comparisonDate = toLocalDate(comparison);
+  if (!parsed || !comparisonDate) {
     return false;
   }
 
-  return new Date(`${value}T00:00:00`) >= new Date(`${comparison}T00:00:00`);
+  return parsed >= comparisonDate;
+}
+
+function isBeforeDate(value: string, comparison: string) {
+  const parsed = toLocalDate(value);
+  const comparisonDate = toLocalDate(comparison);
+  if (!parsed || !comparisonDate) {
+    return false;
+  }
+
+  return parsed < comparisonDate;
+}
+
+function toLocalDate(value: string) {
+  const parts = value.split("-").map((part) => Number.parseInt(part, 10));
+  if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) {
+    return null;
+  }
+
+  const [year, month, day] = parts;
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+    return null;
+  }
+
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function toDateValue(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function startOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function addMonths(date: Date, amount: number) {
+  return new Date(date.getFullYear(), date.getMonth() + amount, 1);
+}
+
+function calendarDays(month: Date) {
+  const firstDay = new Date(month.getFullYear(), month.getMonth(), 1);
+  const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+  const days: Array<Date | null> = [];
+
+  for (let index = 0; index < firstDay.getDay(); index += 1) {
+    days.push(null);
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    days.push(new Date(month.getFullYear(), month.getMonth(), day));
+  }
+
+  while (days.length % 7 !== 0) {
+    days.push(null);
+  }
+
+  return days;
+}
+
+function monthLabel(date: Date) {
+  return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
+function formatReadableDate(value: string) {
+  const date = toLocalDate(value);
+  if (!date) {
+    return value;
+  }
+
+  return date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+function formatHours(minutes: number) {
+  const hours = minutes / 60;
+  const formatted = Number.isInteger(hours) ? `${hours}` : hours.toFixed(1);
+  return `${formatted}h`;
 }
 
 function sessionTitle(session: PlanSession, index: number, sessions: PlanSession[]) {
@@ -786,12 +1075,105 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingHorizontal: spacing.sm
   },
+  backButton: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.sm,
+    minHeight: 44
+  },
+  backButtonText: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: "800"
+  },
+  calendarButton: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    minHeight: 56,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  calendarDay: {
+    alignItems: "center",
+    borderRadius: 8,
+    height: 40,
+    justifyContent: "center",
+    width: "14.285%"
+  },
+  calendarDayBlank: {
+    height: 40,
+    width: "14.285%"
+  },
+  calendarDayDisabled: {
+    opacity: 0.35
+  },
+  calendarDayDisabledText: {
+    color: colors.muted
+  },
+  calendarDaySelected: {
+    backgroundColor: colors.brand
+  },
+  calendarDaySelectedText: {
+    color: "#FFFFFF"
+  },
+  calendarDayText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: "700"
+  },
+  calendarGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    rowGap: spacing.xs
+  },
+  calendarHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  calendarMonth: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: "800"
+  },
+  calendarPanel: {
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  calendarValue: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: "800"
+  },
   content: {
     gap: spacing.lg,
     paddingBottom: spacing.xxl
   },
+  dayCard: {
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md
+  },
   disabledButton: {
     opacity: 0.55
+  },
+  distributionItem: {
+    gap: spacing.sm
+  },
+  distributionList: {
+    gap: spacing.md
   },
   field: {
     gap: spacing.xs,
@@ -805,6 +1187,14 @@ const styles = StyleSheet.create({
   },
   formStack: {
     gap: spacing.md
+  },
+  generatedHero: {
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.lg
   },
   header: {
     alignItems: "center",
@@ -1021,7 +1411,7 @@ const styles = StyleSheet.create({
   },
   sessionRow: {
     alignItems: "center",
-    backgroundColor: colors.panel,
+    backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
@@ -1131,6 +1521,14 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     lineHeight: 20
+  },
+  weekdayText: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: "800",
+    textAlign: "center",
+    textTransform: "uppercase",
+    width: "14.285%"
   },
   wizardActions: {
     flexDirection: "row",

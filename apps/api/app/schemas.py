@@ -46,6 +46,7 @@ class PlanMetadata(BaseModel):
     exam_end_date: date | None = None
     days_until_exam: int
     total_study_minutes: int
+    average_daily_minutes: int
     required_daily_minutes: int
     available_daily_minutes: int
     daily_gap_minutes: int

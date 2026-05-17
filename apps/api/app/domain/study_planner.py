@@ -27,7 +27,6 @@ class TopicWork:
 
 REVISION_OFFSETS = (1, 3, 7)
 REVISION_SESSION_MINUTES = 20
-PREVIEW_DAYS = 14
 
 
 def build_study_plan(payload: StudyPlanRequest) -> StudyPlanResponse:
@@ -46,13 +45,14 @@ def build_study_plan(payload: StudyPlanRequest) -> StudyPlanResponse:
 
     total_minutes = sum(item.estimated_minutes for item in work_items)
     days_until_exam = max(1, (exam_start_date - today).days)
+    average_daily_minutes = ceil(total_minutes / days_until_exam)
     revision_buffer_days = _revision_buffer(days_until_exam)
     first_pass_days = max(1, days_until_exam - revision_buffer_days)
     required_daily_minutes = ceil(total_minutes / first_pass_days)
     daily_gap_minutes = max(0, required_daily_minutes - payload.available_daily_minutes)
 
     status = _status(required_daily_minutes, payload.available_daily_minutes)
-    schedule = _build_preview_schedule(payload, work_items, today, days_until_exam, exam_start_date)
+    schedule = _build_schedule(payload, work_items, today, days_until_exam, exam_start_date)
 
     return StudyPlanResponse(
         metadata=PlanMetadata(
@@ -63,6 +63,7 @@ def build_study_plan(payload: StudyPlanRequest) -> StudyPlanResponse:
             exam_end_date=payload.exam_end_date,
             days_until_exam=days_until_exam,
             total_study_minutes=total_minutes,
+            average_daily_minutes=average_daily_minutes,
             required_daily_minutes=required_daily_minutes,
             available_daily_minutes=payload.available_daily_minutes,
             daily_gap_minutes=daily_gap_minutes,
@@ -161,7 +162,7 @@ def _subject_distribution(
     ]
 
 
-def _build_preview_schedule(
+def _build_schedule(
     payload: StudyPlanRequest,
     work_items: list[TopicWork],
     today: date,
@@ -174,7 +175,7 @@ def _build_preview_schedule(
 
     revision_due: dict[date, list[tuple[str, str]]] = defaultdict(list)
     schedule: list[DailyPlan] = []
-    preview_days = min(PREVIEW_DAYS, days_until_exam)
+    preview_days = days_until_exam
 
     for offset in range(preview_days):
         plan_date = today + timedelta(days=offset)

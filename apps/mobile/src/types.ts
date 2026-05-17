@@ -40,6 +40,7 @@ export type PlanMetadata = {
   exam_end_date: string | null;
   days_until_exam: number;
   total_study_minutes: number;
+  average_daily_minutes: number;
   required_daily_minutes: number;
   available_daily_minutes: number;
   daily_gap_minutes: number;

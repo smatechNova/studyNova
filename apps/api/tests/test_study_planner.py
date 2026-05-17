@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from math import ceil
 
 from app.domain.study_planner import build_study_plan
 from app.schemas import StudyPlanRequest, SubjectInput, TopicInput
@@ -39,6 +40,7 @@ def test_build_study_plan_returns_balanced_metadata() -> None:
     assert plan.metadata.exam_end_date == date.today() + timedelta(days=35)
     assert "Textbook" in plan.metadata.resources_used
     assert plan.metadata.total_study_minutes > 0
+    assert plan.metadata.average_daily_minutes == ceil(plan.metadata.total_study_minutes / 30)
     assert plan.metadata.required_daily_minutes > 0
     assert len(plan.subject_distribution) == 2
     assert sum(item.estimated_minutes for item in plan.subject_distribution) == plan.metadata.total_study_minutes
@@ -48,6 +50,7 @@ def test_build_study_plan_includes_study_sessions() -> None:
     plan = build_study_plan(_sample_request())
     first_day = plan.schedule[0]
 
+    assert len(plan.schedule) == 30
     assert first_day.total_minutes <= 180
     assert any(session.kind == "study" for session in first_day.sessions)
     assert all(session.minutes > 0 for session in first_day.sessions)
