@@ -90,6 +90,60 @@ class SavedStudyPlan(BaseModel):
     plan: StudyPlanResponse
 
 
+class StudySessionCompletionRequest(BaseModel):
+    session_key: str = Field(min_length=1, max_length=240)
+    study_date: date
+    kind: Literal["study", "revision", "practice"]
+    subject: str = Field(min_length=1, max_length=80)
+    topic: str = Field(min_length=1, max_length=160)
+    resource_type: str = Field(default="Textbook", min_length=1, max_length=80)
+    minutes_planned: int = Field(ge=1, le=720)
+    minutes_completed: int = Field(ge=1, le=720)
+    recall_note: str = Field(min_length=10, max_length=480)
+    confidence: int = Field(ge=1, le=5)
+
+
+class StudySessionCompletion(BaseModel):
+    id: str
+    plan_id: str
+    session_key: str
+    study_date: date
+    kind: Literal["study", "revision", "practice"]
+    subject: str
+    topic: str
+    resource_type: str
+    minutes_planned: int
+    minutes_completed: int
+    recall_note: str
+    confidence: int
+    completed_at: datetime
+
+
+class DailyProgress(BaseModel):
+    study_date: date
+    planned_minutes: int
+    completed_minutes: int
+    planned_sessions: int
+    completed_sessions: int
+    completion_rate: float
+
+
+class StudyPlanProgress(BaseModel):
+    plan_id: str
+    planned_minutes: int
+    completed_minutes: int
+    planned_sessions: int
+    completed_sessions: int
+    completion_rate: float
+    completed_session_keys: list[str] = Field(default_factory=list)
+    daily: list[DailyProgress] = Field(default_factory=list)
+    completions: list[StudySessionCompletion] = Field(default_factory=list)
+
+
+class DeleteResponse(BaseModel):
+    deleted: bool
+
+
 class CheckInRequest(BaseModel):
     student_id: str = Field(min_length=1, max_length=80)
     study_date: date

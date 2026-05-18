@@ -1,4 +1,11 @@
-import type { SavedStudyPlan, StudyPlanRequest, StudyPlanResponse } from "@/types";
+import type {
+  SavedStudyPlan,
+  StudyPlanProgress,
+  StudyPlanRequest,
+  StudyPlanResponse,
+  StudySessionCompletion,
+  StudySessionCompletionRequest
+} from "@/types";
 
 const API_URL = getApiUrl();
 
@@ -56,4 +63,46 @@ export async function getLatestStudyPlan(studentName?: string): Promise<SavedStu
   }
 
   return response.json() as Promise<SavedStudyPlan>;
+}
+
+export async function getStudyPlanProgress(planId: string): Promise<StudyPlanProgress> {
+  const response = await fetch(`${API_URL}/api/v1/study-plans/${planId}/progress`);
+
+  if (!response.ok) {
+    throw new Error(`Study plan progress request failed with ${response.status}`);
+  }
+
+  return response.json() as Promise<StudyPlanProgress>;
+}
+
+export async function completeStudySession(
+  planId: string,
+  payload: StudySessionCompletionRequest
+): Promise<StudySessionCompletion> {
+  const response = await fetch(`${API_URL}/api/v1/study-plans/${planId}/session-completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Study session completion failed with ${response.status}`);
+  }
+
+  return response.json() as Promise<StudySessionCompletion>;
+}
+
+export async function deleteStudySessionCompletion(planId: string, sessionKey: string): Promise<void> {
+  const response = await fetch(
+    `${API_URL}/api/v1/study-plans/${planId}/session-completions/${encodeURIComponent(sessionKey)}`,
+    {
+      method: "DELETE"
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Study session undo failed with ${response.status}`);
+  }
 }

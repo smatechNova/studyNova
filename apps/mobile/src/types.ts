@@ -83,3 +83,43 @@ export type SavedStudyPlan = {
   created_at: string;
   plan: StudyPlanResponse;
 };
+
+export type StudySessionCompletionRequest = {
+  session_key: string;
+  study_date: string;
+  kind: PlanSession["kind"];
+  subject: string;
+  topic: string;
+  resource_type: string;
+  minutes_planned: number;
+  minutes_completed: number;
+  recall_note: string;
+  confidence: number;
+};
+
+export type StudySessionCompletion = StudySessionCompletionRequest & {
+  id: string;
+  plan_id: string;
+  completed_at: string;
+};
+
+export type DailyProgress = {
+  study_date: string;
+  planned_minutes: number;
+  completed_minutes: number;
+  planned_sessions: number;
+  completed_sessions: number;
+  completion_rate: number;
+};
+
+export type StudyPlanProgress = {
+  plan_id: string;
+  planned_minutes: number;
+  completed_minutes: number;
+  planned_sessions: number;
+  completed_sessions: number;
+  completion_rate: number;
+  completed_session_keys: string[];
+  daily: DailyProgress[];
+  completions: StudySessionCompletion[];
+};

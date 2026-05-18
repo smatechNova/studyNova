@@ -7,10 +7,14 @@ from app.domain.study_planner import build_study_plan
 from app.schemas import (
     CheckInRequest,
     CheckInResponse,
+    DeleteResponse,
     ParentProgressSummary,
     SavedStudyPlan,
+    StudyPlanProgress,
     StudyPlanRequest,
     StudyPlanResponse,
+    StudySessionCompletion,
+    StudySessionCompletionRequest,
 )
 from app.storage import get_study_plan_store
 
@@ -35,6 +39,38 @@ def get_latest_study_plan(student_name: str | None = None) -> SavedStudyPlan:
     if saved_plan is None:
         raise HTTPException(status_code=404, detail="No saved study plan found.")
     return saved_plan
+
+
+@router.get("/study-plans/{plan_id}/progress", response_model=StudyPlanProgress)
+def get_study_plan_progress(plan_id: str) -> StudyPlanProgress:
+    progress = get_study_plan_store().progress(plan_id)
+    if progress is None:
+        raise HTTPException(status_code=404, detail="No saved study plan found.")
+    return progress
+
+
+@router.post(
+    "/study-plans/{plan_id}/session-completions",
+    response_model=StudySessionCompletion,
+)
+def complete_study_session(
+    plan_id: str,
+    payload: StudySessionCompletionRequest,
+) -> StudySessionCompletion:
+    store = get_study_plan_store()
+    if store.by_id(plan_id) is None:
+        raise HTTPException(status_code=404, detail="No saved study plan found.")
+
+    return store.complete_session(plan_id, payload)
+
+
+@router.delete(
+    "/study-plans/{plan_id}/session-completions/{session_key}",
+    response_model=DeleteResponse,
+)
+def delete_study_session_completion(plan_id: str, session_key: str) -> DeleteResponse:
+    deleted = get_study_plan_store().delete_completion(plan_id, session_key)
+    return DeleteResponse(deleted=deleted)
 
 
 @router.post("/progress/check-ins", response_model=CheckInResponse)

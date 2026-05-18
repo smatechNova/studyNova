@@ -14,8 +14,15 @@ import {
 import { ProgressBar } from "@/components/ProgressBar";
 import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
-import { generateStudyPlan, getLatestStudyPlan, saveStudyPlan } from "@/lib/api";
-import type { PlanSession, SavedStudyPlan, StudyPlanRequest, StudyPlanResponse } from "@/types";
+import {
+  completeStudySession,
+  deleteStudySessionCompletion,
+  generateStudyPlan,
+  getLatestStudyPlan,
+  getStudyPlanProgress,
+  saveStudyPlan
+} from "@/lib/api";
+import type { PlanSession, SavedStudyPlan, StudyPlanProgress, StudyPlanRequest, StudyPlanResponse } from "@/types";
 import { colors, spacing } from "@/theme";
 
 const RESOURCE_OPTIONS = ["Textbook", "Class notes", "Notebook", "Online notes", "Past questions"];
@@ -123,7 +130,7 @@ export default function StudentScreen() {
         const saved = await saveStudyPlan(response);
         setSavedPlan(saved);
         setLatestPlan(saved);
-        setSaveMessage("Saved locally for this development API.");
+        setSaveMessage("Plan saved. You can continue from here later.");
       } catch {
         setSaveMessage("Generated, but saving is unavailable right now.");
       }
@@ -674,12 +681,111 @@ type GeneratedPlanViewProps = {
 
 function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: GeneratedPlanViewProps) {
   const todayPlan = plan.schedule[0];
+  const planId = savedPlan?.id;
+  const [progress, setProgress] = useState<StudyPlanProgress | null>(null);
+  const [progressMessage, setProgressMessage] = useState("");
+  const [activeCompletionKey, setActiveCompletionKey] = useState("");
+  const [completionNote, setCompletionNote] = useState("");
+  const [completionConfidence, setCompletionConfidence] = useState(3);
+  const [isProgressLoading, setIsProgressLoading] = useState(false);
+  const [isSavingCompletion, setIsSavingCompletion] = useState(false);
   const averageDailyMinutes =
     plan.metadata.average_daily_minutes ??
     Math.ceil(plan.metadata.total_study_minutes / Math.max(plan.metadata.days_until_exam, 1));
-  const completion = todayPlan
-    ? Math.min(100, Math.round((todayPlan.total_minutes / plan.metadata.available_daily_minutes) * 100))
-    : 0;
+  const completedSessionKeys = useMemo(
+    () => new Set(progress?.completed_session_keys ?? []),
+    [progress?.completed_session_keys]
+  );
+  const todayProgress = progress?.daily.find((day) => day.study_date === todayPlan?.study_date);
+  const completion = todayProgress?.completion_rate ?? 0;
+  const completedTodayMinutes = todayProgress?.completed_minutes ?? 0;
+  const plannedTodayMinutes = todayProgress?.planned_minutes ?? todayPlan?.total_minutes ?? 0;
+
+  useEffect(() => {
+    if (!planId) {
+      setProgress(null);
+      return;
+    }
+
+    void refreshProgress(planId);
+  }, [planId]);
+
+  async function refreshProgress(nextPlanId = planId) {
+    if (!nextPlanId) {
+      return;
+    }
+
+    setIsProgressLoading(true);
+    try {
+      const nextProgress = await getStudyPlanProgress(nextPlanId);
+      setProgress(nextProgress);
+      setProgressMessage("");
+    } catch {
+      setProgressMessage("Progress tracking is unavailable until the API is running.");
+    } finally {
+      setIsProgressLoading(false);
+    }
+  }
+
+  function openCompletion(sessionKeyValue: string) {
+    setActiveCompletionKey(sessionKeyValue);
+    setCompletionNote("");
+    setCompletionConfidence(3);
+    setProgressMessage("Write a quick recall note before marking the session done.");
+  }
+
+  async function markSessionDone(studyDate: string, session: PlanSession, sessionKeyValue: string) {
+    if (!planId) {
+      setProgressMessage("Save the generated plan before tracking progress.");
+      return;
+    }
+
+    if (completionNote.trim().length < 10) {
+      setProgressMessage("Add a short recall note with at least 10 characters.");
+      return;
+    }
+
+    setIsSavingCompletion(true);
+    try {
+      await completeStudySession(planId, {
+        session_key: sessionKeyValue,
+        study_date: studyDate,
+        kind: session.kind,
+        subject: session.subject,
+        topic: session.topic,
+        resource_type: session.resource_type,
+        minutes_planned: session.minutes,
+        minutes_completed: session.minutes,
+        recall_note: completionNote.trim(),
+        confidence: completionConfidence
+      });
+      setActiveCompletionKey("");
+      setCompletionNote("");
+      setProgressMessage("Session saved with a recall note.");
+      await refreshProgress(planId);
+    } catch {
+      setProgressMessage("Could not save this session. Check that the API is running.");
+    } finally {
+      setIsSavingCompletion(false);
+    }
+  }
+
+  async function undoSession(sessionKeyValue: string) {
+    if (!planId) {
+      return;
+    }
+
+    setIsSavingCompletion(true);
+    try {
+      await deleteStudySessionCompletion(planId, sessionKeyValue);
+      setProgressMessage("Session completion removed.");
+      await refreshProgress(planId);
+    } catch {
+      setProgressMessage("Could not update this session right now.");
+    } finally {
+      setIsSavingCompletion(false);
+    }
+  }
 
   return (
     <Screen>
@@ -700,7 +806,6 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
           <Text style={styles.title}>{plan.metadata.student_name}</Text>
           <Text style={styles.helper}>{plan.metadata.recommendation}</Text>
           {saveMessage ? <Text style={styles.saveStatus}>{saveMessage}</Text> : null}
-          {savedPlan ? <Text style={styles.sessionMeta}>Saved plan ID: {savedPlan.id}</Text> : null}
         </View>
 
         <View style={styles.statsGrid}>
@@ -755,6 +860,11 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
             <Text style={styles.metric}>{completion}%</Text>
           </View>
           <ProgressBar value={completion} />
+          <Text style={styles.helper}>
+            {formatHours(completedTodayMinutes)} completed from {formatHours(plannedTodayMinutes)} planned today.
+          </Text>
+          {isProgressLoading ? <Text style={styles.sessionMeta}>Loading saved progress...</Text> : null}
+          {progressMessage ? <Text style={styles.saveStatus}>{progressMessage}</Text> : null}
         </View>
 
         <View style={styles.sessionList}>
@@ -772,24 +882,105 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
               </View>
 
               {day.sessions.length ? (
-                day.sessions.map((session, index, sessions) => (
-                  <View key={`${day.study_date}-${session.subject}-${session.topic}-${index}`} style={styles.sessionRow}>
-                    <View style={styles.sessionIcon}>
-                      <MaterialCommunityIcons
-                        name={sessionIcon(session.kind)}
-                        size={22}
-                        color={colors.brand}
-                      />
+                day.sessions.map((session, index, sessions) => {
+                  const currentSessionKey = sessionKey(day.study_date, index);
+                  const isDone = completedSessionKeys.has(currentSessionKey);
+                  const isActive = activeCompletionKey === currentSessionKey;
+
+                  return (
+                    <View key={`${day.study_date}-${session.subject}-${session.topic}-${index}`} style={styles.sessionBlock}>
+                      <View style={[styles.sessionRow, isDone ? styles.sessionRowDone : null]}>
+                        <View style={[styles.sessionIcon, isDone ? styles.sessionIconDone : null]}>
+                          <MaterialCommunityIcons
+                            name={isDone ? "check-circle-outline" : sessionIcon(session.kind)}
+                            size={22}
+                            color={isDone ? colors.success : colors.brand}
+                          />
+                        </View>
+                        <View style={styles.sessionCopy}>
+                          <Text style={styles.sessionTitle}>{sessionTitle(session, index, sessions)}</Text>
+                          <Text style={styles.sessionMeta}>
+                            {session.subject} - {session.resource_type} - {session.minutes} minutes
+                          </Text>
+                        </View>
+                        <View style={styles.sessionActions}>
+                          <Text style={styles.sessionKind}>{sessionKindLabel(session.kind)}</Text>
+                          <Pressable
+                            accessibilityRole="button"
+                            disabled={isSavingCompletion || !planId}
+                            onPress={() =>
+                              isDone ? void undoSession(currentSessionKey) : openCompletion(currentSessionKey)
+                            }
+                            style={[
+                              styles.sessionActionButton,
+                              isDone ? styles.sessionDoneButton : null,
+                              !planId ? styles.disabledButton : null
+                            ]}
+                          >
+                            <Text style={[styles.sessionActionText, isDone ? styles.sessionDoneText : null]}>
+                              {isDone ? "Done" : "Study"}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </View>
+
+                      {isActive && !isDone ? (
+                        <View style={styles.completionPanel}>
+                          <Text style={styles.sessionTitle}>Quick recall check</Text>
+                          <Text style={styles.helper}>
+                            Write one thing you remember from this session before it counts as complete.
+                          </Text>
+                          <TextInput
+                            multiline
+                            onChangeText={setCompletionNote}
+                            placeholder="Example: I can solve simultaneous equations by substitution."
+                            placeholderTextColor={colors.muted}
+                            style={[styles.input, styles.textArea]}
+                            textAlignVertical="top"
+                            value={completionNote}
+                          />
+                          <View style={styles.confidenceRow}>
+                            {[1, 2, 3, 4, 5].map((score) => {
+                              const isSelected = completionConfidence === score;
+                              return (
+                                <Pressable
+                                  accessibilityRole="button"
+                                  key={score}
+                                  onPress={() => setCompletionConfidence(score)}
+                                  style={[styles.confidenceChip, isSelected ? styles.confidenceChipActive : null]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.confidenceText,
+                                      isSelected ? styles.confidenceTextActive : null
+                                    ]}
+                                  >
+                                    {score}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                          <Pressable
+                            accessibilityRole="button"
+                            disabled={isSavingCompletion}
+                            onPress={() => void markSessionDone(day.study_date, session, currentSessionKey)}
+                            style={[styles.primaryButton, isSavingCompletion ? styles.disabledButton : null]}
+                          >
+                            {isSavingCompletion ? (
+                              <ActivityIndicator color="#FFFFFF" />
+                            ) : (
+                              <>
+                                <MaterialCommunityIcons name="check" size={18} color="#FFFFFF" />
+                                <Text style={styles.primaryButtonText}>Mark session done</Text>
+                              </>
+                            )}
+                          </Pressable>
+                        </View>
+                      ) : null}
                     </View>
-                    <View style={styles.sessionCopy}>
-                      <Text style={styles.sessionTitle}>{sessionTitle(session, index, sessions)}</Text>
-                      <Text style={styles.sessionMeta}>
-                        {session.subject} - {session.resource_type} - {session.minutes} minutes
-                      </Text>
-                    </View>
-                    <Text style={styles.sessionKind}>{sessionKindLabel(session.kind)}</Text>
-                  </View>
-                ))
+                  );
+                })
               ) : (
                 <Text style={styles.helper}>A calm catch-up day for light revision, missed pages, or rest.</Text>
               )}
@@ -1041,24 +1232,24 @@ function getFirstValidationError(nextForm: PlanForm): ValidationResult | null {
 function getStepValidationError(step: StepName, nextForm: PlanForm): string {
   switch (step) {
     case "Profile":
-      if (!nextForm.studentName.trim()) {
-        return "Enter the student name before continuing.";
+      if (!isValidPersonName(nextForm.studentName)) {
+        return "Enter the student's full name before continuing.";
       }
 
-      if (!nextForm.classLevel.trim()) {
-        return "Enter the student's class before continuing.";
+      if (!isValidShortText(nextForm.classLevel)) {
+        return "Enter a valid class, such as SS2 Science.";
       }
 
-      if (toNumber(nextForm.age) <= 0) {
-        return "Enter the student's age before continuing.";
+      if (!isIntegerInRange(nextForm.age, 3, 30)) {
+        return "Enter a valid age between 3 and 30.";
       }
 
-      if (!nextForm.parentName.trim()) {
-        return "Enter the parent or guardian name before continuing.";
+      if (!isValidPersonName(nextForm.parentName)) {
+        return "Enter the parent or guardian's full name before continuing.";
       }
 
-      if (!nextForm.parentContact.trim()) {
-        return "Enter the parent contact before continuing.";
+      if (!isValidParentContact(nextForm.parentContact)) {
+        return "Enter a valid parent phone number or email address.";
       }
 
       return "";
@@ -1072,23 +1263,23 @@ function getStepValidationError(step: StepName, nextForm: PlanForm): string {
         return "Choose an exam end date that is on or after the start date.";
       }
 
-      if (toNumber(nextForm.availableDailyMinutes) <= 0) {
-        return "Enter the daily study minutes before continuing.";
+      if (!isIntegerInRange(nextForm.availableDailyMinutes, 30, 720)) {
+        return "Enter daily study minutes between 30 and 720.";
       }
 
       return "";
 
     case "Pace":
-      if (toNumber(nextForm.minutesPerPage) <= 0) {
-        return "Enter the minutes needed to read one page before continuing.";
+      if (!isIntegerInRange(nextForm.minutesPerPage, 1, 30)) {
+        return "Enter minutes per page between 1 and 30.";
       }
 
-      if (toNumber(nextForm.sessionMinutes) <= 0) {
-        return "Enter the study session length before continuing.";
+      if (!isIntegerInRange(nextForm.sessionMinutes, 20, 90)) {
+        return "Enter study session minutes between 20 and 90.";
       }
 
-      if (toNumber(nextForm.breakMinutes) <= 0) {
-        return "Enter the break length before continuing.";
+      if (!isIntegerInRange(nextForm.breakMinutes, 5, 30)) {
+        return "Enter break minutes between 5 and 30.";
       }
 
       return "";
@@ -1101,7 +1292,7 @@ function getStepValidationError(step: StepName, nextForm: PlanForm): string {
       for (let subjectIndex = 0; subjectIndex < nextForm.subjects.length; subjectIndex += 1) {
         const subject = nextForm.subjects[subjectIndex];
 
-        if (!subject.name.trim()) {
+        if (!isValidShortText(subject.name)) {
           return `Enter the name for subject ${subjectIndex + 1}.`;
         }
 
@@ -1112,12 +1303,12 @@ function getStepValidationError(step: StepName, nextForm: PlanForm): string {
         for (let topicIndex = 0; topicIndex < subject.topics.length; topicIndex += 1) {
           const topic = subject.topics[topicIndex];
 
-          if (!topic.name.trim()) {
+          if (!isValidShortText(topic.name)) {
             return `Enter topic ${topicIndex + 1} under subject ${subjectIndex + 1}.`;
           }
 
-          if (toNumber(topic.pages) <= 0) {
-            return `Enter the page count for topic ${topicIndex + 1} under subject ${subjectIndex + 1}.`;
+          if (!isIntegerInRange(topic.pages, 1, 500)) {
+            return `Enter pages between 1 and 500 for topic ${topicIndex + 1} under subject ${subjectIndex + 1}.`;
           }
         }
       }
@@ -1178,8 +1369,50 @@ function futureDate(daysFromToday: number) {
 }
 
 function toNumber(value: string) {
-  const parsed = Number.parseInt(value, 10);
+  if (!isWholeNumber(value)) {
+    return 0;
+  }
+
+  const parsed = Number.parseInt(value.trim(), 10);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isWholeNumber(value: string) {
+  return /^\d+$/.test(value.trim());
+}
+
+function isIntegerInRange(value: string, min: number, max: number) {
+  if (!isWholeNumber(value)) {
+    return false;
+  }
+
+  const parsed = Number.parseInt(value.trim(), 10);
+  return parsed >= min && parsed <= max;
+}
+
+function isValidShortText(value: string) {
+  const normalized = value.trim();
+  return normalized.length >= 2 && /[a-zA-Z0-9]/.test(normalized);
+}
+
+function isValidPersonName(value: string) {
+  const normalized = value.trim();
+  return normalized.length >= 2 && /[a-zA-Z]/.test(normalized) && /^[a-zA-Z\s'.-]+$/.test(normalized);
+}
+
+function isValidParentContact(value: string) {
+  const normalized = value.trim();
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (emailPattern.test(normalized)) {
+    return true;
+  }
+
+  if (!/^[+\d\s()-]+$/.test(normalized)) {
+    return false;
+  }
+
+  const digits = normalized.replace(/\D/g, "");
+  return digits.length >= 10 && digits.length <= 15;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -1311,6 +1544,10 @@ function sessionKindLabel(kind: PlanSession["kind"]) {
   return kind;
 }
 
+function sessionKey(studyDate: string, index: number) {
+  return `${studyDate}:${index}`;
+}
+
 function sessionTitle(session: PlanSession, index: number, sessions: PlanSession[]) {
   const matchingSessions = sessions.filter(
     (entry) => entry.kind === session.kind && entry.subject === session.subject && entry.topic === session.topic
@@ -1419,6 +1656,41 @@ const styles = StyleSheet.create({
   content: {
     gap: spacing.lg,
     paddingBottom: spacing.xxl
+  },
+  completionPanel: {
+    backgroundColor: colors.brandSoft,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  confidenceChip: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 40,
+    justifyContent: "center",
+    width: 44
+  },
+  confidenceChipActive: {
+    backgroundColor: colors.brand,
+    borderColor: colors.brand
+  },
+  confidenceRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  confidenceText: {
+    color: colors.muted,
+    fontSize: 14,
+    fontWeight: "800"
+  },
+  confidenceTextActive: {
+    color: "#FFFFFF"
   },
   dayCard: {
     backgroundColor: colors.panel,
@@ -1673,6 +1945,26 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "800"
   },
+  sessionActionButton: {
+    alignItems: "center",
+    backgroundColor: colors.brandSoft,
+    borderRadius: 8,
+    minHeight: 36,
+    justifyContent: "center",
+    paddingHorizontal: spacing.sm
+  },
+  sessionActionText: {
+    color: colors.brand,
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  sessionActions: {
+    alignItems: "flex-end",
+    gap: spacing.xs
+  },
+  sessionBlock: {
+    gap: spacing.sm
+  },
   sessionCopy: {
     flex: 1,
     gap: 2
@@ -1684,6 +1976,9 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: "center",
     width: 44
+  },
+  sessionIconDone: {
+    backgroundColor: colors.successSoft
   },
   sessionKind: {
     color: colors.muted,
@@ -1708,10 +2003,20 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.md
   },
+  sessionRowDone: {
+    borderColor: colors.success,
+    backgroundColor: colors.successSoft
+  },
   sessionTitle: {
     color: colors.text,
     fontSize: 16,
     fontWeight: "700"
+  },
+  sessionDoneButton: {
+    backgroundColor: colors.success
+  },
+  sessionDoneText: {
+    color: "#FFFFFF"
   },
   smallIconButton: {
     alignItems: "center",
