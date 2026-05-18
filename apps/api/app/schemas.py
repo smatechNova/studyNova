@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -81,6 +81,13 @@ class StudyPlanResponse(BaseModel):
     metadata: PlanMetadata
     subject_distribution: list[SubjectDistribution]
     schedule: list[DailyPlan]
+
+
+class SavedStudyPlan(BaseModel):
+    id: str
+    student_name: str
+    created_at: datetime
+    plan: StudyPlanResponse
 
 
 class CheckInRequest(BaseModel):

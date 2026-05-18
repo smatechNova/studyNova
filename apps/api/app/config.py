@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     allowed_origin_regex: str = r"https://.*\.app\.github\.dev"
     supabase_url: str = ""
     supabase_service_role_key: str = ""
+    local_data_path: str = "apps/api/.data/studynova.sqlite3"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

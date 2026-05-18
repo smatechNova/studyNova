@@ -1,4 +1,4 @@
-import type { StudyPlanRequest, StudyPlanResponse } from "@/types";
+import type { SavedStudyPlan, StudyPlanRequest, StudyPlanResponse } from "@/types";
 
 const API_URL = getApiUrl();
 
@@ -29,4 +29,31 @@ export async function generateStudyPlan(payload: StudyPlanRequest): Promise<Stud
   }
 
   return response.json() as Promise<StudyPlanResponse>;
+}
+
+export async function saveStudyPlan(payload: StudyPlanResponse): Promise<SavedStudyPlan> {
+  const response = await fetch(`${API_URL}/api/v1/study-plans/save`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Study plan save failed with ${response.status}`);
+  }
+
+  return response.json() as Promise<SavedStudyPlan>;
+}
+
+export async function getLatestStudyPlan(studentName?: string): Promise<SavedStudyPlan> {
+  const query = studentName ? `?student_name=${encodeURIComponent(studentName)}` : "";
+  const response = await fetch(`${API_URL}/api/v1/study-plans/latest${query}`);
+
+  if (!response.ok) {
+    throw new Error(`Latest study plan request failed with ${response.status}`);
+  }
+
+  return response.json() as Promise<SavedStudyPlan>;
 }

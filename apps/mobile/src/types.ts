@@ -76,3 +76,10 @@ export type StudyPlanResponse = {
   subject_distribution: SubjectDistribution[];
   schedule: DailyPlan[];
 };
+
+export type SavedStudyPlan = {
+  id: string;
+  student_name: string;
+  created_at: string;
+  plan: StudyPlanResponse;
+};

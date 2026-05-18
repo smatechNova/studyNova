@@ -14,8 +14,8 @@ import {
 import { ProgressBar } from "@/components/ProgressBar";
 import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
-import { generateStudyPlan } from "@/lib/api";
-import type { PlanSession, StudyPlanRequest, StudyPlanResponse } from "@/types";
+import { generateStudyPlan, saveStudyPlan } from "@/lib/api";
+import type { PlanSession, SavedStudyPlan, StudyPlanRequest, StudyPlanResponse } from "@/types";
 import { colors, spacing } from "@/theme";
 
 const RESOURCE_OPTIONS = ["Textbook", "Class notes", "Notebook", "Online notes", "Past questions"];
@@ -58,6 +58,8 @@ type PlanForm = {
 export default function StudentScreen() {
   const [form, setForm] = useState<PlanForm>(() => createDefaultForm());
   const [plan, setPlan] = useState<StudyPlanResponse | null>(null);
+  const [savedPlan, setSavedPlan] = useState<SavedStudyPlan | null>(null);
+  const [saveMessage, setSaveMessage] = useState("");
   const [stepIndex, setStepIndex] = useState(0);
   const [activeCalendar, setActiveCalendar] = useState<DateFieldName | null>(null);
   const [isPlanVisible, setIsPlanVisible] = useState(false);
@@ -84,6 +86,15 @@ export default function StudentScreen() {
     try {
       const response = await generateStudyPlan(request);
       setPlan(response);
+      setSavedPlan(null);
+      setSaveMessage("Saving generated plan...");
+      try {
+        const saved = await saveStudyPlan(response);
+        setSavedPlan(saved);
+        setSaveMessage("Saved locally for this development API.");
+      } catch {
+        setSaveMessage("Generated, but saving is unavailable right now.");
+      }
       setIsPlanVisible(true);
       setStepIndex(STEPS.length - 1);
     } catch {
@@ -270,6 +281,8 @@ export default function StudentScreen() {
           setStepIndex(STEPS.length - 1);
         }}
         plan={plan}
+        savedPlan={savedPlan}
+        saveMessage={saveMessage}
       />
     );
   }
@@ -530,11 +543,13 @@ export default function StudentScreen() {
 
 type GeneratedPlanViewProps = {
   plan: StudyPlanResponse;
+  savedPlan: SavedStudyPlan | null;
+  saveMessage: string;
   onBack: () => void;
   onEdit: () => void;
 };
 
-function GeneratedPlanView({ plan, onBack, onEdit }: GeneratedPlanViewProps) {
+function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: GeneratedPlanViewProps) {
   const todayPlan = plan.schedule[0];
   const averageDailyMinutes =
     plan.metadata.average_daily_minutes ??
@@ -561,6 +576,8 @@ function GeneratedPlanView({ plan, onBack, onEdit }: GeneratedPlanViewProps) {
           <Text style={styles.kicker}>Generated plan</Text>
           <Text style={styles.title}>{plan.metadata.student_name}</Text>
           <Text style={styles.helper}>{plan.metadata.recommendation}</Text>
+          {saveMessage ? <Text style={styles.saveStatus}>{saveMessage}</Text> : null}
+          {savedPlan ? <Text style={styles.sessionMeta}>Saved plan ID: {savedPlan.id}</Text> : null}
         </View>
 
         <View style={styles.statsGrid}>
@@ -1378,6 +1395,11 @@ const styles = StyleSheet.create({
   reviewValue: {
     color: colors.text,
     fontSize: 16,
+    fontWeight: "800"
+  },
+  saveStatus: {
+    color: colors.success,
+    fontSize: 14,
     fontWeight: "800"
   },
   secondaryButton: {

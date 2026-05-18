@@ -8,9 +8,11 @@ from app.schemas import (
     CheckInRequest,
     CheckInResponse,
     ParentProgressSummary,
+    SavedStudyPlan,
     StudyPlanRequest,
     StudyPlanResponse,
 )
+from app.storage import get_study_plan_store
 
 router = APIRouter(prefix="/api/v1")
 
@@ -20,6 +22,19 @@ _check_ins: list[CheckInRequest] = []
 @router.post("/study-plans/generate", response_model=StudyPlanResponse)
 def generate_study_plan(payload: StudyPlanRequest) -> StudyPlanResponse:
     return build_study_plan(payload)
+
+
+@router.post("/study-plans/save", response_model=SavedStudyPlan)
+def save_study_plan(plan: StudyPlanResponse) -> SavedStudyPlan:
+    return get_study_plan_store().save(plan)
+
+
+@router.get("/study-plans/latest", response_model=SavedStudyPlan)
+def get_latest_study_plan(student_name: str | None = None) -> SavedStudyPlan:
+    saved_plan = get_study_plan_store().latest(student_name)
+    if saved_plan is None:
+        raise HTTPException(status_code=404, detail="No saved study plan found.")
+    return saved_plan
 
 
 @router.post("/progress/check-ins", response_model=CheckInResponse)
@@ -62,4 +77,3 @@ def get_parent_progress(parent_id: str, student_id: str) -> ParentProgressSummar
         total_minutes=total_minutes,
         latest_note=student_logs[-1].note if student_logs else "No study activity has been recorded yet.",
     )
-

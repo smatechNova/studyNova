@@ -26,6 +26,7 @@ __pycache__/
 venv/
 build/
 *.egg-info/
+apps/api/.data/
 
 # Editors
 .idea/
@@ -37,4 +38,3 @@ build/
 *.aab
 *.apk
 *.ipa
-
