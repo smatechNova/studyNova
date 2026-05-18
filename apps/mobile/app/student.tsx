@@ -1,5 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -14,7 +14,7 @@ import {
 import { ProgressBar } from "@/components/ProgressBar";
 import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
-import { generateStudyPlan, saveStudyPlan } from "@/lib/api";
+import { generateStudyPlan, getLatestStudyPlan, saveStudyPlan } from "@/lib/api";
 import type { PlanSession, SavedStudyPlan, StudyPlanRequest, StudyPlanResponse } from "@/types";
 import { colors, spacing } from "@/theme";
 
@@ -59,7 +59,9 @@ export default function StudentScreen() {
   const [form, setForm] = useState<PlanForm>(() => createDefaultForm());
   const [plan, setPlan] = useState<StudyPlanResponse | null>(null);
   const [savedPlan, setSavedPlan] = useState<SavedStudyPlan | null>(null);
+  const [latestPlan, setLatestPlan] = useState<SavedStudyPlan | null>(null);
   const [saveMessage, setSaveMessage] = useState("");
+  const [latestMessage, setLatestMessage] = useState("");
   const [stepIndex, setStepIndex] = useState(0);
   const [activeCalendar, setActiveCalendar] = useState<DateFieldName | null>(null);
   const [isPlanVisible, setIsPlanVisible] = useState(false);
@@ -73,6 +75,30 @@ export default function StudentScreen() {
     0
   );
   const estimatedReadingMinutes = pageCount * clamp(toNumber(form.minutesPerPage), 1, 30);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadLatestPlan() {
+      try {
+        const saved = await getLatestStudyPlan();
+        if (isMounted) {
+          setLatestPlan(saved);
+          setLatestMessage("");
+        }
+      } catch {
+        if (isMounted) {
+          setLatestMessage("No saved plan yet.");
+        }
+      }
+    }
+
+    void loadLatestPlan();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   async function submitPlan(nextForm = form) {
     const request = buildRequest(nextForm);
@@ -91,6 +117,7 @@ export default function StudentScreen() {
       try {
         const saved = await saveStudyPlan(response);
         setSavedPlan(saved);
+        setLatestPlan(saved);
         setSaveMessage("Saved locally for this development API.");
       } catch {
         setSaveMessage("Generated, but saving is unavailable right now.");
@@ -102,6 +129,17 @@ export default function StudentScreen() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  function continueLatestPlan() {
+    if (!latestPlan) {
+      return;
+    }
+
+    setPlan(latestPlan.plan);
+    setSavedPlan(latestPlan);
+    setSaveMessage("Loaded latest saved plan.");
+    setIsPlanVisible(true);
   }
 
   function buildRequest(nextForm: PlanForm): StudyPlanRequest | null {
@@ -299,6 +337,30 @@ export default function StudentScreen() {
             <MaterialCommunityIcons name="bell-outline" size={22} color={colors.text} />
           </Pressable>
         </View>
+
+        {latestPlan ? (
+          <View style={styles.panel}>
+            <View style={styles.panelHeader}>
+              <View style={styles.latestCopy}>
+                <Text style={styles.kicker}>Latest saved plan</Text>
+                <Text style={styles.sectionTitle}>{latestPlan.student_name}</Text>
+                <Text style={styles.helper}>
+                  Saved {formatReadableDate(latestPlan.created_at.slice(0, 10))} -{" "}
+                  {formatHours(latestPlan.plan.metadata.average_daily_minutes)} per day
+                </Text>
+              </View>
+              <Pressable accessibilityRole="button" onPress={continueLatestPlan} style={styles.primaryButton}>
+                <MaterialCommunityIcons name="play-circle-outline" size={18} color="#FFFFFF" />
+                <Text style={styles.primaryButtonText}>Continue</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : latestMessage ? (
+          <View style={styles.infoPanel}>
+            <MaterialCommunityIcons name="content-save-outline" size={20} color={colors.brand} />
+            <Text style={styles.infoText}>{latestMessage}</Text>
+          </View>
+        ) : null}
 
         <WizardProgress currentStep={stepIndex} />
 
@@ -1268,6 +1330,23 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     width: "100%"
   },
+  infoPanel: {
+    alignItems: "center",
+    backgroundColor: colors.brandSoft,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  infoText: {
+    color: colors.brandDark,
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 20
+  },
   kicker: {
     color: colors.muted,
     fontSize: 12,
@@ -1278,6 +1357,11 @@ const styles = StyleSheet.create({
     color: colors.brand,
     fontSize: 24,
     fontWeight: "800"
+  },
+  latestCopy: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 180
   },
   panel: {
     backgroundColor: colors.panel,
