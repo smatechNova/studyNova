@@ -55,6 +55,11 @@ type PlanForm = {
   subjects: SubjectForm[];
 };
 
+type ValidationResult = {
+  message: string;
+  stepIndex: number;
+};
+
 export default function StudentScreen() {
   const [form, setForm] = useState<PlanForm>(() => createDefaultForm());
   const [plan, setPlan] = useState<StudyPlanResponse | null>(null);
@@ -143,7 +148,18 @@ export default function StudentScreen() {
   }
 
   function buildRequest(nextForm: PlanForm): StudyPlanRequest | null {
+    const validation = getFirstValidationError(nextForm);
+    if (validation) {
+      setStepIndex(validation.stepIndex);
+      setError(validation.message);
+      return null;
+    }
+
     const age = toNumber(nextForm.age);
+    const availableDailyMinutes = toNumber(nextForm.availableDailyMinutes);
+    const minutesPerPage = toNumber(nextForm.minutesPerPage);
+    const sessionMinutes = toNumber(nextForm.sessionMinutes);
+    const breakMinutes = toNumber(nextForm.breakMinutes);
     const subjects = nextForm.subjects
       .map((subject) => ({
         name: subject.name.trim(),
@@ -188,6 +204,26 @@ export default function StudentScreen() {
       return null;
     }
 
+    if (availableDailyMinutes <= 0) {
+      setError("Enter the daily study minutes.");
+      return null;
+    }
+
+    if (minutesPerPage <= 0) {
+      setError("Enter the minutes needed to read one page.");
+      return null;
+    }
+
+    if (sessionMinutes <= 0) {
+      setError("Enter the study session length.");
+      return null;
+    }
+
+    if (breakMinutes <= 0) {
+      setError("Enter the break length.");
+      return null;
+    }
+
     if (!subjects.length) {
       setError("Add at least one subject with one topic.");
       return null;
@@ -203,16 +239,22 @@ export default function StudentScreen() {
       },
       exam_start_date: nextForm.examStartDate,
       exam_end_date: nextForm.examEndDate,
-      available_daily_minutes: clamp(toNumber(nextForm.availableDailyMinutes), 30, 720),
-      minutes_per_page: clamp(toNumber(nextForm.minutesPerPage), 1, 30),
-      session_minutes: clamp(toNumber(nextForm.sessionMinutes), 20, 90),
-      break_minutes: clamp(toNumber(nextForm.breakMinutes), 5, 30),
+      available_daily_minutes: clamp(availableDailyMinutes, 30, 720),
+      minutes_per_page: clamp(minutesPerPage, 1, 30),
+      session_minutes: clamp(sessionMinutes, 20, 90),
+      break_minutes: clamp(breakMinutes, 5, 30),
       study_strength_note: nextForm.studyStrengthNote.trim(),
       subjects
     };
   }
 
   function goNext() {
+    const validationMessage = getStepValidationError(currentStep, form);
+    if (validationMessage) {
+      setError(validationMessage);
+      return;
+    }
+
     setError("");
     setActiveCalendar(null);
     setStepIndex((current) => Math.min(current + 1, STEPS.length - 1));
@@ -225,10 +267,12 @@ export default function StudentScreen() {
   }
 
   function updateField(field: keyof Omit<PlanForm, "subjects">, value: string) {
+    setError("");
     setForm((current) => ({ ...current, [field]: value }));
   }
 
   function updateDateField(field: DateFieldName, value: string) {
+    setError("");
     setForm((current) => {
       if (field === "examStartDate" && !isDateOnOrAfter(current.examEndDate, value)) {
         return { ...current, examStartDate: value, examEndDate: value };
@@ -240,6 +284,7 @@ export default function StudentScreen() {
   }
 
   function updateSubject(subjectId: string, name: string) {
+    setError("");
     setForm((current) => ({
       ...current,
       subjects: current.subjects.map((subject) =>
@@ -249,9 +294,10 @@ export default function StudentScreen() {
   }
 
   function addSubject() {
+    setError("");
     setForm((current) => ({
       ...current,
-      subjects: [...current.subjects, createSubject("New subject", [createTopic("New topic", "10", "Textbook")])]
+      subjects: [...current.subjects, createSubject("", [createTopic("", "", "Textbook")])]
     }));
   }
 
@@ -266,6 +312,7 @@ export default function StudentScreen() {
   }
 
   function updateTopic(subjectId: string, topicId: string, field: keyof Omit<TopicForm, "id">, value: string) {
+    setError("");
     setForm((current) => ({
       ...current,
       subjects: current.subjects.map((subject) => {
@@ -284,11 +331,12 @@ export default function StudentScreen() {
   }
 
   function addTopic(subjectId: string) {
+    setError("");
     setForm((current) => ({
       ...current,
       subjects: current.subjects.map((subject) =>
         subject.id === subjectId
-          ? { ...subject, topics: [...subject.topics, createTopic("New topic", "10", "Textbook")] }
+          ? { ...subject, topics: [...subject.topics, createTopic("", "", "Textbook")] }
           : subject
       )
     }));
@@ -381,28 +429,33 @@ export default function StudentScreen() {
             <View style={styles.formStack}>
               <FormField
                 label="Student name"
+                placeholder="Alliyah Olaniyan"
                 value={form.studentName}
                 onChangeText={(value) => updateField("studentName", value)}
               />
               <FormField
                 label="Class"
+                placeholder="SS2 Science"
                 value={form.classLevel}
                 onChangeText={(value) => updateField("classLevel", value)}
               />
               <FormField
                 keyboardType="number-pad"
                 label="Age"
+                placeholder="15"
                 value={form.age}
                 onChangeText={(value) => updateField("age", value)}
               />
               <FormField
                 label="Parent or guardian"
+                placeholder="Mrs Olaniyan"
                 value={form.parentName}
                 onChangeText={(value) => updateField("parentName", value)}
               />
               <FormField
                 keyboardType="phone-pad"
                 label="Parent contact"
+                placeholder="08012345678"
                 value={form.parentContact}
                 onChangeText={(value) => updateField("parentContact", value)}
               />
@@ -434,6 +487,7 @@ export default function StudentScreen() {
               <FormField
                 keyboardType="number-pad"
                 label="Daily study minutes"
+                placeholder="180"
                 value={form.availableDailyMinutes}
                 onChangeText={(value) => updateField("availableDailyMinutes", value)}
               />
@@ -445,24 +499,28 @@ export default function StudentScreen() {
               <FormField
                 keyboardType="number-pad"
                 label="Minutes to read one page"
+                placeholder="5"
                 value={form.minutesPerPage}
                 onChangeText={(value) => updateField("minutesPerPage", value)}
               />
               <FormField
                 keyboardType="number-pad"
                 label="Study session minutes"
+                placeholder="45"
                 value={form.sessionMinutes}
                 onChangeText={(value) => updateField("sessionMinutes", value)}
               />
               <FormField
                 keyboardType="number-pad"
                 label="Break minutes"
+                placeholder="10"
                 value={form.breakMinutes}
                 onChangeText={(value) => updateField("breakMinutes", value)}
               />
               <FormField
                 label="Study strength note"
                 multiline
+                placeholder="I understand faster when I summarize each page."
                 value={form.studyStrengthNote}
                 onChangeText={(value) => updateField("studyStrengthNote", value)}
               />
@@ -487,6 +545,7 @@ export default function StudentScreen() {
                     <View style={styles.subjectNameField}>
                       <FormField
                         label={`Subject ${subjectIndex + 1}`}
+                        placeholder="Mathematics"
                         value={subject.name}
                         onChangeText={(value) => updateSubject(subject.id, value)}
                       />
@@ -514,12 +573,14 @@ export default function StudentScreen() {
                       </View>
                       <FormField
                         label="Topic name"
+                        placeholder="Algebra"
                         value={topic.name}
                         onChangeText={(value) => updateTopic(subject.id, topic.id, "name", value)}
                       />
                       <FormField
                         keyboardType="number-pad"
                         label="Pages in this topic"
+                        placeholder="25"
                         value={topic.pages}
                         onChangeText={(value) => updateTopic(subject.id, topic.id, "pages", value)}
                       />
@@ -757,6 +818,8 @@ function FormField({
   placeholder,
   multiline = false
 }: FormFieldProps) {
+  const [isFocused, setIsFocused] = useState(false);
+
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -764,8 +827,10 @@ function FormField({
         autoCapitalize={keyboardType === "default" ? "words" : "none"}
         keyboardType={keyboardType}
         multiline={multiline}
+        onBlur={() => setIsFocused(false)}
         onChangeText={onChangeText}
-        placeholder={placeholder}
+        onFocus={() => setIsFocused(true)}
+        placeholder={isFocused ? "" : placeholder}
         placeholderTextColor={colors.muted}
         style={[styles.input, multiline ? styles.textArea : null]}
         textAlignVertical={multiline ? "top" : "center"}
@@ -957,34 +1022,130 @@ function stepSubtitle(step: StepName) {
   }
 }
 
+function getFirstValidationError(nextForm: PlanForm): ValidationResult | null {
+  const requiredSteps: StepName[] = ["Profile", "Exam", "Pace", "Subjects"];
+
+  for (const step of requiredSteps) {
+    const message = getStepValidationError(step, nextForm);
+    if (message) {
+      return {
+        message,
+        stepIndex: STEPS.indexOf(step)
+      };
+    }
+  }
+
+  return null;
+}
+
+function getStepValidationError(step: StepName, nextForm: PlanForm): string {
+  switch (step) {
+    case "Profile":
+      if (!nextForm.studentName.trim()) {
+        return "Enter the student name before continuing.";
+      }
+
+      if (!nextForm.classLevel.trim()) {
+        return "Enter the student's class before continuing.";
+      }
+
+      if (toNumber(nextForm.age) <= 0) {
+        return "Enter the student's age before continuing.";
+      }
+
+      if (!nextForm.parentName.trim()) {
+        return "Enter the parent or guardian name before continuing.";
+      }
+
+      if (!nextForm.parentContact.trim()) {
+        return "Enter the parent contact before continuing.";
+      }
+
+      return "";
+
+    case "Exam":
+      if (!isFutureDate(nextForm.examStartDate)) {
+        return "Choose a future exam start date before continuing.";
+      }
+
+      if (!isValidDate(nextForm.examEndDate) || !isDateOnOrAfter(nextForm.examEndDate, nextForm.examStartDate)) {
+        return "Choose an exam end date that is on or after the start date.";
+      }
+
+      if (toNumber(nextForm.availableDailyMinutes) <= 0) {
+        return "Enter the daily study minutes before continuing.";
+      }
+
+      return "";
+
+    case "Pace":
+      if (toNumber(nextForm.minutesPerPage) <= 0) {
+        return "Enter the minutes needed to read one page before continuing.";
+      }
+
+      if (toNumber(nextForm.sessionMinutes) <= 0) {
+        return "Enter the study session length before continuing.";
+      }
+
+      if (toNumber(nextForm.breakMinutes) <= 0) {
+        return "Enter the break length before continuing.";
+      }
+
+      return "";
+
+    case "Subjects":
+      if (!nextForm.subjects.length) {
+        return "Add at least one subject before continuing.";
+      }
+
+      for (let subjectIndex = 0; subjectIndex < nextForm.subjects.length; subjectIndex += 1) {
+        const subject = nextForm.subjects[subjectIndex];
+
+        if (!subject.name.trim()) {
+          return `Enter the name for subject ${subjectIndex + 1}.`;
+        }
+
+        if (!subject.topics.length) {
+          return `Add at least one topic under subject ${subjectIndex + 1}.`;
+        }
+
+        for (let topicIndex = 0; topicIndex < subject.topics.length; topicIndex += 1) {
+          const topic = subject.topics[topicIndex];
+
+          if (!topic.name.trim()) {
+            return `Enter topic ${topicIndex + 1} under subject ${subjectIndex + 1}.`;
+          }
+
+          if (toNumber(topic.pages) <= 0) {
+            return `Enter the page count for topic ${topicIndex + 1} under subject ${subjectIndex + 1}.`;
+          }
+        }
+      }
+
+      return "";
+
+    case "Review": {
+      const validation = getFirstValidationError(nextForm);
+      return validation?.message ?? "";
+    }
+  }
+}
+
 function createDefaultForm(): PlanForm {
   return {
-    studentName: "Alliyah",
-    classLevel: "SS2",
-    age: "15",
-    parentName: "Mrs Adewale",
-    parentContact: "08000000000",
+    studentName: "",
+    classLevel: "",
+    age: "",
+    parentName: "",
+    parentContact: "",
     examStartDate: futureDate(30),
     examEndDate: futureDate(35),
-    availableDailyMinutes: "180",
-    minutesPerPage: "5",
-    sessionMinutes: "45",
-    breakMinutes: "10",
-    studyStrengthNote: "I read faster in the morning and understand better after writing short notes.",
-    subjects: [
-      createSubject("Mathematics", [
-        createTopic("Algebra", "25", "Textbook"),
-        createTopic("Geometry", "18", "Class notes")
-      ]),
-      createSubject("English", [
-        createTopic("Comprehension", "15", "Class notes"),
-        createTopic("Essay Writing", "10", "Notebook")
-      ]),
-      createSubject("Biology", [
-        createTopic("Cell Structure", "20", "Textbook"),
-        createTopic("Nutrition", "12", "Online notes")
-      ])
-    ]
+    availableDailyMinutes: "",
+    minutesPerPage: "",
+    sessionMinutes: "",
+    breakMinutes: "",
+    studyStrengthNote: "",
+    subjects: [createSubject("", [createTopic("", "", "Textbook")])]
   };
 }
 
