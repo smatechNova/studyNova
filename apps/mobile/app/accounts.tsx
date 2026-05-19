@@ -13,7 +13,13 @@ import {
 } from "react-native";
 
 import { Screen } from "@/components/Screen";
-import { createParentAccount, createStudentAccount, getLatestParentFamily, getParentFamily, linkParentStudent } from "@/lib/api";
+import {
+  createParentAccount,
+  createStudentAccount,
+  getLatestParentFamily,
+  getParentFamily,
+  linkParentStudent
+} from "@/lib/api";
 import type { ParentFamilyAccount } from "@/types";
 import { colors, spacing } from "@/theme";
 
@@ -32,6 +38,10 @@ export default function AccountsScreen() {
   const [parentFamily, setParentFamily] = useState<ParentFamilyAccount | null>(null);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const primaryActionLabel =
+    parentFamily?.parent && form.parentContact.trim() === parentFamily.parent.contact
+      ? "Link student to parent"
+      : "Create and link profiles";
 
   useEffect(() => {
     void loadLatestFamily();
@@ -84,6 +94,24 @@ export default function AccountsScreen() {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
+  function prepareAdditionalStudent() {
+    if (!parentFamily?.parent) {
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      studentName: "",
+      classLevel: "",
+      age: "",
+      schoolName: "",
+      parentName: parentFamily.parent?.name ?? current.parentName,
+      parentContact: parentFamily.parent?.contact ?? current.parentContact,
+      relationship: parentFamily.parent?.relationship ?? current.relationship
+    }));
+    setMessage("Parent details are ready. Enter the next student's details and link profiles.");
+  }
+
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content}>
@@ -117,6 +145,10 @@ export default function AccountsScreen() {
                   ))}
                 </View>
               ) : null}
+              <Pressable accessibilityRole="button" onPress={prepareAdditionalStudent} style={styles.inlineAction}>
+                <MaterialCommunityIcons name="account-plus-outline" size={18} color={colors.success} />
+                <Text style={styles.inlineActionText}>Add another student</Text>
+              </Pressable>
             </View>
           </View>
         ) : null}
@@ -192,7 +224,7 @@ export default function AccountsScreen() {
             ) : (
               <>
                 <MaterialCommunityIcons name="content-save-outline" size={18} color="#FFFFFF" />
-                <Text style={styles.primaryButtonText}>Create and link profiles</Text>
+                <Text style={styles.primaryButtonText}>{primaryActionLabel}</Text>
               </>
             )}
           </Pressable>
@@ -372,6 +404,23 @@ const styles = StyleSheet.create({
   infoTitle: {
     color: colors.text,
     fontSize: 15,
+    fontWeight: "800"
+  },
+  inlineAction: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.panel,
+    borderColor: colors.success,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    minHeight: 40,
+    paddingHorizontal: spacing.sm
+  },
+  inlineActionText: {
+    color: colors.success,
+    fontSize: 13,
     fontWeight: "800"
   },
   input: {
