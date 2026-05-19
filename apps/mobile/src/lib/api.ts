@@ -1,5 +1,11 @@
 import type {
+  FamilyAccount,
+  ParentAccount,
+  ParentAccountInput,
+  ParentStudentLink,
   SavedStudyPlan,
+  StudentAccount,
+  StudentAccountInput,
   StudyPlanProgress,
   StudyPlanRequest,
   StudyPlanResponse,
@@ -20,6 +26,67 @@ function getApiUrl() {
   }
 
   return "http://localhost:8000";
+}
+
+export async function createStudentAccount(payload: StudentAccountInput): Promise<StudentAccount> {
+  const response = await fetch(`${API_URL}/api/v1/accounts/students`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Student account request failed with ${response.status}`);
+  }
+
+  return response.json() as Promise<StudentAccount>;
+}
+
+export async function createParentAccount(payload: ParentAccountInput): Promise<ParentAccount> {
+  const response = await fetch(`${API_URL}/api/v1/accounts/parents`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Parent account request failed with ${response.status}`);
+  }
+
+  return response.json() as Promise<ParentAccount>;
+}
+
+export async function linkParentStudent(parentId: string, studentId: string): Promise<ParentStudentLink> {
+  const response = await fetch(`${API_URL}/api/v1/accounts/links`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      parent_id: parentId,
+      student_id: studentId
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Parent-child link request failed with ${response.status}`);
+  }
+
+  return response.json() as Promise<ParentStudentLink>;
+}
+
+export async function getLatestFamilyAccount(): Promise<FamilyAccount> {
+  const response = await fetch(`${API_URL}/api/v1/accounts/family/latest`);
+
+  if (!response.ok) {
+    throw new Error(`Family account request failed with ${response.status}`);
+  }
+
+  return response.json() as Promise<FamilyAccount>;
 }
 
 export async function generateStudyPlan(payload: StudyPlanRequest): Promise<StudyPlanResponse> {

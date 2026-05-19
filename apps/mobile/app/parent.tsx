@@ -5,11 +5,12 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { ProgressBar } from "@/components/ProgressBar";
 import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
-import { getLatestStudyPlan, getStudyPlanProgress } from "@/lib/api";
-import type { SavedStudyPlan, StudyPlanProgress } from "@/types";
+import { getLatestFamilyAccount, getLatestStudyPlan, getStudyPlanProgress } from "@/lib/api";
+import type { FamilyAccount, SavedStudyPlan, StudyPlanProgress } from "@/types";
 import { colors, spacing } from "@/theme";
 
 export default function ParentScreen() {
+  const [family, setFamily] = useState<FamilyAccount | null>(null);
   const [savedPlan, setSavedPlan] = useState<SavedStudyPlan | null>(null);
   const [progress, setProgress] = useState<StudyPlanProgress | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -41,14 +42,25 @@ export default function ParentScreen() {
     setMessage("");
 
     try {
-      const latest = await getLatestStudyPlan();
+      const latestFamily = await getLatestFamilyAccount();
+      setFamily(latestFamily);
+
+      if (!latestFamily.student || !latestFamily.parent || !latestFamily.link) {
+        setSavedPlan(null);
+        setProgress(null);
+        setMessage("Create and link student and parent profiles first.");
+        return;
+      }
+
+      const latest = await getLatestStudyPlan(latestFamily.student.name);
       const latestProgress = await getStudyPlanProgress(latest.id);
       setSavedPlan(latest);
       setProgress(latestProgress);
     } catch {
+      setFamily(null);
       setSavedPlan(null);
       setProgress(null);
-      setMessage("Generate and save a student plan first, then complete one study session.");
+      setMessage("Create linked profiles, then generate and save a student plan.");
     } finally {
       setIsLoading(false);
     }
@@ -60,8 +72,15 @@ export default function ParentScreen() {
         <View style={styles.header}>
           <View style={styles.headerCopy}>
             <Text style={styles.kicker}>Linked student</Text>
-            <Text style={styles.title}>{savedPlan?.student_name ?? "No student yet"}</Text>
-            {savedPlan ? <Text style={styles.helper}>{savedPlan.plan.metadata.class_level || "Class not set"}</Text> : null}
+            <Text style={styles.title}>{family?.student?.name ?? savedPlan?.student_name ?? "No student yet"}</Text>
+            {family?.student ? (
+              <Text style={styles.helper}>
+                {family.student.class_level}
+                {family.parent ? ` - linked to ${family.parent.name}` : ""}
+              </Text>
+            ) : savedPlan ? (
+              <Text style={styles.helper}>{savedPlan.plan.metadata.class_level || "Class not set"}</Text>
+            ) : null}
           </View>
           <Pressable accessibilityRole="button" onPress={() => void loadParentView()} style={styles.badge}>
             {isLoading ? (

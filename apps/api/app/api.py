@@ -8,8 +8,15 @@ from app.schemas import (
     CheckInRequest,
     CheckInResponse,
     DeleteResponse,
+    FamilyAccount,
+    ParentAccount,
+    ParentAccountCreate,
     ParentProgressSummary,
+    ParentStudentLink,
+    ParentStudentLinkCreate,
     SavedStudyPlan,
+    StudentAccount,
+    StudentAccountCreate,
     StudyPlanProgress,
     StudyPlanRequest,
     StudyPlanResponse,
@@ -21,6 +28,29 @@ from app.storage import get_study_plan_store
 router = APIRouter(prefix="/api/v1")
 
 _check_ins: list[CheckInRequest] = []
+
+
+@router.post("/accounts/students", response_model=StudentAccount)
+def create_student_account(payload: StudentAccountCreate) -> StudentAccount:
+    return get_study_plan_store().create_student_account(payload)
+
+
+@router.post("/accounts/parents", response_model=ParentAccount)
+def create_parent_account(payload: ParentAccountCreate) -> ParentAccount:
+    return get_study_plan_store().create_parent_account(payload)
+
+
+@router.post("/accounts/links", response_model=ParentStudentLink)
+def link_parent_student(payload: ParentStudentLinkCreate) -> ParentStudentLink:
+    link = get_study_plan_store().link_parent_student(payload)
+    if link is None:
+        raise HTTPException(status_code=404, detail="Parent or student account was not found.")
+    return link
+
+
+@router.get("/accounts/family/latest", response_model=FamilyAccount)
+def get_latest_family_account() -> FamilyAccount:
+    return get_study_plan_store().latest_family()
 
 
 @router.post("/study-plans/generate", response_model=StudyPlanResponse)

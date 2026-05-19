@@ -16,10 +16,10 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="index" options={{ title: "StudyNova" }} />
+        <Stack.Screen name="accounts" options={{ title: "Account Setup" }} />
         <Stack.Screen name="student" options={{ title: "Student Dashboard" }} />
         <Stack.Screen name="parent" options={{ title: "Parent Dashboard" }} />
       </Stack>
     </>
   );
 }
-

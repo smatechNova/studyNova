@@ -17,6 +17,7 @@ import { StatCard } from "@/components/StatCard";
 import {
   completeStudySession,
   generateStudyPlan,
+  getLatestFamilyAccount,
   getLatestStudyPlan,
   getStudyPlanProgress,
   saveStudyPlan
@@ -90,7 +91,23 @@ export default function StudentScreen() {
   useEffect(() => {
     let isMounted = true;
 
-    async function loadLatestPlan() {
+    async function loadAccountAndPlan() {
+      try {
+        const latestFamily = await getLatestFamilyAccount();
+        if (isMounted && latestFamily.student && latestFamily.parent) {
+          setForm((current) => ({
+            ...current,
+            studentName: current.studentName || latestFamily.student?.name || "",
+            classLevel: current.classLevel || latestFamily.student?.class_level || "",
+            age: current.age || `${latestFamily.student?.age ?? ""}`,
+            parentName: current.parentName || latestFamily.parent?.name || "",
+            parentContact: current.parentContact || latestFamily.parent?.contact || ""
+          }));
+        }
+      } catch {
+        // Account setup is optional during early development.
+      }
+
       try {
         const saved = await getLatestStudyPlan();
         if (isMounted) {
@@ -104,7 +121,7 @@ export default function StudentScreen() {
       }
     }
 
-    void loadLatestPlan();
+    void loadAccountAndPlan();
 
     return () => {
       isMounted = false;

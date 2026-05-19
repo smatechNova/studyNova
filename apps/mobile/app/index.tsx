@@ -31,6 +31,13 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.roleGrid}>
+          <Link href="/accounts" asChild>
+            <RoleCard
+              title="Account setup"
+              description="Create student and parent profiles, then link them before planning."
+              icon="account-multiple-plus-outline"
+            />
+          </Link>
           <Link href="/student" asChild>
             <RoleCard
               title="Student"

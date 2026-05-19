@@ -90,6 +90,45 @@ class SavedStudyPlan(BaseModel):
     plan: StudyPlanResponse
 
 
+class StudentAccountCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=80)
+    class_level: str = Field(min_length=1, max_length=40)
+    age: int = Field(ge=3, le=30)
+    school_name: str = Field(default="", max_length=120)
+
+
+class StudentAccount(StudentAccountCreate):
+    id: str
+    created_at: datetime
+
+
+class ParentAccountCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=80)
+    contact: str = Field(min_length=5, max_length=120)
+    relationship: str = Field(default="Parent", min_length=2, max_length=40)
+
+
+class ParentAccount(ParentAccountCreate):
+    id: str
+    created_at: datetime
+
+
+class ParentStudentLinkCreate(BaseModel):
+    parent_id: str = Field(min_length=1, max_length=80)
+    student_id: str = Field(min_length=1, max_length=80)
+
+
+class ParentStudentLink(ParentStudentLinkCreate):
+    id: str
+    created_at: datetime
+
+
+class FamilyAccount(BaseModel):
+    parent: ParentAccount | None = None
+    student: StudentAccount | None = None
+    link: ParentStudentLink | None = None
+
+
 class StudySessionCompletionRequest(BaseModel):
     session_key: str = Field(min_length=1, max_length=240)
     study_date: date

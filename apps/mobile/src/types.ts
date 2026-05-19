@@ -84,6 +84,42 @@ export type SavedStudyPlan = {
   plan: StudyPlanResponse;
 };
 
+export type StudentAccountInput = {
+  name: string;
+  class_level: string;
+  age: number;
+  school_name: string;
+};
+
+export type StudentAccount = StudentAccountInput & {
+  id: string;
+  created_at: string;
+};
+
+export type ParentAccountInput = {
+  name: string;
+  contact: string;
+  relationship: string;
+};
+
+export type ParentAccount = ParentAccountInput & {
+  id: string;
+  created_at: string;
+};
+
+export type ParentStudentLink = {
+  id: string;
+  parent_id: string;
+  student_id: string;
+  created_at: string;
+};
+
+export type FamilyAccount = {
+  parent: ParentAccount | null;
+  student: StudentAccount | null;
+  link: ParentStudentLink | null;
+};
+
 export type StudySessionCompletionRequest = {
   session_key: string;
   study_date: string;

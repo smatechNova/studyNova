@@ -8,7 +8,14 @@ from uuid import uuid4
 from app.config import get_settings
 from app.schemas import (
     DailyProgress,
+    FamilyAccount,
+    ParentAccount,
+    ParentAccountCreate,
+    ParentStudentLink,
+    ParentStudentLinkCreate,
     SavedStudyPlan,
+    StudentAccount,
+    StudentAccountCreate,
     StudyPlanProgress,
     StudyPlanResponse,
     StudySessionCompletion,
@@ -69,6 +76,167 @@ class StudyPlanStore:
             created_at=row["created_at"],
             plan=StudyPlanResponse.model_validate(json.loads(row["plan_json"])),
         )
+
+    def create_student_account(self, payload: StudentAccountCreate) -> StudentAccount:
+        account = StudentAccount(
+            id=str(uuid4()),
+            created_at=datetime.now(timezone.utc),
+            **payload.model_dump(),
+        )
+
+        with self._connect() as connection:
+            connection.execute(
+                """
+                insert into student_accounts (id, name, class_level, age, school_name, created_at)
+                values (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    account.id,
+                    account.name,
+                    account.class_level,
+                    account.age,
+                    account.school_name,
+                    account.created_at.isoformat(),
+                ),
+            )
+
+        return account
+
+    def create_parent_account(self, payload: ParentAccountCreate) -> ParentAccount:
+        account = ParentAccount(
+            id=str(uuid4()),
+            created_at=datetime.now(timezone.utc),
+            **payload.model_dump(),
+        )
+
+        with self._connect() as connection:
+            connection.execute(
+                """
+                insert into parent_accounts (id, name, contact, relationship, created_at)
+                values (?, ?, ?, ?, ?)
+                """,
+                (
+                    account.id,
+                    account.name,
+                    account.contact,
+                    account.relationship,
+                    account.created_at.isoformat(),
+                ),
+            )
+
+        return account
+
+    def link_parent_student(self, payload: ParentStudentLinkCreate) -> ParentStudentLink | None:
+        if self.student_account_by_id(payload.student_id) is None or self.parent_account_by_id(payload.parent_id) is None:
+            return None
+
+        created_at = datetime.now(timezone.utc)
+        with self._connect() as connection:
+            existing = connection.execute(
+                """
+                select id, parent_id, student_id, created_at
+                from parent_student_links
+                where parent_id = ? and student_id = ?
+                """,
+                (payload.parent_id, payload.student_id),
+            ).fetchone()
+
+            if existing:
+                return self._link_from_row(existing)
+
+            link = ParentStudentLink(
+                id=str(uuid4()),
+                parent_id=payload.parent_id,
+                student_id=payload.student_id,
+                created_at=created_at,
+            )
+            connection.execute(
+                """
+                insert into parent_student_links (id, parent_id, student_id, created_at)
+                values (?, ?, ?, ?)
+                """,
+                (
+                    link.id,
+                    link.parent_id,
+                    link.student_id,
+                    link.created_at.isoformat(),
+                ),
+            )
+
+        return link
+
+    def latest_family(self) -> FamilyAccount:
+        with self._connect() as connection:
+            link_row = connection.execute(
+                """
+                select id, parent_id, student_id, created_at
+                from parent_student_links
+                order by created_at desc
+                limit 1
+                """
+            ).fetchone()
+
+        if link_row:
+            link = self._link_from_row(link_row)
+            return FamilyAccount(
+                parent=self.parent_account_by_id(link.parent_id),
+                student=self.student_account_by_id(link.student_id),
+                link=link,
+            )
+
+        return FamilyAccount(parent=self.latest_parent_account(), student=self.latest_student_account(), link=None)
+
+    def latest_student_account(self) -> StudentAccount | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                select id, name, class_level, age, school_name, created_at
+                from student_accounts
+                order by created_at desc
+                limit 1
+                """
+            ).fetchone()
+
+        return self._student_from_row(row) if row else None
+
+    def latest_parent_account(self) -> ParentAccount | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                select id, name, contact, relationship, created_at
+                from parent_accounts
+                order by created_at desc
+                limit 1
+                """
+            ).fetchone()
+
+        return self._parent_from_row(row) if row else None
+
+    def student_account_by_id(self, student_id: str) -> StudentAccount | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                select id, name, class_level, age, school_name, created_at
+                from student_accounts
+                where id = ?
+                """,
+                (student_id,),
+            ).fetchone()
+
+        return self._student_from_row(row) if row else None
+
+    def parent_account_by_id(self, parent_id: str) -> ParentAccount | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                select id, name, contact, relationship, created_at
+                from parent_accounts
+                where id = ?
+                """,
+                (parent_id,),
+            ).fetchone()
+
+        return self._parent_from_row(row) if row else None
 
     def by_id(self, plan_id: str) -> SavedStudyPlan | None:
         with self._connect() as connection:
@@ -283,6 +451,33 @@ class StudyPlanStore:
             for row in rows
         ]
 
+    def _student_from_row(self, row: sqlite3.Row) -> StudentAccount:
+        return StudentAccount(
+            id=row["id"],
+            name=row["name"],
+            class_level=row["class_level"],
+            age=row["age"],
+            school_name=row["school_name"],
+            created_at=row["created_at"],
+        )
+
+    def _parent_from_row(self, row: sqlite3.Row) -> ParentAccount:
+        return ParentAccount(
+            id=row["id"],
+            name=row["name"],
+            contact=row["contact"],
+            relationship=row["relationship"],
+            created_at=row["created_at"],
+        )
+
+    def _link_from_row(self, row: sqlite3.Row) -> ParentStudentLink:
+        return ParentStudentLink(
+            id=row["id"],
+            parent_id=row["parent_id"],
+            student_id=row["student_id"],
+            created_at=row["created_at"],
+        )
+
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database_path)
         connection.row_factory = sqlite3.Row
@@ -304,6 +499,46 @@ class StudyPlanStore:
                 """
                 create index if not exists idx_saved_study_plans_student_created
                 on saved_study_plans (student_name, created_at desc)
+                """
+            )
+            connection.execute(
+                """
+                create table if not exists student_accounts (
+                    id text primary key,
+                    name text not null,
+                    class_level text not null,
+                    age integer not null,
+                    school_name text not null,
+                    created_at text not null
+                )
+                """
+            )
+            connection.execute(
+                """
+                create table if not exists parent_accounts (
+                    id text primary key,
+                    name text not null,
+                    contact text not null,
+                    relationship text not null,
+                    created_at text not null
+                )
+                """
+            )
+            connection.execute(
+                """
+                create table if not exists parent_student_links (
+                    id text primary key,
+                    parent_id text not null,
+                    student_id text not null,
+                    created_at text not null,
+                    unique (parent_id, student_id)
+                )
+                """
+            )
+            connection.execute(
+                """
+                create index if not exists idx_parent_student_links_created
+                on parent_student_links (created_at desc)
                 """
             )
             connection.execute(
