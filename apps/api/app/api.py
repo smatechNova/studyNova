@@ -20,6 +20,7 @@ from app.schemas import (
     StudyPlanProgress,
     StudyPlanRequest,
     StudyPlanResponse,
+    StudyPlanSaveRequest,
     StudySessionCompletion,
     StudySessionCompletionRequest,
 )
@@ -59,13 +60,16 @@ def generate_study_plan(payload: StudyPlanRequest) -> StudyPlanResponse:
 
 
 @router.post("/study-plans/save", response_model=SavedStudyPlan)
-def save_study_plan(plan: StudyPlanResponse) -> SavedStudyPlan:
-    return get_study_plan_store().save(plan)
+def save_study_plan(payload: StudyPlanSaveRequest) -> SavedStudyPlan:
+    return get_study_plan_store().save(payload.plan, payload.student_id)
 
 
 @router.get("/study-plans/latest", response_model=SavedStudyPlan)
-def get_latest_study_plan(student_name: str | None = None) -> SavedStudyPlan:
-    saved_plan = get_study_plan_store().latest(student_name)
+def get_latest_study_plan(
+    student_name: str | None = None,
+    student_id: str | None = None,
+) -> SavedStudyPlan:
+    saved_plan = get_study_plan_store().latest(student_name=student_name, student_id=student_id)
     if saved_plan is None:
         raise HTTPException(status_code=404, detail="No saved study plan found.")
     return saved_plan

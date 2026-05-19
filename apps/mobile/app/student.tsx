@@ -74,6 +74,7 @@ export default function StudentScreen() {
   const [latestPlan, setLatestPlan] = useState<SavedStudyPlan | null>(null);
   const [saveMessage, setSaveMessage] = useState("");
   const [latestMessage, setLatestMessage] = useState("");
+  const [linkedStudentId, setLinkedStudentId] = useState<string | undefined>();
   const [stepIndex, setStepIndex] = useState(0);
   const [activeCalendar, setActiveCalendar] = useState<DateFieldName | null>(null);
   const [isPlanVisible, setIsPlanVisible] = useState(false);
@@ -92,9 +93,12 @@ export default function StudentScreen() {
     let isMounted = true;
 
     async function loadAccountAndPlan() {
+      let accountStudentId: string | undefined;
       try {
         const latestFamily = await getLatestFamilyAccount();
         if (isMounted && latestFamily.student && latestFamily.parent) {
+          accountStudentId = latestFamily.student.id;
+          setLinkedStudentId(accountStudentId);
           setForm((current) => ({
             ...current,
             studentName: current.studentName || latestFamily.student?.name || "",
@@ -109,7 +113,7 @@ export default function StudentScreen() {
       }
 
       try {
-        const saved = await getLatestStudyPlan();
+        const saved = await getLatestStudyPlan(accountStudentId ? { studentId: accountStudentId } : undefined);
         if (isMounted) {
           setLatestPlan(saved);
           setLatestMessage("");
@@ -143,7 +147,7 @@ export default function StudentScreen() {
       setSavedPlan(null);
       setSaveMessage("Saving generated plan...");
       try {
-        const saved = await saveStudyPlan(response);
+        const saved = await saveStudyPlan(response, linkedStudentId);
         setSavedPlan(saved);
         setLatestPlan(saved);
         setSaveMessage("Plan saved. You can continue from here later.");

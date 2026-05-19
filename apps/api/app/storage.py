@@ -29,10 +29,11 @@ class StudyPlanStore:
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self._ensure_schema()
 
-    def save(self, plan: StudyPlanResponse) -> SavedStudyPlan:
+    def save(self, plan: StudyPlanResponse, student_id: str | None = None) -> SavedStudyPlan:
         saved_plan = SavedStudyPlan(
             id=str(uuid4()),
             student_name=plan.metadata.student_name,
+            student_id=student_id,
             created_at=datetime.now(timezone.utc),
             plan=plan,
         )
@@ -40,12 +41,13 @@ class StudyPlanStore:
         with self._connect() as connection:
             connection.execute(
                 """
-                insert into saved_study_plans (id, student_name, created_at, plan_json)
-                values (?, ?, ?, ?)
+                insert into saved_study_plans (id, student_name, student_id, created_at, plan_json)
+                values (?, ?, ?, ?, ?)
                 """,
                 (
                     saved_plan.id,
                     saved_plan.student_name,
+                    saved_plan.student_id,
                     saved_plan.created_at.isoformat(),
                     json.dumps(plan.model_dump(mode="json")),
                 ),
@@ -53,13 +55,20 @@ class StudyPlanStore:
 
         return saved_plan
 
-    def latest(self, student_name: str | None = None) -> SavedStudyPlan | None:
+    def latest(
+        self,
+        student_name: str | None = None,
+        student_id: str | None = None,
+    ) -> SavedStudyPlan | None:
         query = """
-            select id, student_name, created_at, plan_json
+            select id, student_name, student_id, created_at, plan_json
             from saved_study_plans
         """
         params: tuple[str, ...] = ()
-        if student_name:
+        if student_id:
+            query += " where student_id = ?"
+            params = (student_id,)
+        elif student_name:
             query += " where lower(student_name) = lower(?)"
             params = (student_name,)
         query += " order by created_at desc limit 1"
@@ -73,6 +82,7 @@ class StudyPlanStore:
         return SavedStudyPlan(
             id=row["id"],
             student_name=row["student_name"],
+            student_id=row["student_id"],
             created_at=row["created_at"],
             plan=StudyPlanResponse.model_validate(json.loads(row["plan_json"])),
         )
@@ -242,7 +252,7 @@ class StudyPlanStore:
         with self._connect() as connection:
             row = connection.execute(
                 """
-                select id, student_name, created_at, plan_json
+                select id, student_name, student_id, created_at, plan_json
                 from saved_study_plans
                 where id = ?
                 """,
@@ -255,6 +265,7 @@ class StudyPlanStore:
         return SavedStudyPlan(
             id=row["id"],
             student_name=row["student_name"],
+            student_id=row["student_id"],
             created_at=row["created_at"],
             plan=StudyPlanResponse.model_validate(json.loads(row["plan_json"])),
         )
@@ -490,15 +501,27 @@ class StudyPlanStore:
                 create table if not exists saved_study_plans (
                     id text primary key,
                     student_name text not null,
+                    student_id text,
                     created_at text not null,
                     plan_json text not null
                 )
                 """
             )
+            saved_plan_columns = {
+                row["name"] for row in connection.execute("pragma table_info(saved_study_plans)").fetchall()
+            }
+            if "student_id" not in saved_plan_columns:
+                connection.execute("alter table saved_study_plans add column student_id text")
             connection.execute(
                 """
                 create index if not exists idx_saved_study_plans_student_created
                 on saved_study_plans (student_name, created_at desc)
+                """
+            )
+            connection.execute(
+                """
+                create index if not exists idx_saved_study_plans_student_id_created
+                on saved_study_plans (student_id, created_at desc)
                 """
             )
             connection.execute(

@@ -80,6 +80,7 @@ export type StudyPlanResponse = {
 export type SavedStudyPlan = {
   id: string;
   student_name: string;
+  student_id?: string | null;
   created_at: string;
   plan: StudyPlanResponse;
 };

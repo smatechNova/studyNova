@@ -105,13 +105,16 @@ export async function generateStudyPlan(payload: StudyPlanRequest): Promise<Stud
   return response.json() as Promise<StudyPlanResponse>;
 }
 
-export async function saveStudyPlan(payload: StudyPlanResponse): Promise<SavedStudyPlan> {
+export async function saveStudyPlan(payload: StudyPlanResponse, studentId?: string): Promise<SavedStudyPlan> {
   const response = await fetch(`${API_URL}/api/v1/study-plans/save`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify(payload)
+    body: JSON.stringify({
+      plan: payload,
+      student_id: studentId ?? null
+    })
   });
 
   if (!response.ok) {
@@ -121,8 +124,14 @@ export async function saveStudyPlan(payload: StudyPlanResponse): Promise<SavedSt
   return response.json() as Promise<SavedStudyPlan>;
 }
 
-export async function getLatestStudyPlan(studentName?: string): Promise<SavedStudyPlan> {
-  const query = studentName ? `?student_name=${encodeURIComponent(studentName)}` : "";
+export async function getLatestStudyPlan(options?: { studentName?: string; studentId?: string }): Promise<SavedStudyPlan> {
+  const params = new URLSearchParams();
+  if (options?.studentId) {
+    params.set("student_id", options.studentId);
+  } else if (options?.studentName) {
+    params.set("student_name", options.studentName);
+  }
+  const query = params.toString() ? `?${params.toString()}` : "";
   const response = await fetch(`${API_URL}/api/v1/study-plans/latest${query}`);
 
   if (!response.ok) {

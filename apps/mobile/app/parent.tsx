@@ -52,7 +52,7 @@ export default function ParentScreen() {
         return;
       }
 
-      const latest = await getLatestStudyPlan(latestFamily.student.name);
+      const latest = await getLatestStudyPlan({ studentId: latestFamily.student.id });
       const latestProgress = await getStudyPlanProgress(latest.id);
       setSavedPlan(latest);
       setProgress(latestProgress);
