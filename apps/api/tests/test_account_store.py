@@ -76,3 +76,44 @@ def test_study_plan_store_reuses_existing_accounts(tmp_path) -> None:
 
     assert second_student.id == first_student.id
     assert second_parent.id == first_parent.id
+
+
+def test_study_plan_store_lists_multiple_students_for_one_parent(tmp_path) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    parent = store.create_parent_account(
+        ParentAccountCreate(
+            name="Mrs Olaniyan",
+            contact="08012345678",
+            relationship="Mother",
+        )
+    )
+    first_student = store.create_student_account(
+        StudentAccountCreate(
+            name="Alliyah Olaniyan",
+            class_level="SS2 Science",
+            age=15,
+            school_name="",
+        )
+    )
+    second_student = store.create_student_account(
+        StudentAccountCreate(
+            name="Aminah Olaniyan",
+            class_level="JSS3",
+            age=13,
+            school_name="",
+        )
+    )
+
+    store.link_parent_student(ParentStudentLinkCreate(parent_id=parent.id, student_id=first_student.id))
+    store.link_parent_student(ParentStudentLinkCreate(parent_id=parent.id, student_id=second_student.id))
+
+    family = store.parent_family(parent.id)
+    latest_parent_family = store.latest_parent_family()
+
+    assert family.parent is not None
+    assert family.parent.id == parent.id
+    assert {student.id for student in family.students} == {first_student.id, second_student.id}
+    assert len(family.links) == 2
+    assert latest_parent_family.parent is not None
+    assert latest_parent_family.parent.id == parent.id
+    assert {student.id for student in latest_parent_family.students} == {first_student.id, second_student.id}

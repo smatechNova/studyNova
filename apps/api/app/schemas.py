@@ -135,6 +135,12 @@ class FamilyAccount(BaseModel):
     link: ParentStudentLink | None = None
 
 
+class ParentFamilyAccount(BaseModel):
+    parent: ParentAccount | None = None
+    students: list[StudentAccount] = Field(default_factory=list)
+    links: list[ParentStudentLink] = Field(default_factory=list)
+
+
 class StudySessionCompletionRequest(BaseModel):
     session_key: str = Field(min_length=1, max_length=240)
     study_date: date

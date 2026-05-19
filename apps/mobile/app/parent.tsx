@@ -5,12 +5,13 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { ProgressBar } from "@/components/ProgressBar";
 import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
-import { getLatestFamilyAccount, getLatestStudyPlan, getStudyPlanProgress } from "@/lib/api";
-import type { FamilyAccount, SavedStudyPlan, StudyPlanProgress } from "@/types";
+import { getLatestParentFamily, getLatestStudyPlan, getStudyPlanProgress } from "@/lib/api";
+import type { ParentFamilyAccount, SavedStudyPlan, StudyPlanProgress } from "@/types";
 import { colors, spacing } from "@/theme";
 
 export default function ParentScreen() {
-  const [family, setFamily] = useState<FamilyAccount | null>(null);
+  const [parentFamily, setParentFamily] = useState<ParentFamilyAccount | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | undefined>();
   const [savedPlan, setSavedPlan] = useState<SavedStudyPlan | null>(null);
   const [progress, setProgress] = useState<StudyPlanProgress | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,32 +33,44 @@ export default function ParentScreen() {
     return Math.round(total / recentDays.length);
   }, [recentDays]);
   const streakDays = useMemo(() => calculateStreak(progress), [progress]);
+  const selectedStudent =
+    parentFamily?.students.find((student) => student.id === selectedStudentId) ?? parentFamily?.students[0];
 
   useEffect(() => {
     void loadParentView();
   }, []);
 
-  async function loadParentView() {
+  async function loadParentView(nextStudentId = selectedStudentId) {
     setIsLoading(true);
     setMessage("");
 
     try {
-      const latestFamily = await getLatestFamilyAccount();
-      setFamily(latestFamily);
+      const latestFamily = await getLatestParentFamily();
+      setParentFamily(latestFamily);
 
-      if (!latestFamily.student || !latestFamily.parent || !latestFamily.link) {
+      if (!latestFamily.parent || !latestFamily.students.length) {
         setSavedPlan(null);
         setProgress(null);
         setMessage("Create and link student and parent profiles first.");
         return;
       }
 
-      const latest = await getLatestStudyPlan({ studentId: latestFamily.student.id });
-      const latestProgress = await getStudyPlanProgress(latest.id);
-      setSavedPlan(latest);
-      setProgress(latestProgress);
+      const activeStudent =
+        latestFamily.students.find((student) => student.id === nextStudentId) ?? latestFamily.students[0];
+      setSelectedStudentId(activeStudent.id);
+
+      try {
+        const latest = await getLatestStudyPlan({ studentId: activeStudent.id });
+        const latestProgress = await getStudyPlanProgress(latest.id);
+        setSavedPlan(latest);
+        setProgress(latestProgress);
+      } catch {
+        setSavedPlan(null);
+        setProgress(null);
+        setMessage(`Generate and save a study plan for ${activeStudent.name}.`);
+      }
     } catch {
-      setFamily(null);
+      setParentFamily(null);
       setSavedPlan(null);
       setProgress(null);
       setMessage("Create linked profiles, then generate and save a student plan.");
@@ -66,17 +79,22 @@ export default function ParentScreen() {
     }
   }
 
+  function selectStudent(studentId: string) {
+    setSelectedStudentId(studentId);
+    void loadParentView(studentId);
+  }
+
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <View style={styles.headerCopy}>
-            <Text style={styles.kicker}>Linked student</Text>
-            <Text style={styles.title}>{family?.student?.name ?? savedPlan?.student_name ?? "No student yet"}</Text>
-            {family?.student ? (
+            <Text style={styles.kicker}>Selected student</Text>
+            <Text style={styles.title}>{selectedStudent?.name ?? savedPlan?.student_name ?? "No student yet"}</Text>
+            {selectedStudent ? (
               <Text style={styles.helper}>
-                {family.student.class_level}
-                {family.parent ? ` - linked to ${family.parent.name}` : ""}
+                {selectedStudent.class_level}
+                {parentFamily?.parent ? ` - linked to ${parentFamily.parent.name}` : ""}
               </Text>
             ) : savedPlan ? (
               <Text style={styles.helper}>{savedPlan.plan.metadata.class_level || "Class not set"}</Text>
@@ -96,6 +114,37 @@ export default function ParentScreen() {
           <View style={styles.infoPanel}>
             <MaterialCommunityIcons name="information-outline" size={22} color={colors.brand} />
             <Text style={styles.infoText}>{message}</Text>
+          </View>
+        ) : null}
+
+        {parentFamily?.students.length ? (
+          <View style={styles.panel}>
+            <View style={styles.panelHeader}>
+              <Text style={styles.sectionTitle}>Students</Text>
+              <Text style={styles.sessionMeta}>
+                {parentFamily.students.length} linked {parentFamily.students.length === 1 ? "child" : "children"}
+              </Text>
+            </View>
+            <View style={styles.studentPicker}>
+              {parentFamily.students.map((student) => {
+                const isSelected = student.id === selectedStudent?.id;
+                return (
+                  <Pressable
+                    accessibilityRole="button"
+                    key={student.id}
+                    onPress={() => selectStudent(student.id)}
+                    style={[styles.studentChip, isSelected ? styles.studentChipSelected : null]}
+                  >
+                    <Text style={[styles.studentChipText, isSelected ? styles.studentChipTextSelected : null]}>
+                      {student.name}
+                    </Text>
+                    <Text style={[styles.studentChipMeta, isSelected ? styles.studentChipTextSelected : null]}>
+                      {student.class_level}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
         ) : null}
 
@@ -329,6 +378,38 @@ const styles = StyleSheet.create({
     fontSize: 13
   },
   statsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  studentChip: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 2,
+    minHeight: 54,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  studentChipMeta: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "700"
+  },
+  studentChipSelected: {
+    backgroundColor: colors.brandSoft,
+    borderColor: colors.brand
+  },
+  studentChipText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: "800"
+  },
+  studentChipTextSelected: {
+    color: colors.brand
+  },
+  studentPicker: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm

@@ -13,8 +13,8 @@ import {
 } from "react-native";
 
 import { Screen } from "@/components/Screen";
-import { createParentAccount, createStudentAccount, getLatestFamilyAccount, linkParentStudent } from "@/lib/api";
-import type { FamilyAccount } from "@/types";
+import { createParentAccount, createStudentAccount, getLatestParentFamily, getParentFamily, linkParentStudent } from "@/lib/api";
+import type { ParentFamilyAccount } from "@/types";
 import { colors, spacing } from "@/theme";
 
 type AccountForm = {
@@ -29,7 +29,7 @@ type AccountForm = {
 
 export default function AccountsScreen() {
   const [form, setForm] = useState<AccountForm>(() => createDefaultAccountForm());
-  const [family, setFamily] = useState<FamilyAccount | null>(null);
+  const [parentFamily, setParentFamily] = useState<ParentFamilyAccount | null>(null);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -39,10 +39,10 @@ export default function AccountsScreen() {
 
   async function loadLatestFamily() {
     try {
-      const latest = await getLatestFamilyAccount();
-      setFamily(latest);
+      const latest = await getLatestParentFamily();
+      setParentFamily(latest);
     } catch {
-      setFamily(null);
+      setParentFamily(null);
     }
   }
 
@@ -69,7 +69,8 @@ export default function AccountsScreen() {
         relationship: form.relationship.trim()
       });
       const link = await linkParentStudent(parent.id, student.id);
-      setFamily({ parent, student, link });
+      const updatedFamily = await getParentFamily(parent.id);
+      setParentFamily(updatedFamily);
       setMessage("Profiles are linked. Existing records are reused when the details match.");
     } catch {
       setMessage("Could not save the account setup. Check that the API is running.");
@@ -94,19 +95,28 @@ export default function AccountsScreen() {
             <Text style={styles.kicker}>Account foundation</Text>
             <Text style={styles.title}>Link student and parent</Text>
             <Text style={styles.helper}>
-              Create the basic profiles now. Google login can be added later on top of these records.
+              Create the basic profiles now. Use the same parent contact to add another child under one parent account.
             </Text>
           </View>
         </View>
 
-        {family?.student && family?.parent ? (
+        {parentFamily?.parent ? (
           <View style={styles.infoPanel}>
             <MaterialCommunityIcons name="link-variant" size={22} color={colors.success} />
             <View style={styles.infoCopy}>
-              <Text style={styles.infoTitle}>{family.student.name} is linked to {family.parent.name}</Text>
+              <Text style={styles.infoTitle}>{parentFamily.parent.name}</Text>
               <Text style={styles.helper}>
-                {family.student.class_level} {family.student.school_name ? `- ${family.student.school_name}` : ""}
+                {parentFamily.students.length} linked {parentFamily.students.length === 1 ? "student" : "students"}
               </Text>
+              {parentFamily.students.length ? (
+                <View style={styles.studentList}>
+                  {parentFamily.students.map((student) => (
+                    <View key={student.id} style={styles.studentPill}>
+                      <Text style={styles.studentPillText}>{student.name}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
             </View>
           </View>
         ) : null}
@@ -447,6 +457,24 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: colors.text,
     fontSize: 18,
+    fontWeight: "800"
+  },
+  studentList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs
+  },
+  studentPill: {
+    backgroundColor: colors.panel,
+    borderColor: colors.success,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs
+  },
+  studentPillText: {
+    color: colors.text,
+    fontSize: 12,
     fontWeight: "800"
   },
   title: {

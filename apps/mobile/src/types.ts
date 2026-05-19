@@ -121,6 +121,12 @@ export type FamilyAccount = {
   link: ParentStudentLink | null;
 };
 
+export type ParentFamilyAccount = {
+  parent: ParentAccount | null;
+  students: StudentAccount[];
+  links: ParentStudentLink[];
+};
+
 export type StudySessionCompletionRequest = {
   session_key: string;
   study_date: string;

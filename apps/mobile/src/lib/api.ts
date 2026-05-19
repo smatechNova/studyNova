@@ -1,6 +1,7 @@
 import type {
   FamilyAccount,
   ParentAccount,
+  ParentFamilyAccount,
   ParentAccountInput,
   ParentStudentLink,
   SavedStudyPlan,
@@ -87,6 +88,26 @@ export async function getLatestFamilyAccount(): Promise<FamilyAccount> {
   }
 
   return response.json() as Promise<FamilyAccount>;
+}
+
+export async function getLatestParentFamily(): Promise<ParentFamilyAccount> {
+  const response = await fetch(`${API_URL}/api/v1/accounts/parents/latest/family`);
+
+  if (!response.ok) {
+    throw new Error(`Parent family account request failed with ${response.status}`);
+  }
+
+  return response.json() as Promise<ParentFamilyAccount>;
+}
+
+export async function getParentFamily(parentId: string): Promise<ParentFamilyAccount> {
+  const response = await fetch(`${API_URL}/api/v1/accounts/parents/${parentId}/family`);
+
+  if (!response.ok) {
+    throw new Error(`Parent family account request failed with ${response.status}`);
+  }
+
+  return response.json() as Promise<ParentFamilyAccount>;
 }
 
 export async function generateStudyPlan(payload: StudyPlanRequest): Promise<StudyPlanResponse> {

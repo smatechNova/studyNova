@@ -11,6 +11,7 @@ from app.schemas import (
     FamilyAccount,
     ParentAccount,
     ParentAccountCreate,
+    ParentFamilyAccount,
     ParentProgressSummary,
     ParentStudentLink,
     ParentStudentLinkCreate,
@@ -52,6 +53,19 @@ def link_parent_student(payload: ParentStudentLinkCreate) -> ParentStudentLink:
 @router.get("/accounts/family/latest", response_model=FamilyAccount)
 def get_latest_family_account() -> FamilyAccount:
     return get_study_plan_store().latest_family()
+
+
+@router.get("/accounts/parents/latest/family", response_model=ParentFamilyAccount)
+def get_latest_parent_family_account() -> ParentFamilyAccount:
+    return get_study_plan_store().latest_parent_family()
+
+
+@router.get("/accounts/parents/{parent_id}/family", response_model=ParentFamilyAccount)
+def get_parent_family_account(parent_id: str) -> ParentFamilyAccount:
+    family = get_study_plan_store().parent_family(parent_id)
+    if family.parent is None:
+        raise HTTPException(status_code=404, detail="Parent account was not found.")
+    return family
 
 
 @router.post("/study-plans/generate", response_model=StudyPlanResponse)

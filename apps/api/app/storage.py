@@ -11,6 +11,7 @@ from app.schemas import (
     FamilyAccount,
     ParentAccount,
     ParentAccountCreate,
+    ParentFamilyAccount,
     ParentStudentLink,
     ParentStudentLinkCreate,
     SavedStudyPlan,
@@ -203,6 +204,50 @@ class StudyPlanStore:
             )
 
         return FamilyAccount(parent=self.latest_parent_account(), student=self.latest_student_account(), link=None)
+
+    def latest_parent_family(self) -> ParentFamilyAccount:
+        with self._connect() as connection:
+            link_row = connection.execute(
+                """
+                select id, parent_id, student_id, created_at
+                from parent_student_links
+                order by created_at desc
+                limit 1
+                """
+            ).fetchone()
+
+        if link_row:
+            return self.parent_family(link_row["parent_id"])
+
+        latest_parent = self.latest_parent_account()
+        if latest_parent is None:
+            return ParentFamilyAccount()
+
+        return self.parent_family(latest_parent.id)
+
+    def parent_family(self, parent_id: str) -> ParentFamilyAccount:
+        parent = self.parent_account_by_id(parent_id)
+        if parent is None:
+            return ParentFamilyAccount()
+
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                select id, parent_id, student_id, created_at
+                from parent_student_links
+                where parent_id = ?
+                order by created_at asc
+                """,
+                (parent_id,),
+            ).fetchall()
+
+        links = [self._link_from_row(row) for row in rows]
+        students = [
+            student
+            for student in (self.student_account_by_id(link.student_id) for link in links)
+            if student is not None
+        ]
+        return ParentFamilyAccount(parent=parent, students=students, links=links)
 
     def latest_student_account(self) -> StudentAccount | None:
         with self._connect() as connection:
