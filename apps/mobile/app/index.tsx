@@ -16,17 +16,17 @@ export default function HomeScreen() {
             <MaterialCommunityIcons name="school-outline" size={34} color={colors.brand} />
           </View>
           <View style={styles.heroText}>
-            <Text style={styles.kicker}>SMATECH High School</Text>
+            <Text style={styles.kicker}>For students, parents, and schools</Text>
             <Text style={styles.title}>StudyNova</Text>
             <Text style={styles.subtitle}>
-              A focused study planner that turns subjects, topics, time, and exam dates into a daily academic plan.
+              A focused study planner that turns subjects, topics, reading pace, and exam dates into a daily academic plan.
             </Text>
           </View>
         </View>
 
         <View style={styles.statsGrid}>
-          <StatCard label="Plan preview" value="14 days" icon="calendar-clock" />
-          <StatCard label="Revision rhythm" value="1-3-7" icon="repeat-variant" />
+          <StatCard label="Smart planning" value="Daily" icon="calendar-clock" />
+          <StatCard label="Study proof" value="Recall" icon="book-check-outline" />
           <StatCard label="Parent view" value="Live" icon="account-supervisor-outline" />
         </View>
 
@@ -103,4 +103,3 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   }
 });
-

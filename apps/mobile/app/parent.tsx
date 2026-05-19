@@ -1,58 +1,198 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ProgressBar } from "@/components/ProgressBar";
 import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
+import { getLatestStudyPlan, getStudyPlanProgress } from "@/lib/api";
+import type { SavedStudyPlan, StudyPlanProgress } from "@/types";
 import { colors, spacing } from "@/theme";
 
-const completionRate = 78;
-
 export default function ParentScreen() {
+  const [savedPlan, setSavedPlan] = useState<SavedStudyPlan | null>(null);
+  const [progress, setProgress] = useState<StudyPlanProgress | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [message, setMessage] = useState("");
+
+  const latestCompletion = progress?.completions.at(-1);
+  const recentDays = useMemo(() => {
+    const days = progress?.daily ?? [];
+    const today = toDateValue(new Date());
+    const elapsedDays = days.filter((day) => day.study_date <= today);
+    return (elapsedDays.length ? elapsedDays : days).slice(-7);
+  }, [progress?.daily]);
+  const weeklyRate = useMemo(() => {
+    if (!recentDays.length) {
+      return 0;
+    }
+
+    const total = recentDays.reduce((sum, day) => sum + day.completion_rate, 0);
+    return Math.round(total / recentDays.length);
+  }, [recentDays]);
+  const streakDays = useMemo(() => calculateStreak(progress), [progress]);
+
+  useEffect(() => {
+    void loadParentView();
+  }, []);
+
+  async function loadParentView() {
+    setIsLoading(true);
+    setMessage("");
+
+    try {
+      const latest = await getLatestStudyPlan();
+      const latestProgress = await getStudyPlanProgress(latest.id);
+      setSavedPlan(latest);
+      setProgress(latestProgress);
+    } catch {
+      setSavedPlan(null);
+      setProgress(null);
+      setMessage("Generate and save a student plan first, then complete one study session.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <View>
+          <View style={styles.headerCopy}>
             <Text style={styles.kicker}>Linked student</Text>
-            <Text style={styles.title}>Alliyah Adewale</Text>
+            <Text style={styles.title}>{savedPlan?.student_name ?? "No student yet"}</Text>
+            {savedPlan ? <Text style={styles.helper}>{savedPlan.plan.metadata.class_level || "Class not set"}</Text> : null}
           </View>
-          <View style={styles.badge}>
-            <MaterialCommunityIcons name="check-decagram-outline" size={18} color={colors.success} />
-            <Text style={styles.badgeText}>Active</Text>
-          </View>
+          <Pressable accessibilityRole="button" onPress={() => void loadParentView()} style={styles.badge}>
+            {isLoading ? (
+              <ActivityIndicator color={colors.success} />
+            ) : (
+              <MaterialCommunityIcons name="refresh" size={18} color={colors.success} />
+            )}
+            <Text style={styles.badgeText}>Refresh</Text>
+          </Pressable>
         </View>
+
+        {message ? (
+          <View style={styles.infoPanel}>
+            <MaterialCommunityIcons name="information-outline" size={22} color={colors.brand} />
+            <Text style={styles.infoText}>{message}</Text>
+          </View>
+        ) : null}
 
         <View style={styles.panel}>
           <View style={styles.panelHeader}>
             <Text style={styles.sectionTitle}>Weekly consistency</Text>
-            <Text style={styles.metric}>{completionRate}%</Text>
+            <Text style={styles.metric}>{weeklyRate}%</Text>
           </View>
-          <ProgressBar value={completionRate} />
-          <Text style={styles.helper}>
-            Mathematics and English are on track. Biology needs one extra revision session this week.
-          </Text>
+          <ProgressBar value={weeklyRate} />
+          <Text style={styles.helper}>{parentSummaryCopy(weeklyRate, streakDays)}</Text>
         </View>
 
         <View style={styles.statsGrid}>
-          <StatCard label="Study streak" value="5 days" icon="fire" />
-          <StatCard label="Completed" value="11/14" icon="checkbox-marked-circle-outline" />
-          <StatCard label="Minutes" value="520" icon="timer-outline" />
+          <StatCard label="Study streak" value={`${streakDays} days`} icon="fire" />
+          <StatCard
+            label="Completed"
+            value={`${progress?.completed_sessions ?? 0}/${progress?.planned_sessions ?? 0}`}
+            icon="checkbox-marked-circle-outline"
+          />
+          <StatCard label="Minutes" value={`${progress?.completed_minutes ?? 0}`} icon="timer-outline" />
         </View>
 
         <View style={styles.panel}>
-          <Text style={styles.sectionTitle}>Latest update</Text>
-          <View style={styles.updateRow}>
-            <MaterialCommunityIcons name="book-check-outline" size={24} color={colors.brand} />
-            <View style={styles.updateText}>
-              <Text style={styles.updateTitle}>Essay Writing completed</Text>
-              <Text style={styles.helper}>Next revision is scheduled in 3 days.</Text>
+          <View style={styles.panelHeader}>
+            <Text style={styles.sectionTitle}>Latest study proof</Text>
+            {latestCompletion ? <Text style={styles.confidence}>Confidence {latestCompletion.confidence}/5</Text> : null}
+          </View>
+          {latestCompletion ? (
+            <View style={styles.updateRow}>
+              <MaterialCommunityIcons name="book-check-outline" size={24} color={colors.brand} />
+              <View style={styles.updateText}>
+                <Text style={styles.updateTitle}>
+                  {latestCompletion.topic} {latestCompletion.kind === "practice" ? "practice" : "completed"}
+                </Text>
+                <Text style={styles.helper}>{latestCompletion.recall_note}</Text>
+                <Text style={styles.sessionMeta}>
+                  {latestCompletion.subject} - {formatReadableDate(latestCompletion.study_date)}
+                </Text>
+              </View>
             </View>
+          ) : (
+            <Text style={styles.helper}>
+              No completed session yet. Once the student marks a session done, their recall note will appear here.
+            </Text>
+          )}
+        </View>
+
+        <View style={styles.panel}>
+          <Text style={styles.sectionTitle}>Recent study days</Text>
+          <View style={styles.dayList}>
+            {recentDays.map((day) => (
+              <View key={day.study_date} style={styles.dayRow}>
+                <View style={styles.dayCopy}>
+                  <Text style={styles.updateTitle}>{formatReadableDate(day.study_date)}</Text>
+                  <Text style={styles.sessionMeta}>
+                    {day.completed_sessions}/{day.planned_sessions} sessions - {day.completed_minutes} minutes
+                  </Text>
+                </View>
+                <Text style={styles.dayRate}>{Math.round(day.completion_rate)}%</Text>
+              </View>
+            ))}
           </View>
         </View>
       </ScrollView>
     </Screen>
   );
+}
+
+function parentSummaryCopy(weeklyRate: number, streakDays: number) {
+  if (weeklyRate >= 80) {
+    return `Strong week. The student has a ${streakDays}-day active streak and is keeping up well.`;
+  }
+
+  if (weeklyRate >= 50) {
+    return "Progress is moving, but a gentle reminder may help keep sessions consistent.";
+  }
+
+  return "This week needs attention. Encourage one focused session today and review the latest recall note.";
+}
+
+function calculateStreak(progress: StudyPlanProgress | null) {
+  if (!progress) {
+    return 0;
+  }
+
+  const activeDates = new Set(
+    progress.daily.filter((day) => day.completed_sessions > 0).map((day) => day.study_date)
+  );
+  let date = new Date();
+  let streak = 0;
+
+  while (activeDates.has(toDateValue(date))) {
+    streak += 1;
+    date.setDate(date.getDate() - 1);
+  }
+
+  return streak;
+}
+
+function formatReadableDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) {
+    return value;
+  }
+
+  return new Date(year, month - 1, day).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short"
+  });
+}
+
+function toDateValue(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 const styles = StyleSheet.create({
@@ -62,6 +202,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     flexDirection: "row",
     gap: spacing.xs,
+    minHeight: 40,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs
   },
@@ -70,18 +211,67 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700"
   },
+  confidence: {
+    color: colors.success,
+    fontSize: 13,
+    fontWeight: "800"
+  },
   content: {
     gap: spacing.lg,
     paddingBottom: spacing.xxl
   },
+  dayCopy: {
+    flex: 1,
+    gap: spacing.xs
+  },
+  dayList: {
+    gap: spacing.sm
+  },
+  dayRate: {
+    color: colors.brand,
+    fontSize: 16,
+    fontWeight: "800"
+  },
+  dayRow: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.md,
+    padding: spacing.md
+  },
   header: {
     alignItems: "center",
     flexDirection: "row",
+    gap: spacing.md,
     justifyContent: "space-between"
+  },
+  headerCopy: {
+    flex: 1,
+    gap: spacing.xs
   },
   helper: {
     color: colors.muted,
     fontSize: 14,
+    lineHeight: 20
+  },
+  infoPanel: {
+    alignItems: "center",
+    backgroundColor: colors.brandSoft,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  infoText: {
+    color: colors.brandDark,
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "700",
     lineHeight: 20
   },
   kicker: {
@@ -106,12 +296,18 @@ const styles = StyleSheet.create({
   panelHeader: {
     alignItems: "center",
     flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
     justifyContent: "space-between"
   },
   sectionTitle: {
     color: colors.text,
     fontSize: 18,
     fontWeight: "800"
+  },
+  sessionMeta: {
+    color: colors.muted,
+    fontSize: 13
   },
   statsGrid: {
     flexDirection: "row",
@@ -138,4 +334,3 @@ const styles = StyleSheet.create({
     fontWeight: "700"
   }
 });
-

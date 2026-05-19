@@ -16,7 +16,6 @@ import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
 import {
   completeStudySession,
-  deleteStudySessionCompletion,
   generateStudyPlan,
   getLatestStudyPlan,
   getStudyPlanProgress,
@@ -696,6 +695,10 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
     () => new Set(progress?.completed_session_keys ?? []),
     [progress?.completed_session_keys]
   );
+  const completionBySessionKey = useMemo(
+    () => new Map((progress?.completions ?? []).map((completion) => [completion.session_key, completion])),
+    [progress?.completions]
+  );
   const todayProgress = progress?.daily.find((day) => day.study_date === todayPlan?.study_date);
   const completion = todayProgress?.completion_rate ?? 0;
   const completedTodayMinutes = todayProgress?.completed_minutes ?? 0;
@@ -765,23 +768,6 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
       await refreshProgress(planId);
     } catch {
       setProgressMessage("Could not save this session. Check that the API is running.");
-    } finally {
-      setIsSavingCompletion(false);
-    }
-  }
-
-  async function undoSession(sessionKeyValue: string) {
-    if (!planId) {
-      return;
-    }
-
-    setIsSavingCompletion(true);
-    try {
-      await deleteStudySessionCompletion(planId, sessionKeyValue);
-      setProgressMessage("Session completion removed.");
-      await refreshProgress(planId);
-    } catch {
-      setProgressMessage("Could not update this session right now.");
     } finally {
       setIsSavingCompletion(false);
     }
@@ -886,6 +872,7 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
                   const currentSessionKey = sessionKey(day.study_date, index);
                   const isDone = completedSessionKeys.has(currentSessionKey);
                   const isActive = activeCompletionKey === currentSessionKey;
+                  const savedCompletion = completionBySessionKey.get(currentSessionKey);
 
                   return (
                     <View key={`${day.study_date}-${session.subject}-${session.topic}-${index}`} style={styles.sessionBlock}>
@@ -905,24 +892,30 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
                         </View>
                         <View style={styles.sessionActions}>
                           <Text style={styles.sessionKind}>{sessionKindLabel(session.kind)}</Text>
-                          <Pressable
-                            accessibilityRole="button"
-                            disabled={isSavingCompletion || !planId}
-                            onPress={() =>
-                              isDone ? void undoSession(currentSessionKey) : openCompletion(currentSessionKey)
-                            }
-                            style={[
-                              styles.sessionActionButton,
-                              isDone ? styles.sessionDoneButton : null,
-                              !planId ? styles.disabledButton : null
-                            ]}
-                          >
-                            <Text style={[styles.sessionActionText, isDone ? styles.sessionDoneText : null]}>
-                              {isDone ? "Done" : "Study"}
-                            </Text>
-                          </Pressable>
+                          {isDone ? (
+                            <View style={[styles.sessionActionButton, styles.sessionDoneButton]}>
+                              <Text style={[styles.sessionActionText, styles.sessionDoneText]}>Done</Text>
+                            </View>
+                          ) : (
+                            <Pressable
+                              accessibilityRole="button"
+                              disabled={isSavingCompletion || !planId}
+                              onPress={() => openCompletion(currentSessionKey)}
+                              style={[styles.sessionActionButton, !planId ? styles.disabledButton : null]}
+                            >
+                              <Text style={styles.sessionActionText}>Study</Text>
+                            </Pressable>
+                          )}
                         </View>
                       </View>
+
+                      {isDone && savedCompletion ? (
+                        <View style={[styles.completionPanel, styles.completionPanelDone]}>
+                          <Text style={styles.sessionTitle}>Study proof saved</Text>
+                          <Text style={styles.helper}>{savedCompletion.recall_note}</Text>
+                          <Text style={styles.sessionMeta}>Confidence: {savedCompletion.confidence}/5</Text>
+                        </View>
+                      ) : null}
 
                       {isActive && !isDone ? (
                         <View style={styles.completionPanel}>
@@ -939,6 +932,10 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
                             textAlignVertical="top"
                             value={completionNote}
                           />
+                          <View style={styles.panelHeader}>
+                            <Text style={styles.sessionTitle}>Confidence after studying</Text>
+                            <Text style={styles.sessionMeta}>1 unsure - 5 confident</Text>
+                          </View>
                           <View style={styles.confidenceRow}>
                             {[1, 2, 3, 4, 5].map((score) => {
                               const isSelected = completionConfidence === score;
@@ -1664,6 +1661,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: spacing.md,
     padding: spacing.md
+  },
+  completionPanelDone: {
+    backgroundColor: colors.successSoft,
+    borderColor: colors.success
   },
   confidenceChip: {
     alignItems: "center",
