@@ -40,3 +40,39 @@ def test_study_plan_store_rejects_missing_account_link(tmp_path) -> None:
     )
 
     assert link is None
+
+
+def test_study_plan_store_reuses_existing_accounts(tmp_path) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    student_payload = StudentAccountCreate(
+        name="Alliyah Olaniyan",
+        class_level="SS2 Science",
+        age=15,
+        school_name="StudyNova School",
+    )
+    parent_payload = ParentAccountCreate(
+        name="Mrs Olaniyan",
+        contact="080 1234 5678",
+        relationship="Mother",
+    )
+
+    first_student = store.create_student_account(student_payload)
+    first_parent = store.create_parent_account(parent_payload)
+    second_student = store.create_student_account(
+        StudentAccountCreate(
+            name="  alliyah   olaniyan ",
+            class_level="ss2 science",
+            age=15,
+            school_name="studynova school",
+        )
+    )
+    second_parent = store.create_parent_account(
+        ParentAccountCreate(
+            name="Mrs A. Olaniyan",
+            contact="08012345678",
+            relationship="Guardian",
+        )
+    )
+
+    assert second_student.id == first_student.id
+    assert second_parent.id == first_parent.id

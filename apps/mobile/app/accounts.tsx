@@ -70,7 +70,7 @@ export default function AccountsScreen() {
       });
       const link = await linkParentStudent(parent.id, student.id);
       setFamily({ parent, student, link });
-      setMessage("Student and parent profiles are linked.");
+      setMessage("Profiles are linked. Existing records are reused when the details match.");
     } catch {
       setMessage("Could not save the account setup. Check that the API is running.");
     } finally {

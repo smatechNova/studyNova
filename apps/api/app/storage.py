@@ -88,6 +88,10 @@ class StudyPlanStore:
         )
 
     def create_student_account(self, payload: StudentAccountCreate) -> StudentAccount:
+        existing_account = self.student_account_by_profile(payload)
+        if existing_account is not None:
+            return existing_account
+
         account = StudentAccount(
             id=str(uuid4()),
             created_at=datetime.now(timezone.utc),
@@ -113,6 +117,10 @@ class StudyPlanStore:
         return account
 
     def create_parent_account(self, payload: ParentAccountCreate) -> ParentAccount:
+        existing_account = self.parent_account_by_contact(payload.contact)
+        if existing_account is not None:
+            return existing_account
+
         account = ParentAccount(
             id=str(uuid4()),
             created_at=datetime.now(timezone.utc),
@@ -222,6 +230,29 @@ class StudyPlanStore:
 
         return self._parent_from_row(row) if row else None
 
+    def student_account_by_profile(self, payload: StudentAccountCreate) -> StudentAccount | None:
+        profile_key = _student_profile_key(payload)
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                select id, name, class_level, age, school_name, created_at
+                from student_accounts
+                order by created_at desc
+                """
+            ).fetchall()
+
+        for row in rows:
+            candidate = StudentAccountCreate(
+                name=row["name"],
+                class_level=row["class_level"],
+                age=row["age"],
+                school_name=row["school_name"],
+            )
+            if _student_profile_key(candidate) == profile_key:
+                return self._student_from_row(row)
+
+        return None
+
     def student_account_by_id(self, student_id: str) -> StudentAccount | None:
         with self._connect() as connection:
             row = connection.execute(
@@ -234,6 +265,23 @@ class StudyPlanStore:
             ).fetchone()
 
         return self._student_from_row(row) if row else None
+
+    def parent_account_by_contact(self, contact: str) -> ParentAccount | None:
+        contact_key = _contact_key(contact)
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                select id, name, contact, relationship, created_at
+                from parent_accounts
+                order by created_at desc
+                """
+            ).fetchall()
+
+        for row in rows:
+            if _contact_key(row["contact"]) == contact_key:
+                return self._parent_from_row(row)
+
+        return None
 
     def parent_account_by_id(self, parent_id: str) -> ParentAccount | None:
         with self._connect() as connection:
@@ -595,3 +643,25 @@ class StudyPlanStore:
 @lru_cache
 def get_study_plan_store() -> StudyPlanStore:
     return StudyPlanStore(get_settings().local_data_path)
+
+
+def _student_profile_key(payload: StudentAccountCreate) -> tuple[str, str, int, str]:
+    return (
+        _compact_text(payload.name),
+        _compact_text(payload.class_level),
+        payload.age,
+        _compact_text(payload.school_name),
+    )
+
+
+def _contact_key(contact: str) -> str:
+    normalized = contact.strip().lower()
+    if "@" in normalized:
+        return normalized
+
+    digits = "".join(character for character in normalized if character.isdigit())
+    return digits or _compact_text(normalized)
+
+
+def _compact_text(value: str) -> str:
+    return " ".join(value.strip().lower().split())
