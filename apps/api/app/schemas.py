@@ -98,6 +98,7 @@ class StudyPlanSaveRequest(BaseModel):
 
 class StudentAccountCreate(BaseModel):
     login_id: str = Field(min_length=5, max_length=120)
+    auth_uid: str | None = Field(default=None, max_length=160)
     name: str = Field(min_length=2, max_length=80)
     class_level: str = Field(min_length=1, max_length=40)
     age: int = Field(ge=3, le=30)
@@ -113,6 +114,7 @@ class ParentAccountCreate(BaseModel):
     name: str = Field(min_length=2, max_length=80)
     contact: str = Field(min_length=5, max_length=120)
     relationship: str = Field(default="Parent", min_length=2, max_length=40)
+    auth_uid: str | None = Field(default=None, max_length=160)
 
 
 class ParentAccount(ParentAccountCreate):
@@ -145,6 +147,11 @@ class ParentFamilyAccount(BaseModel):
 class AccountSignInRequest(BaseModel):
     role: Literal["student", "parent"]
     login_id: str = Field(min_length=5, max_length=120)
+
+
+class FirebaseSignInRequest(BaseModel):
+    role: Literal["student", "parent"]
+    id_token: str = Field(min_length=20)
 
 
 class AuthSession(BaseModel):

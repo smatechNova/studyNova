@@ -2,6 +2,7 @@ import type {
   AccountSignInInput,
   AuthSession,
   FamilyAccount,
+  FirebaseSignInInput,
   ParentAccount,
   ParentFamilyAccount,
   ParentAccountInput,
@@ -93,6 +94,22 @@ export async function signInAccount(payload: AccountSignInInput): Promise<AuthSe
 
   if (!response.ok) {
     throw new Error(`Account sign-in failed with ${response.status}`);
+  }
+
+  return response.json() as Promise<AuthSession>;
+}
+
+export async function firebaseSignInAccount(payload: FirebaseSignInInput): Promise<AuthSession> {
+  const response = await fetch(`${API_URL}/api/v1/accounts/firebase-sign-in`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Google sign-in failed with ${response.status}`);
   }
 
   return response.json() as Promise<AuthSession>;

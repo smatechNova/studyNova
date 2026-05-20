@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
 
+from app.auth import FirebaseAuthUnavailable, InvalidFirebaseToken, verify_firebase_id_token
 from app.domain.study_planner import build_study_plan
 from app.schemas import (
     AccountSignInRequest,
@@ -11,6 +12,7 @@ from app.schemas import (
     CheckInResponse,
     DeleteResponse,
     FamilyAccount,
+    FirebaseSignInRequest,
     ParentAccount,
     ParentAccountCreate,
     ParentFamilyAccount,
@@ -57,6 +59,21 @@ def sign_in_account(payload: AccountSignInRequest) -> AuthSession:
     session = get_study_plan_store().sign_in(payload)
     if session is None:
         raise HTTPException(status_code=404, detail="No account matched that sign-in ID.")
+    return session
+
+
+@router.post("/accounts/firebase-sign-in", response_model=AuthSession)
+def firebase_sign_in_account(payload: FirebaseSignInRequest) -> AuthSession:
+    try:
+        identity = verify_firebase_id_token(payload.id_token)
+    except FirebaseAuthUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except InvalidFirebaseToken as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    session = get_study_plan_store().firebase_sign_in(payload.role, identity.uid, identity.login_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="No StudyNova account matched this Google sign-in.")
     return session
 
 

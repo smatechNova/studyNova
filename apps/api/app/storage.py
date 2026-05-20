@@ -91,12 +91,23 @@ class StudyPlanStore:
         )
 
     def create_student_account(self, payload: StudentAccountCreate) -> StudentAccount:
+        if payload.auth_uid:
+            existing_auth = self.student_account_by_auth_uid(payload.auth_uid)
+            if existing_auth is not None:
+                return existing_auth
+
         existing_login = self.student_account_by_login_id(payload.login_id)
         if existing_login is not None:
+            if payload.auth_uid and not existing_login.auth_uid:
+                self._bind_student_auth_uid(existing_login.id, payload.auth_uid)
+                return self.student_account_by_id(existing_login.id) or existing_login
             return existing_login
 
         existing_account = self.student_account_by_profile(payload)
         if existing_account is not None:
+            if payload.auth_uid and not existing_account.auth_uid:
+                self._bind_student_auth_uid(existing_account.id, payload.auth_uid)
+                return self.student_account_by_id(existing_account.id) or existing_account
             return existing_account
 
         account = StudentAccount(
@@ -108,12 +119,13 @@ class StudyPlanStore:
         with self._connect() as connection:
             connection.execute(
                 """
-                insert into student_accounts (id, login_id, name, class_level, age, school_name, created_at)
-                values (?, ?, ?, ?, ?, ?, ?)
+                insert into student_accounts (id, login_id, auth_uid, name, class_level, age, school_name, created_at)
+                values (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     account.id,
                     account.login_id,
+                    account.auth_uid,
                     account.name,
                     account.class_level,
                     account.age,
@@ -139,9 +151,46 @@ class StudyPlanStore:
         family = self.parent_family(parent.id)
         return AuthSession(role="parent", parent=parent, students=family.students)
 
+    def firebase_sign_in(self, role: str, auth_uid: str, login_id: str) -> AuthSession | None:
+        if role == "student":
+            if self.parent_account_by_auth_uid(auth_uid) is not None:
+                return None
+
+            student = self.student_account_by_auth_uid(auth_uid) or self.student_account_by_login_id(login_id)
+            if student is None:
+                return None
+
+            if not student.auth_uid:
+                self._bind_student_auth_uid(student.id, auth_uid)
+                student = self.student_account_by_id(student.id) or student
+
+            return AuthSession(role="student", student=student)
+
+        if self.student_account_by_auth_uid(auth_uid) is not None:
+            return None
+
+        parent = self.parent_account_by_auth_uid(auth_uid) or self.parent_account_by_contact(login_id)
+        if parent is None:
+            return None
+
+        if not parent.auth_uid:
+            self._bind_parent_auth_uid(parent.id, auth_uid)
+            parent = self.parent_account_by_id(parent.id) or parent
+
+        family = self.parent_family(parent.id)
+        return AuthSession(role="parent", parent=parent, students=family.students)
+
     def create_parent_account(self, payload: ParentAccountCreate) -> ParentAccount:
+        if payload.auth_uid:
+            existing_auth = self.parent_account_by_auth_uid(payload.auth_uid)
+            if existing_auth is not None:
+                return existing_auth
+
         existing_account = self.parent_account_by_contact(payload.contact)
         if existing_account is not None:
+            if payload.auth_uid and not existing_account.auth_uid:
+                self._bind_parent_auth_uid(existing_account.id, payload.auth_uid)
+                return self.parent_account_by_id(existing_account.id) or existing_account
             return existing_account
 
         account = ParentAccount(
@@ -153,11 +202,12 @@ class StudyPlanStore:
         with self._connect() as connection:
             connection.execute(
                 """
-                insert into parent_accounts (id, name, contact, relationship, created_at)
-                values (?, ?, ?, ?, ?)
+                insert into parent_accounts (id, auth_uid, name, contact, relationship, created_at)
+                values (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     account.id,
+                    account.auth_uid,
                     account.name,
                     account.contact,
                     account.relationship,
@@ -298,7 +348,7 @@ class StudyPlanStore:
         with self._connect() as connection:
             row = connection.execute(
                 """
-                select id, login_id, name, class_level, age, school_name, created_at
+                select id, login_id, auth_uid, name, class_level, age, school_name, created_at
                 from student_accounts
                 order by created_at desc
                 limit 1
@@ -311,7 +361,7 @@ class StudyPlanStore:
         with self._connect() as connection:
             row = connection.execute(
                 """
-                select id, name, contact, relationship, created_at
+                select id, auth_uid, name, contact, relationship, created_at
                 from parent_accounts
                 order by created_at desc
                 limit 1
@@ -325,7 +375,7 @@ class StudyPlanStore:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                select id, login_id, name, class_level, age, school_name, created_at
+                select id, login_id, auth_uid, name, class_level, age, school_name, created_at
                 from student_accounts
                 order by created_at desc
                 """
@@ -349,7 +399,7 @@ class StudyPlanStore:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                select id, login_id, name, class_level, age, school_name, created_at
+                select id, login_id, auth_uid, name, class_level, age, school_name, created_at
                 from student_accounts
                 order by created_at desc
                 """
@@ -361,11 +411,26 @@ class StudyPlanStore:
 
         return None
 
+    def student_account_by_auth_uid(self, auth_uid: str) -> StudentAccount | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                select id, login_id, auth_uid, name, class_level, age, school_name, created_at
+                from student_accounts
+                where auth_uid = ?
+                order by created_at desc
+                limit 1
+                """,
+                (auth_uid,),
+            ).fetchone()
+
+        return self._student_from_row(row) if row else None
+
     def student_account_by_id(self, student_id: str) -> StudentAccount | None:
         with self._connect() as connection:
             row = connection.execute(
                 """
-                select id, login_id, name, class_level, age, school_name, created_at
+                select id, login_id, auth_uid, name, class_level, age, school_name, created_at
                 from student_accounts
                 where id = ?
                 """,
@@ -379,7 +444,7 @@ class StudyPlanStore:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                select id, name, contact, relationship, created_at
+                select id, auth_uid, name, contact, relationship, created_at
                 from parent_accounts
                 order by created_at desc
                 """
@@ -391,11 +456,26 @@ class StudyPlanStore:
 
         return None
 
+    def parent_account_by_auth_uid(self, auth_uid: str) -> ParentAccount | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                select id, auth_uid, name, contact, relationship, created_at
+                from parent_accounts
+                where auth_uid = ?
+                order by created_at desc
+                limit 1
+                """,
+                (auth_uid,),
+            ).fetchone()
+
+        return self._parent_from_row(row) if row else None
+
     def parent_account_by_id(self, parent_id: str) -> ParentAccount | None:
         with self._connect() as connection:
             row = connection.execute(
                 """
-                select id, name, contact, relationship, created_at
+                select id, auth_uid, name, contact, relationship, created_at
                 from parent_accounts
                 where id = ?
                 """,
@@ -403,6 +483,28 @@ class StudyPlanStore:
             ).fetchone()
 
         return self._parent_from_row(row) if row else None
+
+    def _bind_student_auth_uid(self, student_id: str, auth_uid: str) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                update student_accounts
+                set auth_uid = ?
+                where id = ? and (auth_uid is null or auth_uid = '')
+                """,
+                (auth_uid, student_id),
+            )
+
+    def _bind_parent_auth_uid(self, parent_id: str, auth_uid: str) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                update parent_accounts
+                set auth_uid = ?
+                where id = ? and (auth_uid is null or auth_uid = '')
+                """,
+                (auth_uid, parent_id),
+            )
 
     def by_id(self, plan_id: str) -> SavedStudyPlan | None:
         with self._connect() as connection:
@@ -622,6 +724,7 @@ class StudyPlanStore:
         return StudentAccount(
             id=row["id"],
             login_id=row["login_id"] or _legacy_student_login_id(row["id"]),
+            auth_uid=row["auth_uid"] or None,
             name=row["name"],
             class_level=row["class_level"],
             age=row["age"],
@@ -632,6 +735,7 @@ class StudyPlanStore:
     def _parent_from_row(self, row: sqlite3.Row) -> ParentAccount:
         return ParentAccount(
             id=row["id"],
+            auth_uid=row["auth_uid"] or None,
             name=row["name"],
             contact=row["contact"],
             relationship=row["relationship"],
@@ -686,6 +790,7 @@ class StudyPlanStore:
                 create table if not exists student_accounts (
                     id text primary key,
                     login_id text not null default '',
+                    auth_uid text,
                     name text not null,
                     class_level text not null,
                     age integer not null,
@@ -699,6 +804,8 @@ class StudyPlanStore:
             }
             if "login_id" not in student_account_columns:
                 connection.execute("alter table student_accounts add column login_id text not null default ''")
+            if "auth_uid" not in student_account_columns:
+                connection.execute("alter table student_accounts add column auth_uid text")
             connection.execute(
                 """
                 create index if not exists idx_student_accounts_login
@@ -707,13 +814,31 @@ class StudyPlanStore:
             )
             connection.execute(
                 """
+                create index if not exists idx_student_accounts_auth_uid
+                on student_accounts (auth_uid)
+                """
+            )
+            connection.execute(
+                """
                 create table if not exists parent_accounts (
                     id text primary key,
+                    auth_uid text,
                     name text not null,
                     contact text not null,
                     relationship text not null,
                     created_at text not null
                 )
+                """
+            )
+            parent_account_columns = {
+                row["name"] for row in connection.execute("pragma table_info(parent_accounts)").fetchall()
+            }
+            if "auth_uid" not in parent_account_columns:
+                connection.execute("alter table parent_accounts add column auth_uid text")
+            connection.execute(
+                """
+                create index if not exists idx_parent_accounts_auth_uid
+                on parent_accounts (auth_uid)
                 """
             )
             connection.execute(

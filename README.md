@@ -8,7 +8,8 @@ The first production path is an Android mobile app published on Google Play, wit
 
 - Mobile: Expo React Native, TypeScript
 - Backend: Python, FastAPI
-- Database/Auth target: Supabase PostgreSQL and Supabase Auth
+- Database target: Supabase PostgreSQL
+- Auth target: Firebase Auth with Google sign-in and login-ID fallback
 - Cloud API target: Google Cloud Run
 - Builds: Expo EAS Build
 - Development workspace: GitHub Codespaces
@@ -49,6 +50,21 @@ EXPO_PUBLIC_API_URL=http://localhost:8000
 
 For a physical Android phone, use the Codespaces forwarded backend URL or the local network IP instead of `localhost`.
 
+Optional Google sign-in variables for `apps/mobile/.env`:
+
+```bash
+EXPO_PUBLIC_FIREBASE_API_KEY=
+EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=
+EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=
+EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=
+```
+
+Optional Firebase Admin variable for `apps/api/.env`:
+
+```bash
+FIREBASE_SERVICE_ACCOUNT_JSON=
+```
+
 ## First MVP
 
 - Student dashboard
@@ -58,4 +74,3 @@ For a physical Android phone, use the Codespaces forwarded backend URL or the lo
 - Spaced-repetition revision schedule
 - Progress summary endpoint
 - Play Store launch checklist
-

@@ -156,3 +156,41 @@ def test_study_plan_store_signs_in_by_role_and_login_id(tmp_path) -> None:
     assert parent_session.parent is not None
     assert parent_session.parent.id == parent.id
     assert [linked_student.id for linked_student in parent_session.students] == [student.id]
+
+
+def test_study_plan_store_binds_firebase_identity_by_role(tmp_path) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    student = store.create_student_account(
+        StudentAccountCreate(
+            login_id="alliyah@example.com",
+            name="Alliyah Olaniyan",
+            class_level="SS2 Science",
+            age=15,
+            school_name="",
+        )
+    )
+    parent = store.create_parent_account(
+        ParentAccountCreate(
+            name="Mrs Olaniyan",
+            contact="parent@example.com",
+            relationship="Mother",
+        )
+    )
+    store.link_parent_student(ParentStudentLinkCreate(parent_id=parent.id, student_id=student.id))
+
+    student_session = store.firebase_sign_in("student", "firebase-student-1", "alliyah@example.com")
+    parent_session = store.firebase_sign_in("parent", "firebase-parent-1", "parent@example.com")
+    blocked_parent_session = store.firebase_sign_in("parent", "firebase-student-1", "alliyah@example.com")
+    blocked_student_session = store.firebase_sign_in("student", "firebase-parent-1", "parent@example.com")
+
+    assert student_session is not None
+    assert student_session.student is not None
+    assert student_session.student.id == student.id
+    assert student_session.student.auth_uid == "firebase-student-1"
+    assert parent_session is not None
+    assert parent_session.parent is not None
+    assert parent_session.parent.id == parent.id
+    assert parent_session.parent.auth_uid == "firebase-parent-1"
+    assert [linked_student.id for linked_student in parent_session.students] == [student.id]
+    assert blocked_parent_session is None
+    assert blocked_student_session is None

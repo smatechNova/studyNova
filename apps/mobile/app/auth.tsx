@@ -1,4 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import * as Google from "expo-auth-session/providers/google";
+import * as WebBrowser from "expo-web-browser";
 import { Link, router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -13,9 +15,16 @@ import {
 } from "react-native";
 
 import { Screen } from "@/components/Screen";
-import { signInAccount } from "@/lib/api";
+import { firebaseSignInAccount, signInAccount } from "@/lib/api";
+import {
+  exchangeGoogleIdTokenForFirebaseIdToken,
+  getFirebaseClientConfig,
+  isFirebaseClientConfigured
+} from "@/lib/firebaseAuth";
 import { colors, spacing } from "@/theme";
-import type { AuthRole } from "@/types";
+import type { AuthRole, AuthSession } from "@/types";
+
+WebBrowser.maybeCompleteAuthSession();
 
 const ROLE_OPTIONS: Array<{
   role: AuthRole;
@@ -43,10 +52,26 @@ export default function AuthScreen() {
   const [loginId, setLoginId] = useState("");
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const firebaseConfig = getFirebaseClientConfig();
+  const firebaseReady = isFirebaseClientConfigured();
+  const [googleRequest, googleResponse, promptGoogleSignIn] = Google.useIdTokenAuthRequest({
+    androidClientId: firebaseConfig.googleAndroidClientId,
+    iosClientId: firebaseConfig.googleIosClientId,
+    selectAccount: true,
+    webClientId: firebaseConfig.googleWebClientId
+  });
 
   useEffect(() => {
     setRole(normalizeRole(params.role));
   }, [params.role]);
+
+  useEffect(() => {
+    if (googleResponse?.type === "success" && googleResponse.params.id_token) {
+      void completeFirebaseSignIn(googleResponse.params.id_token);
+    } else if (googleResponse?.type === "error") {
+      setMessage("Google sign-in could not be completed. Please try again or use the login ID.");
+    }
+  }, [googleResponse]);
 
   async function signIn() {
     if (!isValidLoginId(loginId)) {
@@ -59,22 +84,53 @@ export default function AuthScreen() {
 
     try {
       const session = await signInAccount({ role, login_id: loginId.trim() });
-      if (role === "student" && session.student) {
-        router.replace(`/student?studentId=${encodeURIComponent(session.student.id)}`);
-        return;
-      }
-
-      if (role === "parent" && session.parent) {
-        router.replace(`/parent?parentId=${encodeURIComponent(session.parent.id)}`);
-        return;
-      }
-
-      setMessage("This account exists, but it is not linked to the selected role.");
+      routeSession(session);
     } catch {
       setMessage("No account matched that role and login ID. Create the account first, then sign in.");
     } finally {
       setIsLoading(false);
     }
+  }
+
+  async function signInWithGoogle() {
+    if (!firebaseReady) {
+      setMessage("Google sign-in needs Firebase keys in the app environment first.");
+      return;
+    }
+
+    setMessage("");
+    await promptGoogleSignIn();
+  }
+
+  async function completeFirebaseSignIn(googleIdToken: string) {
+    setIsLoading(true);
+    setMessage("");
+
+    try {
+      const firebaseIdToken = await exchangeGoogleIdTokenForFirebaseIdToken(googleIdToken);
+      const session = await firebaseSignInAccount({ role, id_token: firebaseIdToken });
+      routeSession(session);
+    } catch {
+      setMessage(
+        "Google sign-in worked, but no StudyNova account is linked to that Gmail yet. Create or link the account first."
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  function routeSession(session: AuthSession) {
+    if (session.role === "student" && role === "student" && session.student) {
+      router.replace(`/student?studentId=${encodeURIComponent(session.student.id)}`);
+      return;
+    }
+
+    if (session.role === "parent" && role === "parent" && session.parent) {
+      router.replace(`/parent?parentId=${encodeURIComponent(session.parent.id)}`);
+      return;
+    }
+
+    setMessage("This account exists, but it is not linked to the selected role.");
   }
 
   function openGmailSignup() {
@@ -123,6 +179,26 @@ export default function AuthScreen() {
             );
           })}
         </View>
+
+        <Pressable
+          accessibilityRole="button"
+          disabled={!firebaseReady || !googleRequest || isLoading}
+          onPress={() => void signInWithGoogle()}
+          style={[
+            styles.googleButton,
+            !firebaseReady || !googleRequest || isLoading ? styles.disabledButton : null
+          ]}
+        >
+          <MaterialCommunityIcons name="google" size={20} color={colors.text} />
+          <Text style={styles.googleButtonText}>
+            Continue with Google as {role === "student" ? "student" : "parent"}
+          </Text>
+        </Pressable>
+        {!firebaseReady ? (
+          <Text style={styles.helper}>
+            Google sign-in will activate after Firebase keys are added. The login ID option below still works now.
+          </Text>
+        ) : null}
 
         <View style={styles.panel}>
           <Text style={styles.sectionTitle}>{role === "student" ? "Student login ID" : "Parent login ID"}</Text>
@@ -231,6 +307,23 @@ const styles = StyleSheet.create({
   gmailLinkText: {
     color: colors.brand,
     fontSize: 13,
+    fontWeight: "800"
+  },
+  googleButton: {
+    alignItems: "center",
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    justifyContent: "center",
+    minHeight: 48,
+    paddingHorizontal: spacing.md
+  },
+  googleButtonText: {
+    color: colors.text,
+    fontSize: 14,
     fontWeight: "800"
   },
   helper: {

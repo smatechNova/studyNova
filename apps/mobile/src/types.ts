@@ -135,6 +135,11 @@ export type AccountSignInInput = {
   login_id: string;
 };
 
+export type FirebaseSignInInput = {
+  role: AuthRole;
+  id_token: string;
+};
+
 export type AuthSession = {
   role: AuthRole;
   student: StudentAccount | null;
