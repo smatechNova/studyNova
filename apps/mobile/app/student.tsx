@@ -2290,7 +2290,7 @@ const styles = StyleSheet.create({
     padding: spacing.md
   },
   warningText: {
-    color: colors.warning,
+    color: colors.warningDark,
     flex: 1,
     fontSize: 14,
     lineHeight: 20

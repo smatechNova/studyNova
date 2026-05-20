@@ -18,12 +18,12 @@ export function ProgressBar({ value }: ProgressBarProps) {
 
 const styles = StyleSheet.create({
   fill: {
-    backgroundColor: colors.brand,
+    backgroundColor: colors.secondary,
     borderRadius: 999,
     height: "100%"
   },
   track: {
-    backgroundColor: colors.brandSoft,
+    backgroundColor: colors.secondarySoft,
     borderRadius: 999,
     height: 10,
     overflow: "hidden",
