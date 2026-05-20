@@ -5,7 +5,7 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
-    "start:codespace": "REACT_DEBUGGER=echo expo start",
+    "start:codespace": "EXPO_UNSTABLE_HEADLESS=1 REACT_DEBUGGER=echo expo start",
     "android": "expo start --android",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit"

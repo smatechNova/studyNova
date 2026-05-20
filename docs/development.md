@@ -26,7 +26,13 @@ npm run mobile
 For Codespaces phone testing, use tunnel mode and disable the desktop React Native debugger:
 
 ```bash
-npm run mobile:codespace -- --clear
+npm run mobile:codespace:clear
+```
+
+If you need to pass Expo flags manually, use:
+
+```bash
+npm run mobile:codespace -- --tunnel --clear
 ```
 
 ## Mobile API URL

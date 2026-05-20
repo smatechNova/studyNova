@@ -9,7 +9,9 @@
     "api": "python -m uvicorn app.main:app --reload --app-dir apps/api",
     "api:test": "python -m pytest apps/api/tests",
     "mobile": "npm --workspace @studynova/mobile run start",
-    "mobile:codespace": "npm --workspace @studynova/mobile run start:codespace -- --tunnel",
+    "mobile:codespace": "npm --workspace @studynova/mobile run start:codespace",
+    "mobile:codespace:tunnel": "npm --workspace @studynova/mobile run start:codespace -- --tunnel",
+    "mobile:codespace:clear": "npm --workspace @studynova/mobile run start:codespace -- --tunnel --clear",
     "mobile:android": "npm --workspace @studynova/mobile run android",
     "mobile:typecheck": "npm --workspace @studynova/mobile run typecheck"
   }
