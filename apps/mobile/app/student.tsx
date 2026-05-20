@@ -35,6 +35,11 @@ import { colors, spacing } from "@/theme";
 const RESOURCE_OPTIONS = ["Textbook", "Class notes", "Notebook", "Online notes", "Past questions"];
 const STEPS = ["Profile", "Exam", "Pace", "Subjects", "Review"] as const;
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const BLOCKED_STUDY_CONTENT_PHRASES = [
+  "could not generate the plan",
+  "api connection and exam dates",
+  "study plan request failed"
+];
 
 type StepName = (typeof STEPS)[number];
 type DateFieldName = "examStartDate" | "examEndDate";
@@ -128,8 +133,13 @@ export default function StudentScreen() {
       try {
         const saved = await getLatestStudyPlan({ studentId: signedInStudentId });
         if (isMounted) {
-          setLatestPlan(saved);
-          setLatestMessage("");
+          if (isStudyPlanUsable(saved.plan)) {
+            setLatestPlan(saved);
+            setLatestMessage("");
+          } else {
+            setLatestPlan(null);
+            setLatestMessage("Your latest saved plan contains an old app message. Please generate a fresh plan.");
+          }
         }
       } catch {
         if (isMounted) {
@@ -156,6 +166,12 @@ export default function StudentScreen() {
 
     try {
       const response = await generateStudyPlan(request);
+      if (!isStudyPlanUsable(response)) {
+        setStepIndex(STEPS.indexOf("Subjects"));
+        setError("One of the study topics looks like an app message. Replace it with the real topic name.");
+        return;
+      }
+
       setPlan(response);
       setSavedPlan(null);
       setSaveMessage("Saving generated plan...");
@@ -179,6 +195,12 @@ export default function StudentScreen() {
 
   function continueLatestPlan() {
     if (!latestPlan) {
+      return;
+    }
+
+    if (!isStudyPlanUsable(latestPlan.plan)) {
+      setLatestPlan(null);
+      setLatestMessage("Your latest saved plan contains an old app message. Please generate a fresh plan.");
       return;
     }
 
@@ -1336,6 +1358,10 @@ function getStepValidationError(step: StepName, nextForm: PlanForm): string {
         return "Enter break minutes between 5 and 30.";
       }
 
+      if (containsBlockedStudyContent(nextForm.studyStrengthNote)) {
+        return "Replace the study strength note with how the student studies.";
+      }
+
       return "";
 
     case "Subjects":
@@ -1350,6 +1376,10 @@ function getStepValidationError(step: StepName, nextForm: PlanForm): string {
           return `Enter the name for subject ${subjectIndex + 1}.`;
         }
 
+        if (containsBlockedStudyContent(subject.name)) {
+          return `Replace subject ${subjectIndex + 1} with a real subject name.`;
+        }
+
         if (!subject.topics.length) {
           return `Add at least one topic under subject ${subjectIndex + 1}.`;
         }
@@ -1359,6 +1389,10 @@ function getStepValidationError(step: StepName, nextForm: PlanForm): string {
 
           if (!isValidShortText(topic.name)) {
             return `Enter topic ${topicIndex + 1} under subject ${subjectIndex + 1}.`;
+          }
+
+          if (containsBlockedStudyContent(topic.name)) {
+            return `Replace topic ${topicIndex + 1} under subject ${subjectIndex + 1} with a real topic name.`;
           }
 
           if (!isIntegerInRange(topic.pages, 1, 500)) {
@@ -1374,6 +1408,26 @@ function getStepValidationError(step: StepName, nextForm: PlanForm): string {
       return validation?.message ?? "";
     }
   }
+}
+
+function isStudyPlanUsable(plan: StudyPlanResponse) {
+  if (containsBlockedStudyContent(plan.metadata.study_strength_note)) {
+    return false;
+  }
+
+  return plan.schedule.every((day) =>
+    day.sessions.every(
+      (session) =>
+        !containsBlockedStudyContent(session.subject) &&
+        !containsBlockedStudyContent(session.topic) &&
+        !containsBlockedStudyContent(session.resource_type)
+    )
+  );
+}
+
+function containsBlockedStudyContent(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return BLOCKED_STUDY_CONTENT_PHRASES.some((phrase) => normalized.includes(phrase));
 }
 
 function createDefaultForm(): PlanForm {

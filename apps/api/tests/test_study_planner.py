@@ -1,6 +1,9 @@
 from datetime import date, timedelta
 from math import ceil
 
+import pytest
+from fastapi import HTTPException
+
 from app.domain.study_planner import build_study_plan
 from app.schemas import StudyPlanRequest, SubjectInput, TopicInput
 
@@ -64,3 +67,14 @@ def test_build_study_plan_fills_flex_days_with_practice() -> None:
     assert any(session.kind == "practice" for session in sessions)
     assert any(session.resource_type == "Past questions" for session in sessions)
     assert any(session.topic.startswith("Weak-area study:") for session in sessions)
+
+
+def test_build_study_plan_rejects_app_error_text_as_topic() -> None:
+    payload = _sample_request()
+    payload.subjects[0].topics[0].name = "Could not generate the plan. Check the API connection and exam dates."
+
+    with pytest.raises(HTTPException) as exc_info:
+        build_study_plan(payload)
+
+    assert exc_info.value.status_code == 422
+    assert "real topic" in str(exc_info.value.detail)

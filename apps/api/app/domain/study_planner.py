@@ -28,6 +28,11 @@ class TopicWork:
 REVISION_OFFSETS = (1, 3, 7)
 REVISION_SESSION_MINUTES = 20
 PRACTICE_SESSION_MINUTES = 30
+BLOCKED_CONTENT_PHRASES = (
+    "could not generate the plan",
+    "api connection and exam dates",
+    "study plan request failed",
+)
 
 
 def build_study_plan(payload: StudyPlanRequest) -> StudyPlanResponse:
@@ -40,6 +45,7 @@ def build_study_plan(payload: StudyPlanRequest) -> StudyPlanResponse:
     if payload.exam_end_date is not None and payload.exam_end_date < exam_start_date:
         raise HTTPException(status_code=422, detail="Exam end date cannot be before the start date.")
 
+    _validate_study_content(payload)
     work_items = _flatten_work(payload)
     if not work_items:
         raise HTTPException(status_code=422, detail="At least one subject topic is required.")
@@ -81,6 +87,24 @@ def build_study_plan(payload: StudyPlanRequest) -> StudyPlanResponse:
         subject_distribution=_subject_distribution(work_items, total_minutes),
         schedule=schedule,
     )
+
+
+def _validate_study_content(payload: StudyPlanRequest) -> None:
+    if _contains_blocked_content(payload.study_strength_note):
+        raise HTTPException(status_code=422, detail="Study strength note should describe how the student studies.")
+
+    for subject in payload.subjects:
+        if _contains_blocked_content(subject.name):
+            raise HTTPException(status_code=422, detail="Subject name looks like an app message. Enter a real subject.")
+
+        for topic in subject.topics:
+            if _contains_blocked_content(topic.name):
+                raise HTTPException(status_code=422, detail="Topic name looks like an app message. Enter a real topic.")
+
+
+def _contains_blocked_content(value: str) -> bool:
+    normalized = value.strip().lower()
+    return any(phrase in normalized for phrase in BLOCKED_CONTENT_PHRASES)
 
 
 def _student_name(payload: StudyPlanRequest) -> str:
