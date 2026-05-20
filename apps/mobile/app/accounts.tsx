@@ -40,8 +40,8 @@ export default function AccountsScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const primaryActionLabel =
     parentFamily?.parent && form.parentContact.trim() === parentFamily.parent.contact
-      ? "Link student to parent"
-      : "Create and link profiles";
+      ? "Link this student to parent"
+      : "Create student and parent link";
 
   useEffect(() => {
     void loadLatestFamily();
@@ -109,7 +109,7 @@ export default function AccountsScreen() {
       parentContact: parentFamily.parent?.contact ?? current.parentContact,
       relationship: parentFamily.parent?.relationship ?? current.relationship
     }));
-    setMessage("Parent details are ready. Enter the next student's details and link profiles.");
+    setMessage("Parent monitoring details are ready. Enter one student's details and link that student.");
   }
 
   return (
@@ -120,10 +120,10 @@ export default function AccountsScreen() {
             <MaterialCommunityIcons name="account-multiple-plus-outline" size={32} color={colors.brand} />
           </View>
           <View style={styles.heroCopy}>
-            <Text style={styles.kicker}>Account foundation</Text>
-            <Text style={styles.title}>Link student and parent</Text>
+            <Text style={styles.kicker}>Account model</Text>
+            <Text style={styles.title}>Student account plus parent monitoring</Text>
             <Text style={styles.helper}>
-              Create the basic profiles now. Use the same parent contact to add another child under one parent account.
+              Each student owns one student account. A parent account can link more than one student for monitoring.
             </Text>
           </View>
         </View>
@@ -132,6 +132,7 @@ export default function AccountsScreen() {
           <View style={styles.infoPanel}>
             <MaterialCommunityIcons name="link-variant" size={22} color={colors.success} />
             <View style={styles.infoCopy}>
+              <Text style={styles.kicker}>Parent monitoring account</Text>
               <Text style={styles.infoTitle}>{parentFamily.parent.name}</Text>
               <Text style={styles.helper}>
                 {parentFamily.students.length} linked {parentFamily.students.length === 1 ? "student" : "students"}
@@ -147,14 +148,17 @@ export default function AccountsScreen() {
               ) : null}
               <Pressable accessibilityRole="button" onPress={prepareAdditionalStudent} style={styles.inlineAction}>
                 <MaterialCommunityIcons name="account-plus-outline" size={18} color={colors.success} />
-                <Text style={styles.inlineActionText}>Add another student</Text>
+                <Text style={styles.inlineActionText}>Link another student</Text>
               </Pressable>
             </View>
           </View>
         ) : null}
 
         <View style={styles.panel}>
-          <Text style={styles.sectionTitle}>Student profile</Text>
+          <View style={styles.sectionCopy}>
+            <Text style={styles.sectionTitle}>Student account</Text>
+            <Text style={styles.helper}>This profile belongs to one learner and feeds that learner's dashboard.</Text>
+          </View>
           <FormField
             label="Student name"
             onChangeText={(value) => updateField("studentName", value)}
@@ -183,7 +187,12 @@ export default function AccountsScreen() {
         </View>
 
         <View style={styles.panel}>
-          <Text style={styles.sectionTitle}>Parent profile</Text>
+          <View style={styles.sectionCopy}>
+            <Text style={styles.sectionTitle}>Parent monitoring account</Text>
+            <Text style={styles.helper}>
+              Reuse the same parent contact when linking another student to this parent.
+            </Text>
+          </View>
           <FormField
             label="Parent name"
             onChangeText={(value) => updateField("parentName", value)}
@@ -231,7 +240,7 @@ export default function AccountsScreen() {
 
           <Link href="/student" asChild>
             <Pressable accessibilityRole="button" style={styles.secondaryButton}>
-              <Text style={styles.secondaryButtonText}>Continue to student plan</Text>
+              <Text style={styles.secondaryButtonText}>Continue to student dashboard</Text>
               <MaterialCommunityIcons name="chevron-right" size={18} color={colors.brand} />
             </Pressable>
           </Link>
@@ -507,6 +516,9 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 18,
     fontWeight: "800"
+  },
+  sectionCopy: {
+    gap: spacing.xs
   },
   studentList: {
     flexDirection: "row",

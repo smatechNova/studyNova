@@ -1,4 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Link } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
@@ -121,10 +122,16 @@ export default function ParentScreen() {
           <View style={styles.panel}>
             <View style={styles.panelHeader}>
               <Text style={styles.sectionTitle}>Students</Text>
-              <Text style={styles.sessionMeta}>
-                {parentFamily.students.length} linked {parentFamily.students.length === 1 ? "child" : "children"}
-              </Text>
+              <Link href="/accounts" asChild>
+                <Pressable accessibilityRole="button" style={styles.linkButton}>
+                  <MaterialCommunityIcons name="account-plus-outline" size={18} color={colors.brand} />
+                  <Text style={styles.linkButtonText}>Link student</Text>
+                </Pressable>
+              </Link>
             </View>
+            <Text style={styles.helper}>
+              This parent can monitor multiple student accounts. Select one child to view their progress.
+            </Text>
             <View style={styles.studentPicker}>
               {parentFamily.students.map((student) => {
                 const isSelected = student.id === selectedStudent?.id;
@@ -347,6 +354,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     textTransform: "uppercase"
+  },
+  linkButton: {
+    alignItems: "center",
+    backgroundColor: colors.brandSoft,
+    borderRadius: 8,
+    flexDirection: "row",
+    gap: spacing.xs,
+    minHeight: 40,
+    paddingHorizontal: spacing.sm
+  },
+  linkButtonText: {
+    color: colors.brand,
+    fontSize: 13,
+    fontWeight: "800"
   },
   metric: {
     color: colors.brand,
