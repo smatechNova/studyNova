@@ -8,9 +8,16 @@
     "userInterfaceStyle": "light",
     "android": {
       "package": "com.smatech.studynova",
-      "permissions": ["POST_NOTIFICATIONS"]
+      "permissions": [
+        "POST_NOTIFICATIONS"
+      ],
+      "softwareKeyboardLayoutMode": "resize"
     },
-    "plugins": ["expo-router", "expo-notifications"],
+    "plugins": [
+      "expo-router",
+      "expo-notifications",
+      "expo-secure-store"
+    ],
     "experiments": {
       "typedRoutes": true
     }

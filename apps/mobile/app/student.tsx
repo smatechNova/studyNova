@@ -23,6 +23,7 @@ import {
   getStudyPlanProgress,
   saveStudyPlan
 } from "@/lib/api";
+import { getStoredAuthSession } from "@/lib/session";
 import type {
   PlanSession,
   SavedStudyPlan,
@@ -91,6 +92,7 @@ export default function StudentScreen() {
   const styles = useStudentStyles();
   const params = useLocalSearchParams<{ studentId?: string }>();
   const signedInStudentId = getParamValue(params.studentId);
+  const [storedStudentId, setStoredStudentId] = useState<string | undefined>();
   const [form, setForm] = useState<PlanForm>(() => createDefaultForm());
   const [plan, setPlan] = useState<StudyPlanResponse | null>(null);
   const [savedPlan, setSavedPlan] = useState<SavedStudyPlan | null>(null);
@@ -103,6 +105,7 @@ export default function StudentScreen() {
   const [isPlanVisible, setIsPlanVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const activeStudentId = signedInStudentId ?? storedStudentId;
 
   const currentStep = STEPS[stepIndex];
   const topicCount = form.subjects.reduce((total, subject) => total + subject.topics.length, 0);
@@ -115,13 +118,34 @@ export default function StudentScreen() {
   useEffect(() => {
     let isMounted = true;
 
+    async function loadStoredSession() {
+      if (signedInStudentId) {
+        return;
+      }
+
+      const session = await getStoredAuthSession();
+      if (isMounted && session?.role === "student" && session.student) {
+        setStoredStudentId(session.student.id);
+      }
+    }
+
+    void loadStoredSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [signedInStudentId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
     async function loadAccountAndPlan() {
-      if (!signedInStudentId) {
+      if (!activeStudentId) {
         return;
       }
 
       try {
-        const studentFamily = await getStudentFamily(signedInStudentId);
+        const studentFamily = await getStudentFamily(activeStudentId);
         if (isMounted && studentFamily.student) {
           setLinkedStudentId(studentFamily.student.id);
           setForm((current) => ({
@@ -140,7 +164,7 @@ export default function StudentScreen() {
       }
 
       try {
-        const saved = await getLatestStudyPlan({ studentId: signedInStudentId });
+        const saved = await getLatestStudyPlan({ studentId: activeStudentId });
         if (isMounted) {
           if (isStudyPlanUsable(saved.plan)) {
             setLatestPlan(saved);
@@ -162,7 +186,7 @@ export default function StudentScreen() {
     return () => {
       isMounted = false;
     };
-  }, [signedInStudentId]);
+  }, [activeStudentId]);
 
   async function submitPlan(nextForm = form) {
     const request = buildRequest(nextForm);
@@ -185,7 +209,7 @@ export default function StudentScreen() {
       setSavedPlan(null);
       setSaveMessage("Saving generated plan...");
       try {
-        const saved = await saveStudyPlan(response, linkedStudentId);
+        const saved = await saveStudyPlan(response, linkedStudentId ?? activeStudentId);
         setSavedPlan(saved);
         setLatestPlan(saved);
         setSaveMessage("Plan saved. You can continue from here later.");
@@ -430,7 +454,7 @@ export default function StudentScreen() {
     }));
   }
 
-  if (!signedInStudentId) {
+  if (!activeStudentId) {
     return (
       <Screen>
         <ScrollView contentContainerStyle={styles.content}>
@@ -469,7 +493,11 @@ export default function StudentScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.header}>
           <View>
             <Text style={styles.kicker}>Guided setup</Text>
@@ -870,7 +898,11 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.header}>
           <Pressable accessibilityRole="button" onPress={onBack} style={styles.backButton}>
             <MaterialCommunityIcons name="arrow-left" size={22} color={colors.text} />

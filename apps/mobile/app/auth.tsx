@@ -21,6 +21,7 @@ import {
   getFirebaseClientConfig,
   isFirebaseClientConfigured
 } from "@/lib/firebaseAuth";
+import { saveAuthSession } from "@/lib/session";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
 import type { AuthRole, AuthSession } from "@/types";
@@ -87,7 +88,7 @@ export default function AuthScreen() {
 
     try {
       const session = await signInAccount({ role, login_id: loginId.trim() });
-      routeSession(session);
+      await routeSession(session);
     } catch {
       setMessage("No account matched that role and login ID. Create the account first, then sign in.");
     } finally {
@@ -112,7 +113,7 @@ export default function AuthScreen() {
     try {
       const firebaseIdToken = await exchangeGoogleIdTokenForFirebaseIdToken(googleIdToken);
       const session = await firebaseSignInAccount({ role, id_token: firebaseIdToken });
-      routeSession(session);
+      await routeSession(session);
     } catch {
       setMessage(
         "Google sign-in worked, but no StudyNova account is linked to that Gmail yet. Create or link the account first."
@@ -122,13 +123,15 @@ export default function AuthScreen() {
     }
   }
 
-  function routeSession(session: AuthSession) {
+  async function routeSession(session: AuthSession) {
     if (session.role === "student" && role === "student" && session.student) {
+      await saveAuthSession(session);
       router.replace(`/student?studentId=${encodeURIComponent(session.student.id)}`);
       return;
     }
 
     if (session.role === "parent" && role === "parent" && session.parent) {
+      await saveAuthSession(session);
       router.replace(`/parent?parentId=${encodeURIComponent(session.parent.id)}`);
       return;
     }
@@ -142,7 +145,11 @@ export default function AuthScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.hero}>
           <View style={styles.logo}>
             <MaterialCommunityIcons name="login-variant" size={34} color={colors.brand} />

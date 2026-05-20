@@ -1,7 +1,16 @@
 from datetime import date, timedelta
 
 from app.domain.study_planner import build_study_plan
-from app.schemas import StudyPlanRequest, StudySessionCompletionRequest, SubjectInput, TopicInput
+from app.schemas import (
+    CheckInRequest,
+    ParentAccountCreate,
+    ParentStudentLinkCreate,
+    StudentAccountCreate,
+    StudyPlanRequest,
+    StudySessionCompletionRequest,
+    SubjectInput,
+    TopicInput,
+)
 from app.storage import StudyPlanStore
 
 
@@ -64,3 +73,79 @@ def test_study_plan_store_tracks_session_progress(tmp_path) -> None:
 
     assert reset_progress is not None
     assert reset_progress.completed_sessions == 0
+
+
+def test_study_plan_store_persists_check_ins_for_parent_summary(tmp_path) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    student = store.create_student_account(
+        StudentAccountCreate(
+            login_id="alliyah@example.com",
+            name="Alliyah Olaniyan",
+            class_level="SS2 Science",
+            age=15,
+            school_name="",
+        )
+    )
+    parent = store.create_parent_account(
+        ParentAccountCreate(
+            name="Mrs Olaniyan",
+            contact="08012345678",
+            relationship="Mother",
+        )
+    )
+    store.link_parent_student(ParentStudentLinkCreate(parent_id=parent.id, student_id=student.id))
+
+    yesterday = date.today() - timedelta(days=1)
+    today = date.today()
+    first_check_in = store.create_check_in(
+        CheckInRequest(
+            student_id=student.id,
+            study_date=yesterday,
+            minutes_completed=30,
+            sessions_completed=1,
+            sessions_planned=2,
+            note="Reviewed yesterday's algebra practice.",
+        )
+    )
+    second_check_in = store.create_check_in(
+        CheckInRequest(
+            student_id=student.id,
+            study_date=today,
+            minutes_completed=45,
+            sessions_completed=2,
+            sessions_planned=2,
+            note="Finished today's reading and recall note.",
+        )
+    )
+
+    summary = store.parent_progress_summary(parent.id, student.id)
+
+    assert first_check_in.saved is True
+    assert second_check_in.saved is True
+    assert summary is not None
+    assert summary.total_minutes == 75
+    assert summary.completion_rate == 75
+    assert summary.streak_days == 2
+    assert summary.latest_note == "Finished today's reading and recall note."
+
+
+def test_study_plan_store_rejects_unlinked_parent_summary(tmp_path) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    student = store.create_student_account(
+        StudentAccountCreate(
+            login_id="alliyah@example.com",
+            name="Alliyah Olaniyan",
+            class_level="SS2 Science",
+            age=15,
+            school_name="",
+        )
+    )
+    parent = store.create_parent_account(
+        ParentAccountCreate(
+            name="Mrs Olaniyan",
+            contact="08012345678",
+            relationship="Mother",
+        )
+    )
+
+    assert store.parent_progress_summary(parent.id, student.id) is None

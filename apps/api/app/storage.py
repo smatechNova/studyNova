@@ -9,11 +9,14 @@ from app.config import get_settings
 from app.schemas import (
     AccountSignInRequest,
     AuthSession,
+    CheckInRequest,
+    CheckInResponse,
     DailyProgress,
     FamilyAccount,
     ParentAccount,
     ParentAccountCreate,
     ParentFamilyAccount,
+    ParentProgressSummary,
     ParentStudentLink,
     ParentStudentLinkCreate,
     SavedStudyPlan,
@@ -484,6 +487,20 @@ class StudyPlanStore:
 
         return self._parent_from_row(row) if row else None
 
+    def _parent_student_link_exists(self, parent_id: str, student_id: str) -> bool:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                select id
+                from parent_student_links
+                where parent_id = ? and student_id = ?
+                limit 1
+                """,
+                (parent_id, student_id),
+            ).fetchone()
+
+        return row is not None
+
     def _bind_student_auth_uid(self, student_id: str, auth_uid: str) -> None:
         with self._connect() as connection:
             connection.execute(
@@ -643,6 +660,87 @@ class StudyPlanStore:
             deleted_count = cursor.rowcount
 
         return deleted_count > 0
+
+    def create_check_in(self, payload: CheckInRequest) -> CheckInResponse:
+        check_in_id = str(uuid4())
+        created_at = datetime.now(timezone.utc)
+
+        with self._connect() as connection:
+            connection.execute(
+                """
+                insert into study_check_ins (
+                    id,
+                    student_id,
+                    study_date,
+                    minutes_completed,
+                    sessions_completed,
+                    sessions_planned,
+                    note,
+                    created_at
+                )
+                values (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    check_in_id,
+                    payload.student_id,
+                    payload.study_date.isoformat(),
+                    payload.minutes_completed,
+                    payload.sessions_completed,
+                    payload.sessions_planned,
+                    payload.note,
+                    created_at.isoformat(),
+                ),
+            )
+
+        return CheckInResponse(
+            id=check_in_id,
+            student_id=payload.student_id,
+            study_date=payload.study_date,
+            saved=True,
+        )
+
+    def parent_progress_summary(self, parent_id: str, student_id: str) -> ParentProgressSummary | None:
+        if not self._parent_student_link_exists(parent_id, student_id):
+            return None
+
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                select student_id,
+                       study_date,
+                       minutes_completed,
+                       sessions_completed,
+                       sessions_planned,
+                       note,
+                       created_at
+                from study_check_ins
+                where student_id = ?
+                order by study_date asc, created_at asc
+                """,
+                (student_id,),
+            ).fetchall()
+
+        total_minutes = sum(row["minutes_completed"] for row in rows)
+        completed_sessions = sum(row["sessions_completed"] for row in rows)
+        planned_sessions = sum(row["sessions_planned"] for row in rows)
+        completion_rate = round((completed_sessions / planned_sessions) * 100, 1) if planned_sessions else 0
+        active_days = {datetime.fromisoformat(row["study_date"]).date() for row in rows}
+        today = datetime.now(timezone.utc).date()
+        streak_days = 0
+        while today in active_days:
+            streak_days += 1
+            today = today.fromordinal(today.toordinal() - 1)
+
+        latest_note = rows[-1]["note"] if rows else "No study activity has been recorded yet."
+
+        return ParentProgressSummary(
+            parent_id=parent_id,
+            student_id=student_id,
+            completion_rate=completion_rate,
+            streak_days=streak_days,
+            total_minutes=total_minutes,
+            latest_note=latest_note,
+        )
 
     def progress(self, plan_id: str) -> StudyPlanProgress | None:
         saved_plan = self.by_id(plan_id)
@@ -882,6 +980,26 @@ class StudyPlanStore:
                 """
                 create index if not exists idx_study_session_completions_plan_date
                 on study_session_completions (plan_id, study_date)
+                """
+            )
+            connection.execute(
+                """
+                create table if not exists study_check_ins (
+                    id text primary key,
+                    student_id text not null,
+                    study_date text not null,
+                    minutes_completed integer not null,
+                    sessions_completed integer not null,
+                    sessions_planned integer not null,
+                    note text not null,
+                    created_at text not null
+                )
+                """
+            )
+            connection.execute(
+                """
+                create index if not exists idx_study_check_ins_student_date
+                on study_check_ins (student_id, study_date)
                 """
             )
 

@@ -135,7 +135,11 @@ export default function AccountsScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.hero}>
           <View style={styles.logo}>
             <MaterialCommunityIcons name="account-multiple-plus-outline" size={32} color={colors.brand} />

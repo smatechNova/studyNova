@@ -1,6 +1,3 @@
-from datetime import date
-from uuid import uuid4
-
 from fastapi import APIRouter, HTTPException
 
 from app.auth import FirebaseAuthUnavailable, InvalidFirebaseToken, verify_firebase_id_token
@@ -32,8 +29,6 @@ from app.schemas import (
 from app.storage import get_study_plan_store
 
 router = APIRouter(prefix="/api/v1")
-
-_check_ins: list[CheckInRequest] = []
 
 
 @router.post("/accounts/students", response_model=StudentAccount)
@@ -158,13 +153,7 @@ def delete_study_session_completion(plan_id: str, session_key: str) -> DeleteRes
 
 @router.post("/progress/check-ins", response_model=CheckInResponse)
 def create_check_in(payload: CheckInRequest) -> CheckInResponse:
-    _check_ins.append(payload)
-    return CheckInResponse(
-        id=str(uuid4()),
-        student_id=payload.student_id,
-        study_date=payload.study_date,
-        saved=True,
-    )
+    return get_study_plan_store().create_check_in(payload)
 
 
 @router.get(
@@ -172,27 +161,11 @@ def create_check_in(payload: CheckInRequest) -> CheckInResponse:
     response_model=ParentProgressSummary,
 )
 def get_parent_progress(parent_id: str, student_id: str) -> ParentProgressSummary:
-    student_logs = [log for log in _check_ins if log.student_id == student_id]
     if not parent_id.strip() or not student_id.strip():
         raise HTTPException(status_code=400, detail="Parent and student ids are required.")
 
-    total_minutes = sum(log.minutes_completed for log in student_logs)
-    completed_sessions = sum(log.sessions_completed for log in student_logs)
-    planned_sessions = sum(log.sessions_planned for log in student_logs)
-    completion_rate = round((completed_sessions / planned_sessions) * 100, 1) if planned_sessions else 0
+    summary = get_study_plan_store().parent_progress_summary(parent_id, student_id)
+    if summary is None:
+        raise HTTPException(status_code=404, detail="Parent and student are not linked.")
 
-    active_days = {log.study_date for log in student_logs}
-    today = date.today()
-    streak_days = 0
-    while today in active_days:
-        streak_days += 1
-        today = date.fromordinal(today.toordinal() - 1)
-
-    return ParentProgressSummary(
-        parent_id=parent_id,
-        student_id=student_id,
-        completion_rate=completion_rate,
-        streak_days=streak_days,
-        total_minutes=total_minutes,
-        latest_note=student_logs[-1].note if student_logs else "No study activity has been recorded yet.",
-    )
+    return summary
