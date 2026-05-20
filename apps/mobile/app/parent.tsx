@@ -7,6 +7,7 @@ import { ProgressBar } from "@/components/ProgressBar";
 import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
 import { getLatestStudyPlan, getParentFamily, getStudyPlanProgress } from "@/lib/api";
+import { getStoredAuthSession } from "@/lib/session";
 import type { ParentFamilyAccount, SavedStudyPlan, StudyPlanProgress } from "@/types";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
@@ -16,12 +17,14 @@ export default function ParentScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const params = useLocalSearchParams<{ parentId?: string }>();
   const signedInParentId = getParamValue(params.parentId);
+  const [storedParentId, setStoredParentId] = useState<string | undefined>();
   const [parentFamily, setParentFamily] = useState<ParentFamilyAccount | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | undefined>();
   const [savedPlan, setSavedPlan] = useState<SavedStudyPlan | null>(null);
   const [progress, setProgress] = useState<StudyPlanProgress | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState("");
+  const activeParentId = signedInParentId ?? storedParentId;
 
   const latestCompletion = progress?.completions.at(-1);
   const recentDays = useMemo(() => {
@@ -43,11 +46,32 @@ export default function ParentScreen() {
     parentFamily?.students.find((student) => student.id === selectedStudentId) ?? parentFamily?.students[0];
 
   useEffect(() => {
-    void loadParentView();
+    let isMounted = true;
+
+    async function loadStoredSession() {
+      if (signedInParentId) {
+        return;
+      }
+
+      const session = await getStoredAuthSession();
+      if (isMounted && session?.role === "parent" && session.parent) {
+        setStoredParentId(session.parent.id);
+      }
+    }
+
+    void loadStoredSession();
+
+    return () => {
+      isMounted = false;
+    };
   }, [signedInParentId]);
 
+  useEffect(() => {
+    void loadParentView();
+  }, [activeParentId]);
+
   async function loadParentView(nextStudentId = selectedStudentId) {
-    if (!signedInParentId) {
+    if (!activeParentId) {
       return;
     }
 
@@ -55,7 +79,7 @@ export default function ParentScreen() {
     setMessage("");
 
     try {
-      const latestFamily = await getParentFamily(signedInParentId);
+      const latestFamily = await getParentFamily(activeParentId);
       setParentFamily(latestFamily);
 
       if (!latestFamily.parent || !latestFamily.students.length) {
@@ -94,7 +118,7 @@ export default function ParentScreen() {
     void loadParentView(studentId);
   }
 
-  if (!signedInParentId) {
+  if (!activeParentId) {
     return (
       <Screen>
         <ScrollView contentContainerStyle={styles.content}>
@@ -153,7 +177,7 @@ export default function ParentScreen() {
           <View style={styles.panel}>
             <View style={styles.panelHeader}>
               <Text style={styles.sectionTitle}>Students</Text>
-              <Link href={`/accounts?parentId=${encodeURIComponent(signedInParentId)}`} asChild>
+              <Link href={`/accounts?parentId=${encodeURIComponent(activeParentId)}`} asChild>
                 <Pressable accessibilityRole="button" style={styles.linkButton}>
                   <MaterialCommunityIcons name="account-plus-outline" size={18} color={colors.brand} />
                   <Text style={styles.linkButtonText}>Link student</Text>
