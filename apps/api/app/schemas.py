@@ -97,6 +97,7 @@ class StudyPlanSaveRequest(BaseModel):
 
 
 class StudentAccountCreate(BaseModel):
+    login_id: str = Field(min_length=5, max_length=120)
     name: str = Field(min_length=2, max_length=80)
     class_level: str = Field(min_length=1, max_length=40)
     age: int = Field(ge=3, le=30)
@@ -139,6 +140,18 @@ class ParentFamilyAccount(BaseModel):
     parent: ParentAccount | None = None
     students: list[StudentAccount] = Field(default_factory=list)
     links: list[ParentStudentLink] = Field(default_factory=list)
+
+
+class AccountSignInRequest(BaseModel):
+    role: Literal["student", "parent"]
+    login_id: str = Field(min_length=5, max_length=120)
+
+
+class AuthSession(BaseModel):
+    role: Literal["student", "parent"]
+    student: StudentAccount | None = None
+    parent: ParentAccount | None = None
+    students: list[StudentAccount] = Field(default_factory=list)
 
 
 class StudySessionCompletionRequest(BaseModel):

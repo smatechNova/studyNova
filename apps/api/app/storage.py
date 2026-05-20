@@ -7,6 +7,8 @@ from uuid import uuid4
 
 from app.config import get_settings
 from app.schemas import (
+    AccountSignInRequest,
+    AuthSession,
     DailyProgress,
     FamilyAccount,
     ParentAccount,
@@ -89,6 +91,10 @@ class StudyPlanStore:
         )
 
     def create_student_account(self, payload: StudentAccountCreate) -> StudentAccount:
+        existing_login = self.student_account_by_login_id(payload.login_id)
+        if existing_login is not None:
+            return existing_login
+
         existing_account = self.student_account_by_profile(payload)
         if existing_account is not None:
             return existing_account
@@ -102,11 +108,12 @@ class StudyPlanStore:
         with self._connect() as connection:
             connection.execute(
                 """
-                insert into student_accounts (id, name, class_level, age, school_name, created_at)
-                values (?, ?, ?, ?, ?, ?)
+                insert into student_accounts (id, login_id, name, class_level, age, school_name, created_at)
+                values (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     account.id,
+                    account.login_id,
                     account.name,
                     account.class_level,
                     account.age,
@@ -116,6 +123,21 @@ class StudyPlanStore:
             )
 
         return account
+
+    def sign_in(self, payload: AccountSignInRequest) -> AuthSession | None:
+        if payload.role == "student":
+            student = self.student_account_by_login_id(payload.login_id)
+            if student is None:
+                return None
+
+            return AuthSession(role="student", student=student)
+
+        parent = self.parent_account_by_contact(payload.login_id)
+        if parent is None:
+            return None
+
+        family = self.parent_family(parent.id)
+        return AuthSession(role="parent", parent=parent, students=family.students)
 
     def create_parent_account(self, payload: ParentAccountCreate) -> ParentAccount:
         existing_account = self.parent_account_by_contact(payload.contact)
@@ -249,11 +271,34 @@ class StudyPlanStore:
         ]
         return ParentFamilyAccount(parent=parent, students=students, links=links)
 
+    def student_family(self, student_id: str) -> FamilyAccount:
+        student = self.student_account_by_id(student_id)
+        if student is None:
+            return FamilyAccount()
+
+        with self._connect() as connection:
+            link_row = connection.execute(
+                """
+                select id, parent_id, student_id, created_at
+                from parent_student_links
+                where student_id = ?
+                order by created_at asc
+                limit 1
+                """,
+                (student_id,),
+            ).fetchone()
+
+        if link_row is None:
+            return FamilyAccount(student=student)
+
+        link = self._link_from_row(link_row)
+        return FamilyAccount(parent=self.parent_account_by_id(link.parent_id), student=student, link=link)
+
     def latest_student_account(self) -> StudentAccount | None:
         with self._connect() as connection:
             row = connection.execute(
                 """
-                select id, name, class_level, age, school_name, created_at
+                select id, login_id, name, class_level, age, school_name, created_at
                 from student_accounts
                 order by created_at desc
                 limit 1
@@ -280,7 +325,7 @@ class StudyPlanStore:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                select id, name, class_level, age, school_name, created_at
+                select id, login_id, name, class_level, age, school_name, created_at
                 from student_accounts
                 order by created_at desc
                 """
@@ -288,6 +333,7 @@ class StudyPlanStore:
 
         for row in rows:
             candidate = StudentAccountCreate(
+                login_id=row["login_id"] or _legacy_student_login_id(row["id"]),
                 name=row["name"],
                 class_level=row["class_level"],
                 age=row["age"],
@@ -298,11 +344,28 @@ class StudyPlanStore:
 
         return None
 
+    def student_account_by_login_id(self, login_id: str) -> StudentAccount | None:
+        login_key = _contact_key(login_id)
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                select id, login_id, name, class_level, age, school_name, created_at
+                from student_accounts
+                order by created_at desc
+                """
+            ).fetchall()
+
+        for row in rows:
+            if _contact_key(row["login_id"]) == login_key:
+                return self._student_from_row(row)
+
+        return None
+
     def student_account_by_id(self, student_id: str) -> StudentAccount | None:
         with self._connect() as connection:
             row = connection.execute(
                 """
-                select id, name, class_level, age, school_name, created_at
+                select id, login_id, name, class_level, age, school_name, created_at
                 from student_accounts
                 where id = ?
                 """,
@@ -558,6 +621,7 @@ class StudyPlanStore:
     def _student_from_row(self, row: sqlite3.Row) -> StudentAccount:
         return StudentAccount(
             id=row["id"],
+            login_id=row["login_id"] or _legacy_student_login_id(row["id"]),
             name=row["name"],
             class_level=row["class_level"],
             age=row["age"],
@@ -621,12 +685,24 @@ class StudyPlanStore:
                 """
                 create table if not exists student_accounts (
                     id text primary key,
+                    login_id text not null default '',
                     name text not null,
                     class_level text not null,
                     age integer not null,
                     school_name text not null,
                     created_at text not null
                 )
+                """
+            )
+            student_account_columns = {
+                row["name"] for row in connection.execute("pragma table_info(student_accounts)").fetchall()
+            }
+            if "login_id" not in student_account_columns:
+                connection.execute("alter table student_accounts add column login_id text not null default ''")
+            connection.execute(
+                """
+                create index if not exists idx_student_accounts_login
+                on student_accounts (login_id)
                 """
             )
             connection.execute(
@@ -690,8 +766,9 @@ def get_study_plan_store() -> StudyPlanStore:
     return StudyPlanStore(get_settings().local_data_path)
 
 
-def _student_profile_key(payload: StudentAccountCreate) -> tuple[str, str, int, str]:
+def _student_profile_key(payload: StudentAccountCreate) -> tuple[str, str, str, int, str]:
     return (
+        _contact_key(payload.login_id),
         _compact_text(payload.name),
         _compact_text(payload.class_level),
         payload.age,
@@ -710,3 +787,7 @@ def _contact_key(contact: str) -> str:
 
 def _compact_text(value: str) -> str:
     return " ".join(value.strip().lower().split())
+
+
+def _legacy_student_login_id(student_id: str) -> str:
+    return f"{student_id}@legacy.studynova.local"

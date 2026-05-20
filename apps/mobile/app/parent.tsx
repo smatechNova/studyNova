@@ -1,16 +1,18 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Link } from "expo-router";
+import { Link, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ProgressBar } from "@/components/ProgressBar";
 import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
-import { getLatestParentFamily, getLatestStudyPlan, getStudyPlanProgress } from "@/lib/api";
+import { getLatestStudyPlan, getParentFamily, getStudyPlanProgress } from "@/lib/api";
 import type { ParentFamilyAccount, SavedStudyPlan, StudyPlanProgress } from "@/types";
 import { colors, spacing } from "@/theme";
 
 export default function ParentScreen() {
+  const params = useLocalSearchParams<{ parentId?: string }>();
+  const signedInParentId = getParamValue(params.parentId);
   const [parentFamily, setParentFamily] = useState<ParentFamilyAccount | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | undefined>();
   const [savedPlan, setSavedPlan] = useState<SavedStudyPlan | null>(null);
@@ -39,14 +41,18 @@ export default function ParentScreen() {
 
   useEffect(() => {
     void loadParentView();
-  }, []);
+  }, [signedInParentId]);
 
   async function loadParentView(nextStudentId = selectedStudentId) {
+    if (!signedInParentId) {
+      return;
+    }
+
     setIsLoading(true);
     setMessage("");
 
     try {
-      const latestFamily = await getLatestParentFamily();
+      const latestFamily = await getParentFamily(signedInParentId);
       setParentFamily(latestFamily);
 
       if (!latestFamily.parent || !latestFamily.students.length) {
@@ -83,6 +89,28 @@ export default function ParentScreen() {
   function selectStudent(studentId: string) {
     setSelectedStudentId(studentId);
     void loadParentView(studentId);
+  }
+
+  if (!signedInParentId) {
+    return (
+      <Screen>
+        <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.panel}>
+            <MaterialCommunityIcons name="lock-outline" size={28} color={colors.brand} />
+            <Text style={styles.sectionTitle}>Parent sign in required</Text>
+            <Text style={styles.helper}>
+              Sign in as a parent or guardian to monitor linked student accounts.
+            </Text>
+            <Link href="/auth?role=parent" asChild>
+              <Pressable accessibilityRole="button" style={styles.linkButton}>
+                <MaterialCommunityIcons name="login" size={18} color={colors.brand} />
+                <Text style={styles.linkButtonText}>Sign in as parent</Text>
+              </Pressable>
+            </Link>
+          </View>
+        </ScrollView>
+      </Screen>
+    );
   }
 
   return (
@@ -122,7 +150,7 @@ export default function ParentScreen() {
           <View style={styles.panel}>
             <View style={styles.panelHeader}>
               <Text style={styles.sectionTitle}>Students</Text>
-              <Link href="/accounts" asChild>
+              <Link href={`/accounts?parentId=${encodeURIComponent(signedInParentId)}`} asChild>
                 <Pressable accessibilityRole="button" style={styles.linkButton}>
                   <MaterialCommunityIcons name="account-plus-outline" size={18} color={colors.brand} />
                   <Text style={styles.linkButtonText}>Link student</Text>
@@ -218,6 +246,10 @@ export default function ParentScreen() {
       </ScrollView>
     </Screen>
   );
+}
+
+function getParamValue(value?: string | string[]) {
+  return Array.isArray(value) ? value[0] : value;
 }
 
 function parentSummaryCopy(weeklyRate: number, streakDays: number) {

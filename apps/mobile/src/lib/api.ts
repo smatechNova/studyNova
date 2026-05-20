@@ -1,4 +1,6 @@
 import type {
+  AccountSignInInput,
+  AuthSession,
   FamilyAccount,
   ParentAccount,
   ParentFamilyAccount,
@@ -80,11 +82,37 @@ export async function linkParentStudent(parentId: string, studentId: string): Pr
   return response.json() as Promise<ParentStudentLink>;
 }
 
+export async function signInAccount(payload: AccountSignInInput): Promise<AuthSession> {
+  const response = await fetch(`${API_URL}/api/v1/accounts/sign-in`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Account sign-in failed with ${response.status}`);
+  }
+
+  return response.json() as Promise<AuthSession>;
+}
+
 export async function getLatestFamilyAccount(): Promise<FamilyAccount> {
   const response = await fetch(`${API_URL}/api/v1/accounts/family/latest`);
 
   if (!response.ok) {
     throw new Error(`Family account request failed with ${response.status}`);
+  }
+
+  return response.json() as Promise<FamilyAccount>;
+}
+
+export async function getStudentFamily(studentId: string): Promise<FamilyAccount> {
+  const response = await fetch(`${API_URL}/api/v1/accounts/students/${studentId}/family`);
+
+  if (!response.ok) {
+    throw new Error(`Student family account request failed with ${response.status}`);
   }
 
   return response.json() as Promise<FamilyAccount>;

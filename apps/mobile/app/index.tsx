@@ -31,25 +31,25 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.roleGrid}>
-          <Link href="/accounts" asChild>
+          <Link href="/auth?role=student" asChild>
             <RoleCard
-              title="Account setup"
-              description="Create student and parent profiles, then link them before planning."
-              icon="account-multiple-plus-outline"
-            />
-          </Link>
-          <Link href="/student" asChild>
-            <RoleCard
-              title="Student"
-              description="Generate a timetable, track sessions, and keep revision on schedule."
+              title="Student sign in"
+              description="Open one student's own study dashboard and progress."
               icon="notebook-edit-outline"
             />
           </Link>
-          <Link href="/parent" asChild>
+          <Link href="/auth?role=parent" asChild>
             <RoleCard
-              title="Parent"
-              description="Monitor study consistency and encourage progress without guessing."
+              title="Parent/guardian sign in"
+              description="Monitor linked students from the parent dashboard."
               icon="shield-account-outline"
+            />
+          </Link>
+          <Link href="/accounts" asChild>
+            <RoleCard
+              title="Account setup"
+              description="Create one student account, then link it to a parent monitoring account."
+              icon="account-multiple-plus-outline"
             />
           </Link>
         </View>

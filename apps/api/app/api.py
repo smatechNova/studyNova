@@ -5,6 +5,8 @@ from fastapi import APIRouter, HTTPException
 
 from app.domain.study_planner import build_study_plan
 from app.schemas import (
+    AccountSignInRequest,
+    AuthSession,
     CheckInRequest,
     CheckInResponse,
     DeleteResponse,
@@ -48,6 +50,22 @@ def link_parent_student(payload: ParentStudentLinkCreate) -> ParentStudentLink:
     if link is None:
         raise HTTPException(status_code=404, detail="Parent or student account was not found.")
     return link
+
+
+@router.post("/accounts/sign-in", response_model=AuthSession)
+def sign_in_account(payload: AccountSignInRequest) -> AuthSession:
+    session = get_study_plan_store().sign_in(payload)
+    if session is None:
+        raise HTTPException(status_code=404, detail="No account matched that sign-in ID.")
+    return session
+
+
+@router.get("/accounts/students/{student_id}/family", response_model=FamilyAccount)
+def get_student_family_account(student_id: str) -> FamilyAccount:
+    family = get_study_plan_store().student_family(student_id)
+    if family.student is None:
+        raise HTTPException(status_code=404, detail="Student account was not found.")
+    return family
 
 
 @router.get("/accounts/family/latest", response_model=FamilyAccount)

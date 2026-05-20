@@ -1,4 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Link, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -17,15 +18,14 @@ import { StatCard } from "@/components/StatCard";
 import {
   completeStudySession,
   generateStudyPlan,
-  getLatestParentFamily,
   getLatestStudyPlan,
+  getStudentFamily,
   getStudyPlanProgress,
   saveStudyPlan
 } from "@/lib/api";
 import type {
   PlanSession,
   SavedStudyPlan,
-  StudentAccount,
   StudyPlanProgress,
   StudyPlanRequest,
   StudyPlanResponse
@@ -75,6 +75,8 @@ type ValidationResult = {
 };
 
 export default function StudentScreen() {
+  const params = useLocalSearchParams<{ studentId?: string }>();
+  const signedInStudentId = getParamValue(params.studentId);
   const [form, setForm] = useState<PlanForm>(() => createDefaultForm());
   const [plan, setPlan] = useState<StudyPlanResponse | null>(null);
   const [savedPlan, setSavedPlan] = useState<SavedStudyPlan | null>(null);
@@ -82,7 +84,6 @@ export default function StudentScreen() {
   const [saveMessage, setSaveMessage] = useState("");
   const [latestMessage, setLatestMessage] = useState("");
   const [linkedStudentId, setLinkedStudentId] = useState<string | undefined>();
-  const [linkedStudents, setLinkedStudents] = useState<StudentAccount[]>([]);
   const [stepIndex, setStepIndex] = useState(0);
   const [activeCalendar, setActiveCalendar] = useState<DateFieldName | null>(null);
   const [isPlanVisible, setIsPlanVisible] = useState(false);
@@ -96,36 +97,36 @@ export default function StudentScreen() {
     0
   );
   const estimatedReadingMinutes = pageCount * clamp(toNumber(form.minutesPerPage), 1, 30);
-  const activeStudent = linkedStudents.find((student) => student.id === linkedStudentId) ?? linkedStudents[0];
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadAccountAndPlan() {
-      let accountStudentId: string | undefined;
-      try {
-        const latestFamily = await getLatestParentFamily();
-        if (isMounted && latestFamily.parent && latestFamily.students.length) {
-          const parent = latestFamily.parent;
-          const accountStudent = latestFamily.students[0];
-          accountStudentId = accountStudent.id;
-          setLinkedStudents(latestFamily.students);
-          setLinkedStudentId(accountStudentId);
-          setForm((current) => ({
-            ...current,
-            studentName: current.studentName || accountStudent.name,
-            classLevel: current.classLevel || accountStudent.class_level,
-            age: current.age || `${accountStudent.age}`,
-            parentName: current.parentName || parent.name,
-            parentContact: current.parentContact || parent.contact
-          }));
-        }
-      } catch {
-        // Account setup is optional during early development.
+      if (!signedInStudentId) {
+        return;
       }
 
       try {
-        const saved = await getLatestStudyPlan(accountStudentId ? { studentId: accountStudentId } : undefined);
+        const studentFamily = await getStudentFamily(signedInStudentId);
+        if (isMounted && studentFamily.student) {
+          setLinkedStudentId(studentFamily.student.id);
+          setForm((current) => ({
+            ...current,
+            studentName: current.studentName || studentFamily.student?.name || "",
+            classLevel: current.classLevel || studentFamily.student?.class_level || "",
+            age: current.age || `${studentFamily.student?.age ?? ""}`,
+            parentName: current.parentName || studentFamily.parent?.name || "",
+            parentContact: current.parentContact || studentFamily.parent?.contact || ""
+          }));
+        }
+      } catch {
+        if (isMounted) {
+          setLatestMessage("Sign in with a valid student account.");
+        }
+      }
+
+      try {
+        const saved = await getLatestStudyPlan({ studentId: signedInStudentId });
         if (isMounted) {
           setLatestPlan(saved);
           setLatestMessage("");
@@ -142,7 +143,7 @@ export default function StudentScreen() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [signedInStudentId]);
 
   async function submitPlan(nextForm = form) {
     const request = buildRequest(nextForm);
@@ -184,34 +185,6 @@ export default function StudentScreen() {
     setSavedPlan(latestPlan);
     setSaveMessage("Loaded latest saved plan.");
     setIsPlanVisible(true);
-  }
-
-  async function selectLinkedStudent(studentId: string) {
-    const student = linkedStudents.find((entry) => entry.id === studentId);
-    if (!student) {
-      return;
-    }
-
-    setLinkedStudentId(student.id);
-    setPlan(null);
-    setSavedPlan(null);
-    setLatestPlan(null);
-    setLatestMessage("Loading this student's saved plan...");
-    setIsPlanVisible(false);
-    setForm((current) => ({
-      ...current,
-      studentName: student.name,
-      classLevel: student.class_level,
-      age: `${student.age}`
-    }));
-
-    try {
-      const saved = await getLatestStudyPlan({ studentId: student.id });
-      setLatestPlan(saved);
-      setLatestMessage("");
-    } catch {
-      setLatestMessage(`No saved plan for ${student.name} yet.`);
-    }
   }
 
   function buildRequest(nextForm: PlanForm): StudyPlanRequest | null {
@@ -425,6 +398,28 @@ export default function StudentScreen() {
     }));
   }
 
+  if (!signedInStudentId) {
+    return (
+      <Screen>
+        <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.panel}>
+            <MaterialCommunityIcons name="lock-outline" size={28} color={colors.brand} />
+            <Text style={styles.sectionTitle}>Student sign in required</Text>
+            <Text style={styles.helper}>
+              Sign in as a student to open only that student's dashboard and study plan.
+            </Text>
+            <Link href="/auth?role=student" asChild>
+              <Pressable accessibilityRole="button" style={styles.secondaryButton}>
+                <MaterialCommunityIcons name="login" size={18} color={colors.brand} />
+                <Text style={styles.secondaryButtonText}>Sign in as student</Text>
+              </Pressable>
+            </Link>
+          </View>
+        </ScrollView>
+      </Screen>
+    );
+  }
+
   if (isPlanVisible && plan) {
     return (
       <GeneratedPlanView
@@ -452,38 +447,6 @@ export default function StudentScreen() {
             <MaterialCommunityIcons name="bell-outline" size={22} color={colors.text} />
           </Pressable>
         </View>
-
-        {linkedStudents.length > 1 ? (
-          <View style={styles.panel}>
-            <View style={styles.panelHeader}>
-              <View style={styles.latestCopy}>
-                <Text style={styles.kicker}>Active student account</Text>
-                <Text style={styles.sectionTitle}>{activeStudent?.name ?? "Choose student"}</Text>
-                <Text style={styles.helper}>The student dashboard works with one learner at a time.</Text>
-              </View>
-            </View>
-            <View style={styles.studentPicker}>
-              {linkedStudents.map((student) => {
-                const isSelected = student.id === activeStudent?.id;
-                return (
-                  <Pressable
-                    accessibilityRole="button"
-                    key={student.id}
-                    onPress={() => void selectLinkedStudent(student.id)}
-                    style={[styles.studentChip, isSelected ? styles.studentChipSelected : null]}
-                  >
-                    <Text style={[styles.studentChipText, isSelected ? styles.studentChipTextSelected : null]}>
-                      {student.name}
-                    </Text>
-                    <Text style={[styles.studentChipMeta, isSelected ? styles.studentChipTextSelected : null]}>
-                      {student.class_level}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        ) : null}
 
         {latestPlan ? (
           <View style={styles.panel}>
@@ -1636,6 +1599,10 @@ function sessionKindLabel(kind: PlanSession["kind"]) {
 
 function sessionKey(studyDate: string, index: number) {
   return `${studyDate}:${index}`;
+}
+
+function getParamValue(value?: string | string[]) {
+  return Array.isArray(value) ? value[0] : value;
 }
 
 function sessionTitle(session: PlanSession, index: number, sessions: PlanSession[]) {

@@ -86,6 +86,7 @@ export type SavedStudyPlan = {
 };
 
 export type StudentAccountInput = {
+  login_id: string;
   name: string;
   class_level: string;
   age: number;
@@ -125,6 +126,20 @@ export type ParentFamilyAccount = {
   parent: ParentAccount | null;
   students: StudentAccount[];
   links: ParentStudentLink[];
+};
+
+export type AuthRole = "student" | "parent";
+
+export type AccountSignInInput = {
+  role: AuthRole;
+  login_id: string;
+};
+
+export type AuthSession = {
+  role: AuthRole;
+  student: StudentAccount | null;
+  parent: ParentAccount | null;
+  students: StudentAccount[];
 };
 
 export type StudySessionCompletionRequest = {
