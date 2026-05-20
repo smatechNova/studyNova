@@ -28,7 +28,8 @@ import type {
   SavedStudyPlan,
   StudyPlanProgress,
   StudyPlanRequest,
-  StudyPlanResponse
+  StudyPlanResponse,
+  StudySessionCompletion
 } from "@/types";
 import { colors, spacing } from "@/theme";
 
@@ -809,11 +810,15 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
     }
   }
 
-  function openCompletion(sessionKeyValue: string) {
+  function openCompletion(sessionKeyValue: string, savedCompletion?: StudySessionCompletion) {
     setActiveCompletionKey(sessionKeyValue);
-    setCompletionNote("");
-    setCompletionConfidence(3);
-    setProgressMessage("Write a quick recall note before marking the session done.");
+    setCompletionNote(savedCompletion?.recall_note ?? "");
+    setCompletionConfidence(savedCompletion?.confidence ?? 3);
+    setProgressMessage(
+      savedCompletion
+        ? "Update the reflection for this completed session."
+        : "Write a quick recall note before marking the session done."
+    );
   }
 
   async function markSessionDone(studyDate: string, session: PlanSession, sessionKeyValue: string) {
@@ -841,9 +846,10 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
         recall_note: completionNote.trim(),
         confidence: completionConfidence
       });
+      const isUpdate = completedSessionKeys.has(sessionKeyValue);
       setActiveCompletionKey("");
       setCompletionNote("");
-      setProgressMessage("Session saved with a recall note.");
+      setProgressMessage(isUpdate ? "Study reflection updated." : "Session saved with a study reflection.");
       await refreshProgress(planId);
     } catch {
       setProgressMessage("Could not save this session. Check that the API is running.");
@@ -972,9 +978,19 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
                         <View style={styles.sessionActions}>
                           <Text style={styles.sessionKind}>{sessionKindLabel(session.kind)}</Text>
                           {isDone ? (
-                            <View style={[styles.sessionActionButton, styles.sessionDoneButton]}>
-                              <Text style={[styles.sessionActionText, styles.sessionDoneText]}>Done</Text>
-                            </View>
+                            <>
+                              <View style={[styles.sessionActionButton, styles.sessionDoneButton]}>
+                                <Text style={[styles.sessionActionText, styles.sessionDoneText]}>Done</Text>
+                              </View>
+                              <Pressable
+                                accessibilityRole="button"
+                                disabled={isSavingCompletion || !planId || !savedCompletion}
+                                onPress={() => openCompletion(currentSessionKey, savedCompletion)}
+                                style={[styles.sessionActionButton, !planId || !savedCompletion ? styles.disabledButton : null]}
+                              >
+                                <Text style={styles.sessionActionText}>Edit</Text>
+                              </Pressable>
+                            </>
                           ) : (
                             <Pressable
                               accessibilityRole="button"
@@ -988,19 +1004,32 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
                         </View>
                       </View>
 
-                      {isDone && savedCompletion ? (
+                      {isDone && savedCompletion && !isActive ? (
                         <View style={[styles.completionPanel, styles.completionPanelDone]}>
-                          <Text style={styles.sessionTitle}>Study proof saved</Text>
+                          <View style={styles.panelHeader}>
+                            <Text style={styles.sessionTitle}>Study reflection saved</Text>
+                            <Pressable
+                              accessibilityRole="button"
+                              disabled={isSavingCompletion}
+                              onPress={() => openCompletion(currentSessionKey, savedCompletion)}
+                              style={styles.secondaryButton}
+                            >
+                              <MaterialCommunityIcons name="pencil-outline" size={16} color={colors.brand} />
+                              <Text style={styles.secondaryButtonText}>Edit</Text>
+                            </Pressable>
+                          </View>
                           <Text style={styles.helper}>{savedCompletion.recall_note}</Text>
                           <Text style={styles.sessionMeta}>Confidence: {savedCompletion.confidence}/5</Text>
                         </View>
                       ) : null}
 
-                      {isActive && !isDone ? (
+                      {isActive ? (
                         <View style={styles.completionPanel}>
-                          <Text style={styles.sessionTitle}>Quick recall check</Text>
+                          <Text style={styles.sessionTitle}>{isDone ? "Edit reflection" : "Quick recall check"}</Text>
                           <Text style={styles.helper}>
-                            Write one thing you remember from this session before it counts as complete.
+                            {isDone
+                              ? "Update what the student remembered from this session."
+                              : "Write one thing you remember from this session before it counts as complete."}
                           </Text>
                           <TextInput
                             multiline
@@ -1048,7 +1077,9 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
                             ) : (
                               <>
                                 <MaterialCommunityIcons name="check" size={18} color="#FFFFFF" />
-                                <Text style={styles.primaryButtonText}>Mark session done</Text>
+                                <Text style={styles.primaryButtonText}>
+                                  {isDone ? "Save reflection" : "Mark session done"}
+                                </Text>
                               </>
                             )}
                           </Pressable>
