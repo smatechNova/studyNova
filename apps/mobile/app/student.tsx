@@ -31,7 +31,8 @@ import type {
   StudyPlanResponse,
   StudySessionCompletion
 } from "@/types";
-import { colors, spacing } from "@/theme";
+import { spacing, type AppColors } from "@/theme";
+import { useTheme } from "@/themeContext";
 
 const RESOURCE_OPTIONS = ["Textbook", "Class notes", "Notebook", "Online notes", "Past questions"];
 const STEPS = ["Profile", "Exam", "Pace", "Subjects", "Review"] as const;
@@ -80,7 +81,14 @@ type ValidationResult = {
   stepIndex: number;
 };
 
+function useStudentStyles() {
+  const { colors } = useTheme();
+  return useMemo(() => createStyles(colors), [colors]);
+}
+
 export default function StudentScreen() {
+  const { colors } = useTheme();
+  const styles = useStudentStyles();
   const params = useLocalSearchParams<{ studentId?: string }>();
   const signedInStudentId = getParamValue(params.studentId);
   const [form, setForm] = useState<PlanForm>(() => createDefaultForm());
@@ -759,6 +767,8 @@ type GeneratedPlanViewProps = {
 };
 
 function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: GeneratedPlanViewProps) {
+  const { colors } = useTheme();
+  const styles = useStudentStyles();
   const todayPlan = plan.schedule[0];
   const planId = savedPlan?.id;
   const [progress, setProgress] = useState<StudyPlanProgress | null>(null);
@@ -1116,6 +1126,8 @@ function FormField({
   placeholder,
   multiline = false
 }: FormFieldProps) {
+  const { colors } = useTheme();
+  const styles = useStudentStyles();
   const [isFocused, setIsFocused] = useState(false);
 
   return (
@@ -1148,6 +1160,9 @@ type CalendarFieldProps = {
 };
 
 function CalendarField({ label, value, minDate, isOpen, onToggle, onSelect }: CalendarFieldProps) {
+  const { colors } = useTheme();
+  const styles = useStudentStyles();
+
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -1170,6 +1185,8 @@ type CalendarPickerProps = {
 };
 
 function CalendarPicker({ selectedDate, minDate, onSelect }: CalendarPickerProps) {
+  const { colors } = useTheme();
+  const styles = useStudentStyles();
   const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(toLocalDate(selectedDate) ?? new Date()));
   const days = useMemo(() => calendarDays(visibleMonth), [visibleMonth]);
 
@@ -1242,6 +1259,8 @@ type ResourcePickerProps = {
 };
 
 function ResourcePicker({ selected, onSelect }: ResourcePickerProps) {
+  const styles = useStudentStyles();
+
   return (
     <View style={styles.resourceBlock}>
       <Text style={styles.fieldLabel}>Study resource</Text>
@@ -1272,6 +1291,8 @@ type ReviewItemProps = {
 };
 
 function ReviewItem({ label, value }: ReviewItemProps) {
+  const styles = useStudentStyles();
+
   return (
     <View style={styles.reviewItem}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -1285,6 +1306,8 @@ type WizardProgressProps = {
 };
 
 function WizardProgress({ currentStep }: WizardProgressProps) {
+  const styles = useStudentStyles();
+
   return (
     <View style={styles.progressPanel}>
       {STEPS.map((step, index) => {
@@ -1708,7 +1731,8 @@ function sessionTitle(session: PlanSession, index: number, sessions: PlanSession
   return `${session.topic} - Part ${part}`;
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: AppColors) {
+  return StyleSheet.create({
   addTopicButton: {
     alignItems: "center",
     alignSelf: "flex-start",
@@ -2308,3 +2332,4 @@ const styles = StyleSheet.create({
     justifyContent: "space-between"
   }
 });
+}

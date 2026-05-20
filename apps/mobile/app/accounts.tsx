@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Link, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Linking,
@@ -22,7 +22,8 @@ import {
   linkParentStudent
 } from "@/lib/api";
 import type { ParentFamilyAccount } from "@/types";
-import { colors, spacing } from "@/theme";
+import { spacing, type AppColors } from "@/theme";
+import { useTheme } from "@/themeContext";
 
 type AccountForm = {
   studentLoginId: string;
@@ -36,6 +37,8 @@ type AccountForm = {
 };
 
 export default function AccountsScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const params = useLocalSearchParams<{ parentId?: string }>();
   const parentId = getParamValue(params.parentId);
   const [form, setForm] = useState<AccountForm>(() => createDefaultAccountForm());
@@ -297,6 +300,8 @@ function FormField({
   keyboardType = "default",
   placeholder
 }: FormFieldProps) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [isFocused, setIsFocused] = useState(false);
 
   return (
@@ -408,7 +413,8 @@ function getParamValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: AppColors) {
+  return StyleSheet.create({
   actions: {
     gap: spacing.sm
   },
@@ -608,3 +614,4 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   }
 });
+}

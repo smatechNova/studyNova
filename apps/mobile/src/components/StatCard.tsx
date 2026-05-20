@@ -1,7 +1,8 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { StyleSheet, Text, View } from "react-native";
 
-import { colors, spacing } from "@/theme";
+import { spacing } from "@/theme";
+import { useTheme } from "@/themeContext";
 
 type StatCardProps = {
   label: string;
@@ -10,21 +11,21 @@ type StatCardProps = {
 };
 
 export function StatCard({ label, value, icon }: StatCardProps) {
+  const { colors } = useTheme();
+
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, { backgroundColor: colors.panel, borderColor: colors.border }]}>
       <MaterialCommunityIcons name={icon} size={22} color={colors.brand} />
-      <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
+      <Text style={[styles.value, { color: colors.text }]} numberOfLines={1} adjustsFontSizeToFit>
         {value}
       </Text>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, { color: colors.muted }]}>{label}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.panel,
-    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
     flexBasis: "31%",
@@ -34,14 +35,11 @@ const styles = StyleSheet.create({
     padding: spacing.md
   },
   label: {
-    color: colors.muted,
     fontSize: 12,
     lineHeight: 16
   },
   value: {
-    color: colors.text,
     fontSize: 19,
     fontWeight: "800"
   }
 });
-

@@ -2,7 +2,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Google from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
 import { Link, router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Linking,
@@ -21,7 +21,8 @@ import {
   getFirebaseClientConfig,
   isFirebaseClientConfigured
 } from "@/lib/firebaseAuth";
-import { colors, spacing } from "@/theme";
+import { spacing, type AppColors } from "@/theme";
+import { useTheme } from "@/themeContext";
 import type { AuthRole, AuthSession } from "@/types";
 
 WebBrowser.maybeCompleteAuthSession();
@@ -47,6 +48,8 @@ const ROLE_OPTIONS: Array<{
 ];
 
 export default function AuthScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const params = useLocalSearchParams<{ role?: string }>();
   const [role, setRole] = useState<AuthRole>(() => normalizeRole(params.role));
   const [loginId, setLoginId] = useState("");
@@ -285,7 +288,8 @@ function isValidLoginId(value: string) {
   return digits.length >= 10 && digits.length <= 15;
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: AppColors) {
+  return StyleSheet.create({
   actions: {
     gap: spacing.sm
   },
@@ -462,3 +466,4 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   }
 });
+}

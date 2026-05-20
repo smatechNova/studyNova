@@ -1,13 +1,18 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Link } from "expo-router";
+import { useMemo } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { RoleCard } from "@/components/RoleCard";
 import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
-import { colors, spacing } from "@/theme";
+import { spacing, type AppColors } from "@/theme";
+import { useTheme } from "@/themeContext";
 
 export default function HomeScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content}>
@@ -58,7 +63,8 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: AppColors) {
+  return StyleSheet.create({
   content: {
     gap: spacing.xl,
     paddingBottom: spacing.xxl
@@ -110,3 +116,4 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   }
 });
+}

@@ -1,15 +1,27 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 
-import { colors } from "@/theme";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { ThemeProvider, useTheme } from "@/themeContext";
 
 export default function RootLayout() {
   return (
+    <ThemeProvider>
+      <ThemedStack />
+    </ThemeProvider>
+  );
+}
+
+function ThemedStack() {
+  const { colors, isDark } = useTheme();
+
+  return (
     <>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? "light" : "dark"} />
       <Stack
         screenOptions={{
           headerShadowVisible: false,
+          headerRight: () => <ThemeToggle />,
           headerStyle: { backgroundColor: colors.surface },
           headerTitleStyle: { color: colors.text, fontWeight: "700" },
           contentStyle: { backgroundColor: colors.surface }

@@ -1,4 +1,4 @@
-export const colors = {
+export const lightColors = {
   background: "#F8FAFC",
   border: "#D9E2EC",
   brand: "#2563EB",
@@ -18,6 +18,32 @@ export const colors = {
   warningDark: "#92400E",
   warningSoft: "#FFFBEB"
 };
+
+export const darkColors = {
+  background: "#0F172A",
+  border: "#263244",
+  brand: "#60A5FA",
+  brandDark: "#BFDBFE",
+  brandSoft: "#1E3A5F",
+  muted: "#CBD5E1",
+  panel: "#111827",
+  secondary: "#2DD4BF",
+  secondaryDark: "#5EEAD4",
+  secondarySoft: "#123F3B",
+  success: "#34D399",
+  successSoft: "#113F32",
+  surface: "#0F172A",
+  text: "#F8FAFC",
+  warning: "#FBBF24",
+  warningBorder: "#92400E",
+  warningDark: "#FDE68A",
+  warningSoft: "#3F2A08"
+};
+
+export type ThemeMode = "light" | "dark";
+export type AppColors = typeof lightColors;
+
+export const colors = lightColors;
 
 export const spacing = {
   xs: 4,

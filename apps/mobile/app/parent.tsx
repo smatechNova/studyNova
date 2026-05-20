@@ -8,9 +8,12 @@ import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
 import { getLatestStudyPlan, getParentFamily, getStudyPlanProgress } from "@/lib/api";
 import type { ParentFamilyAccount, SavedStudyPlan, StudyPlanProgress } from "@/types";
-import { colors, spacing } from "@/theme";
+import { spacing, type AppColors } from "@/theme";
+import { useTheme } from "@/themeContext";
 
 export default function ParentScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const params = useLocalSearchParams<{ parentId?: string }>();
   const signedInParentId = getParamValue(params.parentId);
   const [parentFamily, setParentFamily] = useState<ParentFamilyAccount | null>(null);
@@ -302,7 +305,8 @@ function toDateValue(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: AppColors) {
+  return StyleSheet.create({
   badge: {
     alignItems: "center",
     backgroundColor: colors.successSoft,
@@ -487,3 +491,4 @@ const styles = StyleSheet.create({
     fontWeight: "700"
   }
 });
+}
