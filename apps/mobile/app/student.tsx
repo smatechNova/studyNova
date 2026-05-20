@@ -17,12 +17,19 @@ import { StatCard } from "@/components/StatCard";
 import {
   completeStudySession,
   generateStudyPlan,
-  getLatestFamilyAccount,
+  getLatestParentFamily,
   getLatestStudyPlan,
   getStudyPlanProgress,
   saveStudyPlan
 } from "@/lib/api";
-import type { PlanSession, SavedStudyPlan, StudyPlanProgress, StudyPlanRequest, StudyPlanResponse } from "@/types";
+import type {
+  PlanSession,
+  SavedStudyPlan,
+  StudentAccount,
+  StudyPlanProgress,
+  StudyPlanRequest,
+  StudyPlanResponse
+} from "@/types";
 import { colors, spacing } from "@/theme";
 
 const RESOURCE_OPTIONS = ["Textbook", "Class notes", "Notebook", "Online notes", "Past questions"];
@@ -75,6 +82,7 @@ export default function StudentScreen() {
   const [saveMessage, setSaveMessage] = useState("");
   const [latestMessage, setLatestMessage] = useState("");
   const [linkedStudentId, setLinkedStudentId] = useState<string | undefined>();
+  const [linkedStudents, setLinkedStudents] = useState<StudentAccount[]>([]);
   const [stepIndex, setStepIndex] = useState(0);
   const [activeCalendar, setActiveCalendar] = useState<DateFieldName | null>(null);
   const [isPlanVisible, setIsPlanVisible] = useState(false);
@@ -88,6 +96,7 @@ export default function StudentScreen() {
     0
   );
   const estimatedReadingMinutes = pageCount * clamp(toNumber(form.minutesPerPage), 1, 30);
+  const activeStudent = linkedStudents.find((student) => student.id === linkedStudentId) ?? linkedStudents[0];
 
   useEffect(() => {
     let isMounted = true;
@@ -95,17 +104,20 @@ export default function StudentScreen() {
     async function loadAccountAndPlan() {
       let accountStudentId: string | undefined;
       try {
-        const latestFamily = await getLatestFamilyAccount();
-        if (isMounted && latestFamily.student && latestFamily.parent) {
-          accountStudentId = latestFamily.student.id;
+        const latestFamily = await getLatestParentFamily();
+        if (isMounted && latestFamily.parent && latestFamily.students.length) {
+          const parent = latestFamily.parent;
+          const accountStudent = latestFamily.students[0];
+          accountStudentId = accountStudent.id;
+          setLinkedStudents(latestFamily.students);
           setLinkedStudentId(accountStudentId);
           setForm((current) => ({
             ...current,
-            studentName: current.studentName || latestFamily.student?.name || "",
-            classLevel: current.classLevel || latestFamily.student?.class_level || "",
-            age: current.age || `${latestFamily.student?.age ?? ""}`,
-            parentName: current.parentName || latestFamily.parent?.name || "",
-            parentContact: current.parentContact || latestFamily.parent?.contact || ""
+            studentName: current.studentName || accountStudent.name,
+            classLevel: current.classLevel || accountStudent.class_level,
+            age: current.age || `${accountStudent.age}`,
+            parentName: current.parentName || parent.name,
+            parentContact: current.parentContact || parent.contact
           }));
         }
       } catch {
@@ -172,6 +184,34 @@ export default function StudentScreen() {
     setSavedPlan(latestPlan);
     setSaveMessage("Loaded latest saved plan.");
     setIsPlanVisible(true);
+  }
+
+  async function selectLinkedStudent(studentId: string) {
+    const student = linkedStudents.find((entry) => entry.id === studentId);
+    if (!student) {
+      return;
+    }
+
+    setLinkedStudentId(student.id);
+    setPlan(null);
+    setSavedPlan(null);
+    setLatestPlan(null);
+    setLatestMessage("Loading this student's saved plan...");
+    setIsPlanVisible(false);
+    setForm((current) => ({
+      ...current,
+      studentName: student.name,
+      classLevel: student.class_level,
+      age: `${student.age}`
+    }));
+
+    try {
+      const saved = await getLatestStudyPlan({ studentId: student.id });
+      setLatestPlan(saved);
+      setLatestMessage("");
+    } catch {
+      setLatestMessage(`No saved plan for ${student.name} yet.`);
+    }
   }
 
   function buildRequest(nextForm: PlanForm): StudyPlanRequest | null {
@@ -412,6 +452,38 @@ export default function StudentScreen() {
             <MaterialCommunityIcons name="bell-outline" size={22} color={colors.text} />
           </Pressable>
         </View>
+
+        {linkedStudents.length > 1 ? (
+          <View style={styles.panel}>
+            <View style={styles.panelHeader}>
+              <View style={styles.latestCopy}>
+                <Text style={styles.kicker}>Active student account</Text>
+                <Text style={styles.sectionTitle}>{activeStudent?.name ?? "Choose student"}</Text>
+                <Text style={styles.helper}>The student dashboard works with one learner at a time.</Text>
+              </View>
+            </View>
+            <View style={styles.studentPicker}>
+              {linkedStudents.map((student) => {
+                const isSelected = student.id === activeStudent?.id;
+                return (
+                  <Pressable
+                    accessibilityRole="button"
+                    key={student.id}
+                    onPress={() => void selectLinkedStudent(student.id)}
+                    style={[styles.studentChip, isSelected ? styles.studentChipSelected : null]}
+                  >
+                    <Text style={[styles.studentChipText, isSelected ? styles.studentChipTextSelected : null]}>
+                      {student.name}
+                    </Text>
+                    <Text style={[styles.studentChipMeta, isSelected ? styles.studentChipTextSelected : null]}>
+                      {student.class_level}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
 
         {latestPlan ? (
           <View style={styles.panel}>
@@ -2051,6 +2123,38 @@ const styles = StyleSheet.create({
     width: 40
   },
   statsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  studentChip: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 2,
+    minHeight: 54,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  studentChipMeta: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "700"
+  },
+  studentChipSelected: {
+    backgroundColor: colors.brandSoft,
+    borderColor: colors.brand
+  },
+  studentChipText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: "800"
+  },
+  studentChipTextSelected: {
+    color: colors.brand
+  },
+  studentPicker: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm
