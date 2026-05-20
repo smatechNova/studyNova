@@ -98,6 +98,7 @@ class StudyPlanSaveRequest(BaseModel):
 
 class StudentAccountCreate(BaseModel):
     login_id: str = Field(min_length=5, max_length=120)
+    access_code: str = Field(min_length=4, max_length=6, pattern=r"^\d{4,6}$")
     auth_uid: str | None = Field(default=None, max_length=160)
     name: str = Field(min_length=2, max_length=80)
     class_level: str = Field(min_length=1, max_length=40)
@@ -105,20 +106,31 @@ class StudentAccountCreate(BaseModel):
     school_name: str = Field(default="", max_length=120)
 
 
-class StudentAccount(StudentAccountCreate):
+class StudentAccount(BaseModel):
     id: str
+    login_id: str
+    auth_uid: str | None = None
+    name: str
+    class_level: str
+    age: int
+    school_name: str = ""
     created_at: datetime
 
 
 class ParentAccountCreate(BaseModel):
     name: str = Field(min_length=2, max_length=80)
     contact: str = Field(min_length=5, max_length=120)
+    access_code: str = Field(min_length=4, max_length=6, pattern=r"^\d{4,6}$")
     relationship: str = Field(default="Parent", min_length=2, max_length=40)
     auth_uid: str | None = Field(default=None, max_length=160)
 
 
-class ParentAccount(ParentAccountCreate):
+class ParentAccount(BaseModel):
     id: str
+    auth_uid: str | None = None
+    name: str
+    contact: str
+    relationship: str = "Parent"
     created_at: datetime
 
 
@@ -147,6 +159,7 @@ class ParentFamilyAccount(BaseModel):
 class AccountSignInRequest(BaseModel):
     role: Literal["student", "parent"]
     login_id: str = Field(min_length=5, max_length=120)
+    access_code: str = Field(min_length=4, max_length=6, pattern=r"^\d{4,6}$")
 
 
 class FirebaseSignInRequest(BaseModel):

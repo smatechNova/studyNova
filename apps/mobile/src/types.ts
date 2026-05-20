@@ -87,25 +87,29 @@ export type SavedStudyPlan = {
 
 export type StudentAccountInput = {
   login_id: string;
+  access_code: string;
   name: string;
   class_level: string;
   age: number;
   school_name: string;
 };
 
-export type StudentAccount = StudentAccountInput & {
+export type StudentAccount = Omit<StudentAccountInput, "access_code"> & {
   id: string;
+  auth_uid?: string | null;
   created_at: string;
 };
 
 export type ParentAccountInput = {
   name: string;
   contact: string;
+  access_code: string;
   relationship: string;
 };
 
-export type ParentAccount = ParentAccountInput & {
+export type ParentAccount = Omit<ParentAccountInput, "access_code"> & {
   id: string;
+  auth_uid?: string | null;
   created_at: string;
 };
 
@@ -133,6 +137,7 @@ export type AuthRole = "student" | "parent";
 export type AccountSignInInput = {
   role: AuthRole;
   login_id: string;
+  access_code: string;
 };
 
 export type FirebaseSignInInput = {

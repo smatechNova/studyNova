@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import json
 import sqlite3
 from datetime import datetime, timezone
@@ -27,6 +29,10 @@ from app.schemas import (
     StudySessionCompletion,
     StudySessionCompletionRequest,
 )
+
+
+class AccountAccessCodeError(Exception):
+    pass
 
 
 class StudyPlanStore:
@@ -94,13 +100,17 @@ class StudyPlanStore:
         )
 
     def create_student_account(self, payload: StudentAccountCreate) -> StudentAccount:
+        access_code_hash = _hash_access_code(payload.access_code)
+
         if payload.auth_uid:
             existing_auth = self.student_account_by_auth_uid(payload.auth_uid)
             if existing_auth is not None:
+                self._ensure_student_access_code(existing_auth.id, access_code_hash, payload.access_code)
                 return existing_auth
 
         existing_login = self.student_account_by_login_id(payload.login_id)
         if existing_login is not None:
+            self._ensure_student_access_code(existing_login.id, access_code_hash, payload.access_code)
             if payload.auth_uid and not existing_login.auth_uid:
                 self._bind_student_auth_uid(existing_login.id, payload.auth_uid)
                 return self.student_account_by_id(existing_login.id) or existing_login
@@ -108,6 +118,7 @@ class StudyPlanStore:
 
         existing_account = self.student_account_by_profile(payload)
         if existing_account is not None:
+            self._ensure_student_access_code(existing_account.id, access_code_hash, payload.access_code)
             if payload.auth_uid and not existing_account.auth_uid:
                 self._bind_student_auth_uid(existing_account.id, payload.auth_uid)
                 return self.student_account_by_id(existing_account.id) or existing_account
@@ -116,18 +127,34 @@ class StudyPlanStore:
         account = StudentAccount(
             id=str(uuid4()),
             created_at=datetime.now(timezone.utc),
-            **payload.model_dump(),
+            login_id=payload.login_id,
+            auth_uid=payload.auth_uid,
+            name=payload.name,
+            class_level=payload.class_level,
+            age=payload.age,
+            school_name=payload.school_name,
         )
 
         with self._connect() as connection:
             connection.execute(
                 """
-                insert into student_accounts (id, login_id, auth_uid, name, class_level, age, school_name, created_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?)
+                insert into student_accounts (
+                    id,
+                    login_id,
+                    access_code_hash,
+                    auth_uid,
+                    name,
+                    class_level,
+                    age,
+                    school_name,
+                    created_at
+                )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     account.id,
                     account.login_id,
+                    access_code_hash,
                     account.auth_uid,
                     account.name,
                     account.class_level,
@@ -142,13 +169,13 @@ class StudyPlanStore:
     def sign_in(self, payload: AccountSignInRequest) -> AuthSession | None:
         if payload.role == "student":
             student = self.student_account_by_login_id(payload.login_id)
-            if student is None:
+            if student is None or not self._student_access_code_matches(student.id, payload.access_code):
                 return None
 
             return AuthSession(role="student", student=student)
 
         parent = self.parent_account_by_contact(payload.login_id)
-        if parent is None:
+        if parent is None or not self._parent_access_code_matches(parent.id, payload.access_code):
             return None
 
         family = self.parent_family(parent.id)
@@ -184,13 +211,17 @@ class StudyPlanStore:
         return AuthSession(role="parent", parent=parent, students=family.students)
 
     def create_parent_account(self, payload: ParentAccountCreate) -> ParentAccount:
+        access_code_hash = _hash_access_code(payload.access_code)
+
         if payload.auth_uid:
             existing_auth = self.parent_account_by_auth_uid(payload.auth_uid)
             if existing_auth is not None:
+                self._ensure_parent_access_code(existing_auth.id, access_code_hash, payload.access_code)
                 return existing_auth
 
         existing_account = self.parent_account_by_contact(payload.contact)
         if existing_account is not None:
+            self._ensure_parent_access_code(existing_account.id, access_code_hash, payload.access_code)
             if payload.auth_uid and not existing_account.auth_uid:
                 self._bind_parent_auth_uid(existing_account.id, payload.auth_uid)
                 return self.parent_account_by_id(existing_account.id) or existing_account
@@ -199,17 +230,21 @@ class StudyPlanStore:
         account = ParentAccount(
             id=str(uuid4()),
             created_at=datetime.now(timezone.utc),
-            **payload.model_dump(),
+            auth_uid=payload.auth_uid,
+            name=payload.name,
+            contact=payload.contact,
+            relationship=payload.relationship,
         )
 
         with self._connect() as connection:
             connection.execute(
                 """
-                insert into parent_accounts (id, auth_uid, name, contact, relationship, created_at)
-                values (?, ?, ?, ?, ?, ?)
+                insert into parent_accounts (id, access_code_hash, auth_uid, name, contact, relationship, created_at)
+                values (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     account.id,
+                    access_code_hash,
                     account.auth_uid,
                     account.name,
                     account.contact,
@@ -385,14 +420,14 @@ class StudyPlanStore:
             ).fetchall()
 
         for row in rows:
-            candidate = StudentAccountCreate(
+            candidate_key = _student_profile_values(
                 login_id=row["login_id"] or _legacy_student_login_id(row["id"]),
                 name=row["name"],
                 class_level=row["class_level"],
                 age=row["age"],
                 school_name=row["school_name"],
             )
-            if _student_profile_key(candidate) == profile_key:
+            if candidate_key == profile_key:
                 return self._student_from_row(row)
 
         return None
@@ -521,6 +556,80 @@ class StudyPlanStore:
                 where id = ? and (auth_uid is null or auth_uid = '')
                 """,
                 (auth_uid, parent_id),
+            )
+
+    def _ensure_student_access_code(self, student_id: str, access_code_hash: str, access_code: str) -> None:
+        current_hash = self._student_access_code_hash(student_id)
+        if current_hash:
+            if not _access_code_matches(current_hash, access_code):
+                raise AccountAccessCodeError("Student account already exists with a different access code.")
+            return
+
+        self._bind_student_access_code_hash(student_id, access_code_hash)
+
+    def _ensure_parent_access_code(self, parent_id: str, access_code_hash: str, access_code: str) -> None:
+        current_hash = self._parent_access_code_hash(parent_id)
+        if current_hash:
+            if not _access_code_matches(current_hash, access_code):
+                raise AccountAccessCodeError("Parent account already exists with a different access code.")
+            return
+
+        self._bind_parent_access_code_hash(parent_id, access_code_hash)
+
+    def _student_access_code_matches(self, student_id: str, access_code: str) -> bool:
+        access_code_hash = self._student_access_code_hash(student_id)
+        return bool(access_code_hash and _access_code_matches(access_code_hash, access_code))
+
+    def _parent_access_code_matches(self, parent_id: str, access_code: str) -> bool:
+        access_code_hash = self._parent_access_code_hash(parent_id)
+        return bool(access_code_hash and _access_code_matches(access_code_hash, access_code))
+
+    def _student_access_code_hash(self, student_id: str) -> str:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                select access_code_hash
+                from student_accounts
+                where id = ?
+                """,
+                (student_id,),
+            ).fetchone()
+
+        return row["access_code_hash"] if row and row["access_code_hash"] else ""
+
+    def _parent_access_code_hash(self, parent_id: str) -> str:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                select access_code_hash
+                from parent_accounts
+                where id = ?
+                """,
+                (parent_id,),
+            ).fetchone()
+
+        return row["access_code_hash"] if row and row["access_code_hash"] else ""
+
+    def _bind_student_access_code_hash(self, student_id: str, access_code_hash: str) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                update student_accounts
+                set access_code_hash = ?
+                where id = ? and (access_code_hash is null or access_code_hash = '')
+                """,
+                (access_code_hash, student_id),
+            )
+
+    def _bind_parent_access_code_hash(self, parent_id: str, access_code_hash: str) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                update parent_accounts
+                set access_code_hash = ?
+                where id = ? and (access_code_hash is null or access_code_hash = '')
+                """,
+                (access_code_hash, parent_id),
             )
 
     def by_id(self, plan_id: str) -> SavedStudyPlan | None:
@@ -888,6 +997,7 @@ class StudyPlanStore:
                 create table if not exists student_accounts (
                     id text primary key,
                     login_id text not null default '',
+                    access_code_hash text,
                     auth_uid text,
                     name text not null,
                     class_level text not null,
@@ -902,6 +1012,8 @@ class StudyPlanStore:
             }
             if "login_id" not in student_account_columns:
                 connection.execute("alter table student_accounts add column login_id text not null default ''")
+            if "access_code_hash" not in student_account_columns:
+                connection.execute("alter table student_accounts add column access_code_hash text")
             if "auth_uid" not in student_account_columns:
                 connection.execute("alter table student_accounts add column auth_uid text")
             connection.execute(
@@ -920,6 +1032,7 @@ class StudyPlanStore:
                 """
                 create table if not exists parent_accounts (
                     id text primary key,
+                    access_code_hash text,
                     auth_uid text,
                     name text not null,
                     contact text not null,
@@ -933,6 +1046,8 @@ class StudyPlanStore:
             }
             if "auth_uid" not in parent_account_columns:
                 connection.execute("alter table parent_accounts add column auth_uid text")
+            if "access_code_hash" not in parent_account_columns:
+                connection.execute("alter table parent_accounts add column access_code_hash text")
             connection.execute(
                 """
                 create index if not exists idx_parent_accounts_auth_uid
@@ -1010,12 +1125,29 @@ def get_study_plan_store() -> StudyPlanStore:
 
 
 def _student_profile_key(payload: StudentAccountCreate) -> tuple[str, str, str, int, str]:
+    return _student_profile_values(
+        login_id=payload.login_id,
+        name=payload.name,
+        class_level=payload.class_level,
+        age=payload.age,
+        school_name=payload.school_name,
+    )
+
+
+def _student_profile_values(
+    *,
+    login_id: str,
+    name: str,
+    class_level: str,
+    age: int,
+    school_name: str,
+) -> tuple[str, str, str, int, str]:
     return (
-        _contact_key(payload.login_id),
-        _compact_text(payload.name),
-        _compact_text(payload.class_level),
-        payload.age,
-        _compact_text(payload.school_name),
+        _contact_key(login_id),
+        _compact_text(name),
+        _compact_text(class_level),
+        age,
+        _compact_text(school_name),
     )
 
 
@@ -1030,6 +1162,15 @@ def _contact_key(contact: str) -> str:
 
 def _compact_text(value: str) -> str:
     return " ".join(value.strip().lower().split())
+
+
+def _hash_access_code(access_code: str) -> str:
+    normalized = access_code.strip()
+    return hashlib.sha256(f"studynova-access-code-v1:{normalized}".encode("utf-8")).hexdigest()
+
+
+def _access_code_matches(access_code_hash: str, access_code: str) -> bool:
+    return hmac.compare_digest(access_code_hash, _hash_access_code(access_code))
 
 
 def _legacy_student_login_id(student_id: str) -> str:

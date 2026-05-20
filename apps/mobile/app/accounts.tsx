@@ -27,12 +27,14 @@ import { useTheme } from "@/themeContext";
 
 type AccountForm = {
   studentLoginId: string;
+  studentAccessCode: string;
   studentName: string;
   classLevel: string;
   age: string;
   schoolName: string;
   parentName: string;
   parentContact: string;
+  parentAccessCode: string;
   relationship: string;
 };
 
@@ -84,6 +86,7 @@ export default function AccountsScreen() {
     try {
       const student = await createStudentAccount({
         login_id: form.studentLoginId.trim(),
+        access_code: form.studentAccessCode.trim(),
         name: form.studentName.trim(),
         class_level: form.classLevel.trim(),
         age: Number.parseInt(form.age.trim(), 10),
@@ -92,6 +95,7 @@ export default function AccountsScreen() {
       const parent = await createParentAccount({
         name: form.parentName.trim(),
         contact: form.parentContact.trim(),
+        access_code: form.parentAccessCode.trim(),
         relationship: form.relationship.trim()
       });
       const link = await linkParentStudent(parent.id, student.id);
@@ -99,7 +103,7 @@ export default function AccountsScreen() {
       setParentFamily(updatedFamily);
       setMessage("Profiles are linked. Existing records are reused when the details match.");
     } catch {
-      setMessage("Could not save the account setup. Check that the API is running.");
+      setMessage("Could not save the account setup. Check the API and confirm any existing account access code.");
     } finally {
       setIsLoading(false);
     }
@@ -118,6 +122,7 @@ export default function AccountsScreen() {
     setForm((current) => ({
       ...current,
       studentLoginId: "",
+      studentAccessCode: "",
       studentName: "",
       classLevel: "",
       age: "",
@@ -192,6 +197,15 @@ export default function AccountsScreen() {
             placeholder="student@gmail.com or phone number"
             value={form.studentLoginId}
           />
+          <FormField
+            keyboardType="number-pad"
+            label="Student access code"
+            maxLength={6}
+            onChangeText={(value) => updateField("studentAccessCode", value.replace(/\D/g, ""))}
+            placeholder="4-6 digits"
+            secureTextEntry
+            value={form.studentAccessCode}
+          />
           <Pressable accessibilityRole="link" onPress={openGmailSignup} style={styles.gmailLink}>
             <MaterialCommunityIcons name="email-plus-outline" size={18} color={colors.brand} />
             <Text style={styles.gmailLinkText}>Create Gmail for student</Text>
@@ -244,6 +258,15 @@ export default function AccountsScreen() {
             value={form.parentContact}
           />
           <FormField
+            keyboardType="number-pad"
+            label="Parent access code"
+            maxLength={6}
+            onChangeText={(value) => updateField("parentAccessCode", value.replace(/\D/g, ""))}
+            placeholder="4-6 digits"
+            secureTextEntry
+            value={form.parentAccessCode}
+          />
+          <FormField
             label="Relationship"
             onChangeText={(value) => updateField("relationship", value)}
             placeholder="Mother"
@@ -293,7 +316,9 @@ type FormFieldProps = {
   onChangeText: (value: string) => void;
   autoCapitalize?: TextInputProps["autoCapitalize"];
   keyboardType?: TextInputProps["keyboardType"];
+  maxLength?: TextInputProps["maxLength"];
   placeholder: string;
+  secureTextEntry?: TextInputProps["secureTextEntry"];
 };
 
 function FormField({
@@ -302,7 +327,9 @@ function FormField({
   onChangeText,
   autoCapitalize,
   keyboardType = "default",
-  placeholder
+  maxLength,
+  placeholder,
+  secureTextEntry = false
 }: FormFieldProps) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -314,11 +341,13 @@ function FormField({
       <TextInput
         autoCapitalize={autoCapitalize ?? (keyboardType === "default" ? "words" : "none")}
         keyboardType={keyboardType}
+        maxLength={maxLength}
         onBlur={() => setIsFocused(false)}
         onChangeText={onChangeText}
         onFocus={() => setIsFocused(true)}
         placeholder={isFocused ? "" : placeholder}
         placeholderTextColor={colors.muted}
+        secureTextEntry={secureTextEntry}
         style={styles.input}
         value={value}
       />
@@ -329,12 +358,14 @@ function FormField({
 function createDefaultAccountForm(): AccountForm {
   return {
     studentLoginId: "",
+    studentAccessCode: "",
     studentName: "",
     classLevel: "",
     age: "",
     schoolName: "",
     parentName: "",
     parentContact: "",
+    parentAccessCode: "",
     relationship: ""
   };
 }
@@ -342,6 +373,10 @@ function createDefaultAccountForm(): AccountForm {
 function getAccountValidationError(form: AccountForm) {
   if (!isValidLoginId(form.studentLoginId)) {
     return "Enter a valid student login ID, such as Gmail or phone number.";
+  }
+
+  if (!isValidAccessCode(form.studentAccessCode)) {
+    return "Create a 4 to 6 digit access code for the student account.";
   }
 
   if (!isValidPersonName(form.studentName)) {
@@ -362,6 +397,10 @@ function getAccountValidationError(form: AccountForm) {
 
   if (!isValidParentContact(form.parentContact)) {
     return "Enter a valid parent phone number or email address.";
+  }
+
+  if (!isValidAccessCode(form.parentAccessCode)) {
+    return "Create a 4 to 6 digit access code for the parent account.";
   }
 
   if (!isValidShortText(form.relationship)) {
@@ -411,6 +450,10 @@ function isValidParentContact(value: string) {
 
 function isValidLoginId(value: string) {
   return isValidParentContact(value);
+}
+
+function isValidAccessCode(value: string) {
+  return /^\d{4,6}$/.test(value.trim());
 }
 
 function getParamValue(value?: string | string[]) {

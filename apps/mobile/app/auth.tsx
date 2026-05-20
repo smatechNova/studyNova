@@ -54,6 +54,7 @@ export default function AuthScreen() {
   const params = useLocalSearchParams<{ role?: string }>();
   const [role, setRole] = useState<AuthRole>(() => normalizeRole(params.role));
   const [loginId, setLoginId] = useState("");
+  const [accessCode, setAccessCode] = useState("");
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const firebaseConfig = getFirebaseClientConfig();
@@ -83,14 +84,19 @@ export default function AuthScreen() {
       return;
     }
 
+    if (!isValidAccessCode(accessCode)) {
+      setMessage("Enter the 4 to 6 digit access code for this account.");
+      return;
+    }
+
     setIsLoading(true);
     setMessage("");
 
     try {
-      const session = await signInAccount({ role, login_id: loginId.trim() });
+      const session = await signInAccount({ role, login_id: loginId.trim(), access_code: accessCode.trim() });
       await routeSession(session);
     } catch {
-      setMessage("No account matched that role and login ID. Create the account first, then sign in.");
+      setMessage("No account matched that role, login ID, and access code. Check the details or create the account.");
     } finally {
       setIsLoading(false);
     }
@@ -172,6 +178,7 @@ export default function AuthScreen() {
                 key={option.role}
                 onPress={() => {
                   setRole(option.role);
+                  setAccessCode("");
                   setMessage("");
                 }}
                 style={[styles.roleCard, isSelected ? styles.roleCardSelected : null]}
@@ -214,8 +221,8 @@ export default function AuthScreen() {
           <Text style={styles.sectionTitle}>{role === "student" ? "Student login ID" : "Parent login ID"}</Text>
           <Text style={styles.helper}>
             {role === "student"
-              ? "Use the student's Gmail or phone number saved on the student account."
-              : "Use the parent phone number or email saved on the parent account."}
+              ? "Use the student's Gmail or phone number, plus their private access code."
+              : "Use the parent phone number or email, plus the parent access code."}
           </Text>
           <TextInput
             autoCapitalize="none"
@@ -228,6 +235,19 @@ export default function AuthScreen() {
             placeholderTextColor={colors.muted}
             style={styles.input}
             value={loginId}
+          />
+          <TextInput
+            keyboardType="number-pad"
+            maxLength={6}
+            onChangeText={(value) => {
+              setMessage("");
+              setAccessCode(value.replace(/\D/g, ""));
+            }}
+            placeholder="4-6 digit access code"
+            placeholderTextColor={colors.muted}
+            secureTextEntry
+            style={styles.input}
+            value={accessCode}
           />
 
           {role === "student" ? (
@@ -293,6 +313,10 @@ function isValidLoginId(value: string) {
 
   const digits = normalized.replace(/\D/g, "");
   return digits.length >= 10 && digits.length <= 15;
+}
+
+function isValidAccessCode(value: string) {
+  return /^\d{4,6}$/.test(value.trim());
 }
 
 function createStyles(colors: AppColors) {

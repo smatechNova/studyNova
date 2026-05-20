@@ -80,6 +80,7 @@ def test_study_plan_store_persists_check_ins_for_parent_summary(tmp_path) -> Non
     student = store.create_student_account(
         StudentAccountCreate(
             login_id="alliyah@example.com",
+            access_code="1234",
             name="Alliyah Olaniyan",
             class_level="SS2 Science",
             age=15,
@@ -90,6 +91,7 @@ def test_study_plan_store_persists_check_ins_for_parent_summary(tmp_path) -> Non
         ParentAccountCreate(
             name="Mrs Olaniyan",
             contact="08012345678",
+            access_code="4321",
             relationship="Mother",
         )
     )
@@ -134,6 +136,7 @@ def test_study_plan_store_rejects_unlinked_parent_summary(tmp_path) -> None:
     student = store.create_student_account(
         StudentAccountCreate(
             login_id="alliyah@example.com",
+            access_code="1234",
             name="Alliyah Olaniyan",
             class_level="SS2 Science",
             age=15,
@@ -144,6 +147,7 @@ def test_study_plan_store_rejects_unlinked_parent_summary(tmp_path) -> None:
         ParentAccountCreate(
             name="Mrs Olaniyan",
             contact="08012345678",
+            access_code="4321",
             relationship="Mother",
         )
     )

@@ -26,19 +26,25 @@ from app.schemas import (
     StudySessionCompletion,
     StudySessionCompletionRequest,
 )
-from app.storage import get_study_plan_store
+from app.storage import AccountAccessCodeError, get_study_plan_store
 
 router = APIRouter(prefix="/api/v1")
 
 
 @router.post("/accounts/students", response_model=StudentAccount)
 def create_student_account(payload: StudentAccountCreate) -> StudentAccount:
-    return get_study_plan_store().create_student_account(payload)
+    try:
+        return get_study_plan_store().create_student_account(payload)
+    except AccountAccessCodeError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 
 @router.post("/accounts/parents", response_model=ParentAccount)
 def create_parent_account(payload: ParentAccountCreate) -> ParentAccount:
-    return get_study_plan_store().create_parent_account(payload)
+    try:
+        return get_study_plan_store().create_parent_account(payload)
+    except AccountAccessCodeError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 
 @router.post("/accounts/links", response_model=ParentStudentLink)
@@ -53,7 +59,7 @@ def link_parent_student(payload: ParentStudentLinkCreate) -> ParentStudentLink:
 def sign_in_account(payload: AccountSignInRequest) -> AuthSession:
     session = get_study_plan_store().sign_in(payload)
     if session is None:
-        raise HTTPException(status_code=404, detail="No account matched that sign-in ID.")
+        raise HTTPException(status_code=404, detail="No account matched that role, sign-in ID, and access code.")
     return session
 
 

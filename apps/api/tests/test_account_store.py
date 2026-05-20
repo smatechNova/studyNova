@@ -7,6 +7,7 @@ def test_study_plan_store_links_parent_and_student_accounts(tmp_path) -> None:
     student = store.create_student_account(
         StudentAccountCreate(
             login_id="alliyah@example.com",
+            access_code="1234",
             name="Alliyah Olaniyan",
             class_level="SS2 Science",
             age=15,
@@ -17,6 +18,7 @@ def test_study_plan_store_links_parent_and_student_accounts(tmp_path) -> None:
         ParentAccountCreate(
             name="Mrs Olaniyan",
             contact="08012345678",
+            access_code="4321",
             relationship="Mother",
         )
     )
@@ -47,6 +49,7 @@ def test_study_plan_store_reuses_existing_accounts(tmp_path) -> None:
     store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
     student_payload = StudentAccountCreate(
         login_id="alliyah@example.com",
+        access_code="1234",
         name="Alliyah Olaniyan",
         class_level="SS2 Science",
         age=15,
@@ -55,6 +58,7 @@ def test_study_plan_store_reuses_existing_accounts(tmp_path) -> None:
     parent_payload = ParentAccountCreate(
         name="Mrs Olaniyan",
         contact="080 1234 5678",
+        access_code="4321",
         relationship="Mother",
     )
 
@@ -63,6 +67,7 @@ def test_study_plan_store_reuses_existing_accounts(tmp_path) -> None:
     second_student = store.create_student_account(
         StudentAccountCreate(
             login_id="alliyah@example.com",
+            access_code="1234",
             name="  alliyah   olaniyan ",
             class_level="ss2 science",
             age=15,
@@ -73,6 +78,7 @@ def test_study_plan_store_reuses_existing_accounts(tmp_path) -> None:
         ParentAccountCreate(
             name="Mrs A. Olaniyan",
             contact="08012345678",
+            access_code="4321",
             relationship="Guardian",
         )
     )
@@ -87,12 +93,14 @@ def test_study_plan_store_lists_multiple_students_for_one_parent(tmp_path) -> No
         ParentAccountCreate(
             name="Mrs Olaniyan",
             contact="08012345678",
+            access_code="4321",
             relationship="Mother",
         )
     )
     first_student = store.create_student_account(
         StudentAccountCreate(
             login_id="alliyah@example.com",
+            access_code="1234",
             name="Alliyah Olaniyan",
             class_level="SS2 Science",
             age=15,
@@ -102,6 +110,7 @@ def test_study_plan_store_lists_multiple_students_for_one_parent(tmp_path) -> No
     second_student = store.create_student_account(
         StudentAccountCreate(
             login_id="aminah@example.com",
+            access_code="5678",
             name="Aminah Olaniyan",
             class_level="JSS3",
             age=13,
@@ -129,6 +138,7 @@ def test_study_plan_store_signs_in_by_role_and_login_id(tmp_path) -> None:
     student = store.create_student_account(
         StudentAccountCreate(
             login_id="alliyah@example.com",
+            access_code="1234",
             name="Alliyah Olaniyan",
             class_level="SS2 Science",
             age=15,
@@ -139,13 +149,19 @@ def test_study_plan_store_signs_in_by_role_and_login_id(tmp_path) -> None:
         ParentAccountCreate(
             name="Mrs Olaniyan",
             contact="08012345678",
+            access_code="4321",
             relationship="Mother",
         )
     )
     store.link_parent_student(ParentStudentLinkCreate(parent_id=parent.id, student_id=student.id))
 
-    student_session = store.sign_in(AccountSignInRequest(role="student", login_id="alliyah@example.com"))
-    parent_session = store.sign_in(AccountSignInRequest(role="parent", login_id="080 1234 5678"))
+    student_session = store.sign_in(
+        AccountSignInRequest(role="student", login_id="alliyah@example.com", access_code="1234")
+    )
+    parent_session = store.sign_in(AccountSignInRequest(role="parent", login_id="080 1234 5678", access_code="4321"))
+    rejected_session = store.sign_in(
+        AccountSignInRequest(role="student", login_id="alliyah@example.com", access_code="9999")
+    )
 
     assert student_session is not None
     assert student_session.role == "student"
@@ -156,6 +172,7 @@ def test_study_plan_store_signs_in_by_role_and_login_id(tmp_path) -> None:
     assert parent_session.parent is not None
     assert parent_session.parent.id == parent.id
     assert [linked_student.id for linked_student in parent_session.students] == [student.id]
+    assert rejected_session is None
 
 
 def test_study_plan_store_binds_firebase_identity_by_role(tmp_path) -> None:
@@ -163,6 +180,7 @@ def test_study_plan_store_binds_firebase_identity_by_role(tmp_path) -> None:
     student = store.create_student_account(
         StudentAccountCreate(
             login_id="alliyah@example.com",
+            access_code="1234",
             name="Alliyah Olaniyan",
             class_level="SS2 Science",
             age=15,
@@ -173,6 +191,7 @@ def test_study_plan_store_binds_firebase_identity_by_role(tmp_path) -> None:
         ParentAccountCreate(
             name="Mrs Olaniyan",
             contact="parent@example.com",
+            access_code="4321",
             relationship="Mother",
         )
     )
