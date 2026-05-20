@@ -988,7 +988,7 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
                                 onPress={() => openCompletion(currentSessionKey, savedCompletion)}
                                 style={[styles.sessionActionButton, !planId || !savedCompletion ? styles.disabledButton : null]}
                               >
-                                <Text style={styles.sessionActionText}>Edit</Text>
+                                <Text style={styles.sessionActionText}>Edit reflection</Text>
                               </Pressable>
                             </>
                           ) : (
@@ -1015,7 +1015,7 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
                               style={styles.secondaryButton}
                             >
                               <MaterialCommunityIcons name="pencil-outline" size={16} color={colors.brand} />
-                              <Text style={styles.secondaryButtonText}>Edit</Text>
+                              <Text style={styles.secondaryButtonText}>Edit reflection</Text>
                             </Pressable>
                           </View>
                           <Text style={styles.helper}>{savedCompletion.recall_note}</Text>
