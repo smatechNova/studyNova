@@ -19,6 +19,10 @@ import type {
 
 const API_URL = getApiUrl();
 
+type ApiErrorPayload = {
+  detail?: string | Array<{ msg?: string }>;
+};
+
 function getApiUrl() {
   const configuredUrl = process.env.EXPO_PUBLIC_API_URL;
   if (configuredUrl) {
@@ -32,6 +36,23 @@ function getApiUrl() {
   return "http://localhost:8000";
 }
 
+async function createApiError(response: Response, fallback: string) {
+  let detail = "";
+
+  try {
+    const payload = (await response.json()) as ApiErrorPayload;
+    if (typeof payload.detail === "string") {
+      detail = payload.detail;
+    } else if (Array.isArray(payload.detail)) {
+      detail = payload.detail.map((item) => item.msg).filter(Boolean).join(" ");
+    }
+  } catch {
+    detail = "";
+  }
+
+  return new Error(detail ? `${fallback}: ${detail}` : `${fallback} (${response.status})`);
+}
+
 export async function createStudentAccount(payload: StudentAccountInput): Promise<StudentAccount> {
   const response = await fetch(`${API_URL}/api/v1/accounts/students`, {
     method: "POST",
@@ -42,7 +63,7 @@ export async function createStudentAccount(payload: StudentAccountInput): Promis
   });
 
   if (!response.ok) {
-    throw new Error(`Student account request failed with ${response.status}`);
+    throw await createApiError(response, "Student account request failed");
   }
 
   return response.json() as Promise<StudentAccount>;
@@ -58,7 +79,7 @@ export async function createParentAccount(payload: ParentAccountInput): Promise<
   });
 
   if (!response.ok) {
-    throw new Error(`Parent account request failed with ${response.status}`);
+    throw await createApiError(response, "Parent account request failed");
   }
 
   return response.json() as Promise<ParentAccount>;
@@ -77,7 +98,7 @@ export async function linkParentStudent(parentId: string, studentId: string): Pr
   });
 
   if (!response.ok) {
-    throw new Error(`Parent-child link request failed with ${response.status}`);
+    throw await createApiError(response, "Parent-child link request failed");
   }
 
   return response.json() as Promise<ParentStudentLink>;
@@ -93,7 +114,7 @@ export async function signInAccount(payload: AccountSignInInput): Promise<AuthSe
   });
 
   if (!response.ok) {
-    throw new Error(`Account sign-in failed with ${response.status}`);
+    throw await createApiError(response, "Account sign-in failed");
   }
 
   return response.json() as Promise<AuthSession>;
@@ -109,7 +130,7 @@ export async function firebaseSignInAccount(payload: FirebaseSignInInput): Promi
   });
 
   if (!response.ok) {
-    throw new Error(`Google sign-in failed with ${response.status}`);
+    throw await createApiError(response, "Google sign-in failed");
   }
 
   return response.json() as Promise<AuthSession>;
@@ -119,7 +140,7 @@ export async function getLatestFamilyAccount(): Promise<FamilyAccount> {
   const response = await fetch(`${API_URL}/api/v1/accounts/family/latest`);
 
   if (!response.ok) {
-    throw new Error(`Family account request failed with ${response.status}`);
+    throw await createApiError(response, "Family account request failed");
   }
 
   return response.json() as Promise<FamilyAccount>;
@@ -129,7 +150,7 @@ export async function getStudentFamily(studentId: string): Promise<FamilyAccount
   const response = await fetch(`${API_URL}/api/v1/accounts/students/${studentId}/family`);
 
   if (!response.ok) {
-    throw new Error(`Student family account request failed with ${response.status}`);
+    throw await createApiError(response, "Student family account request failed");
   }
 
   return response.json() as Promise<FamilyAccount>;
@@ -139,7 +160,7 @@ export async function getLatestParentFamily(): Promise<ParentFamilyAccount> {
   const response = await fetch(`${API_URL}/api/v1/accounts/parents/latest/family`);
 
   if (!response.ok) {
-    throw new Error(`Parent family account request failed with ${response.status}`);
+    throw await createApiError(response, "Parent family account request failed");
   }
 
   return response.json() as Promise<ParentFamilyAccount>;
@@ -149,7 +170,7 @@ export async function getParentFamily(parentId: string): Promise<ParentFamilyAcc
   const response = await fetch(`${API_URL}/api/v1/accounts/parents/${parentId}/family`);
 
   if (!response.ok) {
-    throw new Error(`Parent family account request failed with ${response.status}`);
+    throw await createApiError(response, "Parent family account request failed");
   }
 
   return response.json() as Promise<ParentFamilyAccount>;
@@ -165,7 +186,7 @@ export async function generateStudyPlan(payload: StudyPlanRequest): Promise<Stud
   });
 
   if (!response.ok) {
-    throw new Error(`Study plan request failed with ${response.status}`);
+    throw await createApiError(response, "Study plan request failed");
   }
 
   return response.json() as Promise<StudyPlanResponse>;
@@ -184,7 +205,7 @@ export async function saveStudyPlan(payload: StudyPlanResponse, studentId?: stri
   });
 
   if (!response.ok) {
-    throw new Error(`Study plan save failed with ${response.status}`);
+    throw await createApiError(response, "Study plan save failed");
   }
 
   return response.json() as Promise<SavedStudyPlan>;
@@ -201,7 +222,7 @@ export async function getLatestStudyPlan(options?: { studentName?: string; stude
   const response = await fetch(`${API_URL}/api/v1/study-plans/latest${query}`);
 
   if (!response.ok) {
-    throw new Error(`Latest study plan request failed with ${response.status}`);
+    throw await createApiError(response, "Latest study plan request failed");
   }
 
   return response.json() as Promise<SavedStudyPlan>;
@@ -211,7 +232,7 @@ export async function getStudyPlanProgress(planId: string): Promise<StudyPlanPro
   const response = await fetch(`${API_URL}/api/v1/study-plans/${planId}/progress`);
 
   if (!response.ok) {
-    throw new Error(`Study plan progress request failed with ${response.status}`);
+    throw await createApiError(response, "Study plan progress request failed");
   }
 
   return response.json() as Promise<StudyPlanProgress>;
@@ -230,7 +251,7 @@ export async function completeStudySession(
   });
 
   if (!response.ok) {
-    throw new Error(`Study session completion failed with ${response.status}`);
+    throw await createApiError(response, "Study session completion failed");
   }
 
   return response.json() as Promise<StudySessionCompletion>;
@@ -245,6 +266,6 @@ export async function deleteStudySessionCompletion(planId: string, sessionKey: s
   );
 
   if (!response.ok) {
-    throw new Error(`Study session undo failed with ${response.status}`);
+    throw await createApiError(response, "Study session undo failed");
   }
 }

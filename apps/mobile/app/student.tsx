@@ -169,8 +169,9 @@ export default function StudentScreen() {
       }
       setIsPlanVisible(true);
       setStepIndex(STEPS.length - 1);
-    } catch {
-      setError("Could not generate the plan. Check the API connection and exam dates.");
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "";
+      setError(detail || "Could not generate the plan. Check the API connection and exam dates.");
     } finally {
       setIsLoading(false);
     }
