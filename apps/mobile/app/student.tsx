@@ -1,8 +1,10 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import * as SecureStore from "expo-secure-store";
 import { Link, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -38,6 +40,7 @@ import { useTheme } from "@/themeContext";
 const RESOURCE_OPTIONS = ["Textbook", "Class notes", "Notebook", "Online notes", "Past questions"];
 const STEPS = ["Profile", "Exam", "Pace", "Subjects", "Review"] as const;
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const PLAN_FORM_DRAFT_KEY_PREFIX = "studynova.student-plan-form.v1";
 const BLOCKED_STUDY_CONTENT_PHRASES = [
   "could not generate the plan",
   "api connection and exam dates",
@@ -82,6 +85,8 @@ type ValidationResult = {
   stepIndex: number;
 };
 
+const memoryPlanDrafts = new Map<string, PlanForm>();
+
 function useStudentStyles() {
   const { colors } = useTheme();
   return useMemo(() => createStyles(colors), [colors]);
@@ -109,6 +114,7 @@ export default function StudentScreen() {
   const [error, setError] = useState("");
   const setupScrollRef = useRef<ScrollView>(null);
   const [newSubjectId, setNewSubjectId] = useState<string | undefined>();
+  const [isDraftReady, setIsDraftReady] = useState(false);
   const activeStudentId = sessionStudentId;
 
   const currentStep = STEPS[stepIndex];
@@ -154,6 +160,42 @@ export default function StudentScreen() {
       isMounted = false;
     };
   }, [routeStudentId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadStoredDraft() {
+      if (!activeStudentId) {
+        setIsDraftReady(false);
+        return;
+      }
+
+      setIsDraftReady(false);
+      const draft = await getStoredPlanFormDraft(activeStudentId);
+      if (!isMounted) {
+        return;
+      }
+
+      if (draft) {
+        setForm(draft);
+      }
+      setIsDraftReady(true);
+    }
+
+    void loadStoredDraft();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeStudentId]);
+
+  useEffect(() => {
+    if (!activeStudentId || !isDraftReady) {
+      return;
+    }
+
+    void savePlanFormDraft(activeStudentId, form);
+  }, [activeStudentId, form, isDraftReady]);
 
   useEffect(() => {
     let isMounted = true;
@@ -375,6 +417,16 @@ export default function StudentScreen() {
     setStepIndex((current) => Math.min(current + 1, STEPS.length - 1));
   }
 
+  function goToStep(index: number) {
+    setError("");
+    setActiveCalendar(null);
+    setStepIndex(index);
+
+    setTimeout(() => {
+      setupScrollRef.current?.scrollTo({ y: 0, animated: true });
+    }, 50);
+  }
+
   function goBack() {
     setError("");
     setActiveCalendar(null);
@@ -523,7 +575,10 @@ export default function StudentScreen() {
   if (isPlanVisible && plan) {
     return (
       <GeneratedPlanView
-        onBack={() => setIsPlanVisible(false)}
+        onBack={() => {
+          setIsPlanVisible(false);
+          setStepIndex(STEPS.length - 1);
+        }}
         onEdit={() => {
           setIsPlanVisible(false);
           setStepIndex(STEPS.length - 1);
@@ -577,7 +632,7 @@ export default function StudentScreen() {
           </View>
         ) : null}
 
-        <WizardProgress currentStep={stepIndex} />
+        <WizardProgress currentStep={stepIndex} onSelectStep={goToStep} />
 
         <View style={styles.panel}>
           <View style={styles.stepHeader}>
@@ -1383,9 +1438,10 @@ function ReviewItem({ label, value }: ReviewItemProps) {
 
 type WizardProgressProps = {
   currentStep: number;
+  onSelectStep: (index: number) => void;
 };
 
-function WizardProgress({ currentStep }: WizardProgressProps) {
+function WizardProgress({ currentStep, onSelectStep }: WizardProgressProps) {
   const styles = useStudentStyles();
 
   return (
@@ -1394,14 +1450,20 @@ function WizardProgress({ currentStep }: WizardProgressProps) {
         const isActive = index === currentStep;
         const isDone = index < currentStep;
         return (
-          <View key={step} style={styles.progressStep}>
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}
+            key={step}
+            onPress={() => onSelectStep(index)}
+            style={styles.progressStep}
+          >
             <View style={[styles.progressDot, isActive || isDone ? styles.progressDotActive : null]}>
               {isDone ? <MaterialCommunityIcons name="check" size={13} color="#FFFFFF" /> : null}
             </View>
             <Text style={[styles.progressText, isActive ? styles.progressTextActive : null]} numberOfLines={1}>
               {step}
             </Text>
-          </View>
+          </Pressable>
         );
       })}
     </View>
@@ -1562,6 +1624,129 @@ function isStudyPlanUsable(plan: StudyPlanResponse) {
 function containsBlockedStudyContent(value: string) {
   const normalized = value.trim().toLowerCase();
   return BLOCKED_STUDY_CONTENT_PHRASES.some((phrase) => normalized.includes(phrase));
+}
+
+async function savePlanFormDraft(studentId: string, nextForm: PlanForm) {
+  const key = getPlanFormDraftKey(studentId);
+  const serialized = JSON.stringify(nextForm);
+  memoryPlanDrafts.set(key, nextForm);
+
+  if (canUsePlanFormWebStorage()) {
+    window.localStorage.setItem(key, serialized);
+    return;
+  }
+
+  try {
+    if (await SecureStore.isAvailableAsync()) {
+      await SecureStore.setItemAsync(key, serialized);
+    }
+  } catch {
+    // Keep the in-memory copy when device storage is temporarily unavailable.
+  }
+}
+
+async function getStoredPlanFormDraft(studentId: string) {
+  const key = getPlanFormDraftKey(studentId);
+
+  if (canUsePlanFormWebStorage()) {
+    return parsePlanFormDraft(window.localStorage.getItem(key));
+  }
+
+  try {
+    if (await SecureStore.isAvailableAsync()) {
+      return parsePlanFormDraft(await SecureStore.getItemAsync(key));
+    }
+  } catch {
+    return memoryPlanDrafts.get(key) ?? null;
+  }
+
+  return memoryPlanDrafts.get(key) ?? null;
+}
+
+function getPlanFormDraftKey(studentId: string) {
+  return `${PLAN_FORM_DRAFT_KEY_PREFIX}.${studentId}`;
+}
+
+function canUsePlanFormWebStorage() {
+  return Platform.OS === "web" && typeof window !== "undefined" && Boolean(window.localStorage);
+}
+
+function parsePlanFormDraft(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return normalizePlanFormDraft(JSON.parse(value));
+  } catch {
+    return null;
+  }
+}
+
+function normalizePlanFormDraft(value: unknown): PlanForm | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const draft = value as Partial<PlanForm>;
+  const base = createDefaultForm();
+  const subjects = Array.isArray(draft.subjects)
+    ? draft.subjects.map(normalizeSubjectDraft).filter((subject): subject is SubjectForm => Boolean(subject))
+    : base.subjects;
+
+  return {
+    studentName: textDraftValue(draft.studentName),
+    classLevel: textDraftValue(draft.classLevel),
+    age: textDraftValue(draft.age),
+    parentName: textDraftValue(draft.parentName),
+    parentContact: textDraftValue(draft.parentContact),
+    examStartDate: textDraftValue(draft.examStartDate, base.examStartDate),
+    examEndDate: textDraftValue(draft.examEndDate, base.examEndDate),
+    availableDailyMinutes: textDraftValue(draft.availableDailyMinutes),
+    minutesPerPage: textDraftValue(draft.minutesPerPage),
+    sessionMinutes: textDraftValue(draft.sessionMinutes),
+    breakMinutes: textDraftValue(draft.breakMinutes),
+    studyStrengthNote: textDraftValue(draft.studyStrengthNote),
+    subjects: subjects.length ? subjects : base.subjects
+  };
+}
+
+function normalizeSubjectDraft(value: unknown): SubjectForm | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const subject = value as Partial<SubjectForm>;
+  const topics = Array.isArray(subject.topics)
+    ? subject.topics.map(normalizeTopicDraft).filter((topic): topic is TopicForm => Boolean(topic))
+    : [];
+
+  return {
+    id: textDraftValue(subject.id, createId("subject")),
+    name: textDraftValue(subject.name),
+    topics: topics.length ? topics : [createTopic("", "", "Textbook")]
+  };
+}
+
+function normalizeTopicDraft(value: unknown): TopicForm | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const topic = value as Partial<TopicForm>;
+  const resourceType = textDraftValue(topic.resourceType, "Textbook");
+
+  return {
+    id: textDraftValue(topic.id, createId("topic")),
+    name: textDraftValue(topic.name),
+    pages: textDraftValue(topic.pages),
+    priority: textDraftValue(topic.priority, "3"),
+    resourceType: RESOURCE_OPTIONS.includes(resourceType) ? resourceType : "Textbook"
+  };
+}
+
+function textDraftValue(value: unknown, fallback = "") {
+  return typeof value === "string" ? value : fallback;
 }
 
 function createDefaultForm(): PlanForm {
