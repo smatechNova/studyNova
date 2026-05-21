@@ -632,7 +632,7 @@ export default function StudentScreen() {
           </View>
         ) : null}
 
-        <WizardProgress currentStep={stepIndex} onSelectStep={goToStep} />
+        <WizardProgress currentStep={stepIndex} form={form} onSelectStep={goToStep} />
 
         <View style={styles.panel}>
           <View style={styles.stepHeader}>
@@ -1438,29 +1438,48 @@ function ReviewItem({ label, value }: ReviewItemProps) {
 
 type WizardProgressProps = {
   currentStep: number;
+  form: PlanForm;
   onSelectStep: (index: number) => void;
 };
 
-function WizardProgress({ currentStep, onSelectStep }: WizardProgressProps) {
+function WizardProgress({ currentStep, form, onSelectStep }: WizardProgressProps) {
   const styles = useStudentStyles();
 
   return (
     <View style={styles.progressPanel}>
       {STEPS.map((step, index) => {
         const isActive = index === currentStep;
-        const isDone = index < currentStep;
+        const isComplete = !getStepValidationError(step, form);
+        const isDone = isComplete && !isActive;
+        const canSelect = isActive || isComplete || hasStepDraft(step, form);
+
         return (
           <Pressable
             accessibilityRole="tab"
-            accessibilityState={{ selected: isActive }}
+            accessibilityState={{ disabled: !canSelect, selected: isActive }}
+            disabled={!canSelect}
             key={step}
             onPress={() => onSelectStep(index)}
-            style={styles.progressStep}
+            style={[styles.progressStep, !canSelect ? styles.progressStepDisabled : null]}
           >
-            <View style={[styles.progressDot, isActive || isDone ? styles.progressDotActive : null]}>
+            <View
+              style={[
+                styles.progressDot,
+                isActive || isDone ? styles.progressDotActive : null,
+                !canSelect ? styles.progressDotLocked : null
+              ]}
+            >
               {isDone ? <MaterialCommunityIcons name="check" size={13} color="#FFFFFF" /> : null}
             </View>
-            <Text style={[styles.progressText, isActive ? styles.progressTextActive : null]} numberOfLines={1}>
+            <Text
+              style={[
+                styles.progressText,
+                isActive ? styles.progressTextActive : null,
+                isDone ? styles.progressTextDone : null,
+                !canSelect ? styles.progressTextLocked : null
+              ]}
+              numberOfLines={1}
+            >
               {step}
             </Text>
           </Pressable>
@@ -1603,6 +1622,40 @@ function getStepValidationError(step: StepName, nextForm: PlanForm): string {
       const validation = getFirstValidationError(nextForm);
       return validation?.message ?? "";
     }
+  }
+}
+
+function hasStepDraft(step: StepName, nextForm: PlanForm): boolean {
+  switch (step) {
+    case "Profile":
+      return Boolean(
+        nextForm.studentName.trim() ||
+          nextForm.classLevel.trim() ||
+          nextForm.age.trim() ||
+          nextForm.parentName.trim() ||
+          nextForm.parentContact.trim()
+      );
+
+    case "Exam":
+      return Boolean(nextForm.availableDailyMinutes.trim());
+
+    case "Pace":
+      return Boolean(
+        nextForm.minutesPerPage.trim() ||
+          nextForm.sessionMinutes.trim() ||
+          nextForm.breakMinutes.trim() ||
+          nextForm.studyStrengthNote.trim()
+      );
+
+    case "Subjects":
+      return nextForm.subjects.some(
+        (subject) =>
+          subject.name.trim() ||
+          subject.topics.some((topic) => topic.name.trim() || topic.pages.trim())
+      );
+
+    case "Review":
+      return !getFirstValidationError(nextForm);
   }
 }
 
@@ -2272,6 +2325,9 @@ function createStyles(colors: AppColors) {
   progressDotActive: {
     backgroundColor: colors.brand
   },
+  progressDotLocked: {
+    backgroundColor: colors.surface
+  },
   progressPanel: {
     backgroundColor: colors.panel,
     borderColor: colors.border,
@@ -2287,6 +2343,9 @@ function createStyles(colors: AppColors) {
     gap: spacing.xs,
     minWidth: 0
   },
+  progressStepDisabled: {
+    opacity: 0.58
+  },
   progressText: {
     color: colors.muted,
     fontSize: 11,
@@ -2294,6 +2353,12 @@ function createStyles(colors: AppColors) {
   },
   progressTextActive: {
     color: colors.brand
+  },
+  progressTextDone: {
+    color: colors.text
+  },
+  progressTextLocked: {
+    color: colors.muted
   },
   removeButton: {
     alignItems: "center",
