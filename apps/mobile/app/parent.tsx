@@ -19,6 +19,14 @@ type AttentionItem = {
   studyDate: string;
 };
 
+type RecoverySummary = {
+  dailyExtraMinutes: number;
+  overdueMinutes: number;
+  overdueSessions: number;
+  recoveryDays: number;
+  targetDailyMinutes: number;
+};
+
 export default function ParentScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -60,6 +68,10 @@ export default function ParentScreen() {
     [savedPlan, progress]
   );
   const overdueAttentionCount = attentionItems.filter((item) => item.status === "overdue").length;
+  const recoverySummary = useMemo(
+    () => (savedPlan ? getRecoverySummary(savedPlan, progress) : null),
+    [savedPlan, progress]
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -372,6 +384,34 @@ export default function ParentScreen() {
           )}
         </View>
 
+        {recoverySummary ? (
+          <View style={styles.panel}>
+            <View style={styles.panelHeader}>
+              <Text style={styles.sectionTitle}>Catch-up view</Text>
+              <Text style={[styles.metric, recoverySummary.overdueMinutes ? styles.overdueText : null]}>
+                {recoverySummary.overdueMinutes ? formatHours(recoverySummary.overdueMinutes) : "On pace"}
+              </Text>
+            </View>
+            <Text style={styles.helper}>
+              {parentRecoveryCopy(recoverySummary, savedPlan?.plan.metadata.available_daily_minutes ?? 0)}
+            </Text>
+            <View style={styles.recoveryGrid}>
+              <View style={styles.recoveryItem}>
+                <Text style={styles.kicker}>Missed</Text>
+                <Text style={styles.updateTitle}>{recoverySummary.overdueSessions}</Text>
+              </View>
+              <View style={styles.recoveryItem}>
+                <Text style={styles.kicker}>Extra daily</Text>
+                <Text style={styles.updateTitle}>{formatHours(recoverySummary.dailyExtraMinutes)}</Text>
+              </View>
+              <View style={styles.recoveryItem}>
+                <Text style={styles.kicker}>Target</Text>
+                <Text style={styles.updateTitle}>{formatHours(recoverySummary.targetDailyMinutes)}</Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
+
         <View style={styles.statsGrid}>
           <StatCard label="Study streak" value={`${streakDays} days`} icon="fire" />
           <StatCard
@@ -461,6 +501,54 @@ function getAttentionItems(savedPlan: SavedStudyPlan, progress: StudyPlanProgres
 
 function attentionStatusLabel(status: AttentionItem["status"]) {
   return status === "overdue" ? "Missed" : "Today";
+}
+
+function getRecoverySummary(savedPlan: SavedStudyPlan, progress: StudyPlanProgress | null): RecoverySummary {
+  const today = toDateValue(new Date());
+  const completedKeys = new Set(progress?.completed_session_keys ?? []);
+  const averageDailyMinutes =
+    savedPlan.plan.metadata.average_daily_minutes ??
+    Math.ceil(savedPlan.plan.metadata.total_study_minutes / Math.max(savedPlan.plan.metadata.days_until_exam, 1));
+  let overdueMinutes = 0;
+  let overdueSessions = 0;
+
+  savedPlan.plan.schedule.forEach((day) => {
+    if (day.study_date >= today) {
+      return;
+    }
+
+    day.sessions.forEach((session, index) => {
+      if (completedKeys.has(`${day.study_date}:${index}`)) {
+        return;
+      }
+
+      overdueMinutes += session.minutes;
+      overdueSessions += 1;
+    });
+  });
+
+  const recoveryDays = Math.max(1, savedPlan.plan.schedule.filter((day) => day.study_date >= today).length);
+  const dailyExtraMinutes = overdueMinutes ? Math.ceil(overdueMinutes / recoveryDays) : 0;
+
+  return {
+    dailyExtraMinutes,
+    overdueMinutes,
+    overdueSessions,
+    recoveryDays,
+    targetDailyMinutes: averageDailyMinutes + dailyExtraMinutes
+  };
+}
+
+function parentRecoveryCopy(summary: RecoverySummary, availableDailyMinutes: number) {
+  if (!summary.overdueMinutes) {
+    return "No catch-up pressure right now. Encourage the student to keep today's queue clear.";
+  }
+
+  if (summary.targetDailyMinutes > availableDailyMinutes) {
+    return `The student needs about ${formatHours(summary.dailyExtraMinutes)} extra daily, which is above the current available study time. A short parent check-in may help.`;
+  }
+
+  return `The student can recover by adding about ${formatHours(summary.dailyExtraMinutes)} daily for ${summary.recoveryDays} days.`;
 }
 
 function parentSummaryCopy(weeklyRate: number, streakDays: number) {
@@ -685,6 +773,21 @@ function createStyles(colors: AppColors) {
     flexWrap: "wrap",
     gap: spacing.sm,
     justifyContent: "space-between"
+  },
+  recoveryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  recoveryItem: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 92,
+    padding: spacing.md
   },
   sectionTitle: {
     color: colors.text,

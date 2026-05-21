@@ -1152,6 +1152,14 @@ type FocusSessionItem = {
   status: "overdue" | "today" | "next";
 };
 
+type RecoverySummary = {
+  dailyExtraMinutes: number;
+  overdueMinutes: number;
+  overdueSessions: number;
+  recoveryDays: number;
+  targetDailyMinutes: number;
+};
+
 function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: GeneratedPlanViewProps) {
   const { colors } = useTheme();
   const styles = useStudentStyles();
@@ -1181,6 +1189,10 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
     [focusSessions]
   );
   const overdueFocusCount = focusSessions.filter((session) => session.status === "overdue").length;
+  const recoverySummary = useMemo(
+    () => getRecoverySummary(plan, completedSessionKeys, averageDailyMinutes),
+    [averageDailyMinutes, completedSessionKeys, plan]
+  );
   const todayProgress = progress?.daily.find((day) => day.study_date === todayPlan?.study_date);
   const completion = todayProgress?.completion_rate ?? 0;
   const completedTodayMinutes = todayProgress?.completed_minutes ?? 0;
@@ -1342,6 +1354,22 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
           </Text>
           {isProgressLoading ? <Text style={styles.sessionMeta}>Loading saved progress...</Text> : null}
           {progressMessage ? <Text style={styles.saveStatus}>{progressMessage}</Text> : null}
+        </View>
+
+        <View style={styles.panel}>
+          <View style={styles.panelHeader}>
+            <Text style={styles.sectionTitle}>Catch-up plan</Text>
+            <Text style={[styles.metric, recoverySummary.overdueMinutes ? styles.overdueText : null]}>
+              {recoverySummary.overdueMinutes ? formatHours(recoverySummary.overdueMinutes) : "On pace"}
+            </Text>
+          </View>
+          <Text style={styles.helper}>{recoveryCopy(recoverySummary, plan.metadata.available_daily_minutes)}</Text>
+          <View style={styles.reviewGrid}>
+            <ReviewItem label="Missed sessions" value={`${recoverySummary.overdueSessions}`} />
+            <ReviewItem label="Catch-up days" value={`${recoverySummary.recoveryDays}`} />
+            <ReviewItem label="Extra daily" value={formatHours(recoverySummary.dailyExtraMinutes)} />
+            <ReviewItem label="New target" value={formatHours(recoverySummary.targetDailyMinutes)} />
+          </View>
         </View>
 
         <View style={styles.panel}>
@@ -2642,6 +2670,54 @@ function getFocusSessions(plan: StudyPlanResponse, completedSessionKeys: Set<str
   });
 
   return [...dueSessions, ...upcomingSessions].slice(0, 3);
+}
+
+function getRecoverySummary(
+  plan: StudyPlanResponse,
+  completedSessionKeys: Set<string>,
+  averageDailyMinutes: number
+): RecoverySummary {
+  const today = toDateValue(new Date());
+  let overdueMinutes = 0;
+  let overdueSessions = 0;
+
+  plan.schedule.forEach((day) => {
+    if (day.study_date >= today) {
+      return;
+    }
+
+    day.sessions.forEach((session, index) => {
+      if (completedSessionKeys.has(sessionKey(day.study_date, index))) {
+        return;
+      }
+
+      overdueMinutes += session.minutes;
+      overdueSessions += 1;
+    });
+  });
+
+  const recoveryDays = Math.max(1, plan.schedule.filter((day) => day.study_date >= today).length);
+  const dailyExtraMinutes = overdueMinutes ? Math.ceil(overdueMinutes / recoveryDays) : 0;
+
+  return {
+    dailyExtraMinutes,
+    overdueMinutes,
+    overdueSessions,
+    recoveryDays,
+    targetDailyMinutes: averageDailyMinutes + dailyExtraMinutes
+  };
+}
+
+function recoveryCopy(summary: RecoverySummary, availableDailyMinutes: number) {
+  if (!summary.overdueMinutes) {
+    return "No catch-up debt right now. Keep today's focus queue clear and protect the revision rhythm.";
+  }
+
+  if (summary.targetDailyMinutes > availableDailyMinutes) {
+    return `Add about ${formatHours(summary.dailyExtraMinutes)} daily to recover missed work. This is above the current available time, so reduce distractions or extend study time temporarily.`;
+  }
+
+  return `Add about ${formatHours(summary.dailyExtraMinutes)} daily for ${summary.recoveryDays} days to recover missed work without rebuilding the whole plan.`;
 }
 
 function focusStatusLabel(status: FocusSessionItem["status"]) {
