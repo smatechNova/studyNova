@@ -10,6 +10,7 @@ import {
   Text,
   TextInput,
   View,
+  type LayoutChangeEvent,
   type TextInputProps
 } from "react-native";
 
@@ -122,6 +123,10 @@ export default function StudentScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const setupScrollRef = useRef<ScrollView>(null);
+  const setupPanelOffsetY = useRef(0);
+  const subjectListOffsetY = useRef(0);
+  const subjectCardOffsets = useRef<Record<string, number>>({});
+  const pendingSubjectScrollId = useRef<string | null>(null);
   const [newSubjectId, setNewSubjectId] = useState<string | undefined>();
   const [isDraftReady, setIsDraftReady] = useState(false);
   const activeStudentId = sessionStudentId;
@@ -474,6 +479,7 @@ export default function StudentScreen() {
     const nextSubject = createSubject("", [createTopic("", "", "Textbook")]);
 
     setError("");
+    pendingSubjectScrollId.current = nextSubject.id;
     setNewSubjectId(nextSubject.id);
     setForm((current) => ({
       ...current,
@@ -481,12 +487,40 @@ export default function StudentScreen() {
     }));
 
     setTimeout(() => {
-      setupScrollRef.current?.scrollToEnd({ animated: true });
-    }, 80);
+      scrollToSubject(nextSubject.id);
+    }, 120);
+
+    setTimeout(() => {
+      scrollToSubject(nextSubject.id);
+    }, 320);
 
     setTimeout(() => {
       setNewSubjectId((current) => (current === nextSubject.id ? undefined : current));
     }, 1800);
+  }
+
+  function handleSubjectLayout(subjectId: string, event: LayoutChangeEvent) {
+    subjectCardOffsets.current[subjectId] = event.nativeEvent.layout.y;
+
+    if (pendingSubjectScrollId.current === subjectId) {
+      setTimeout(() => {
+        scrollToSubject(subjectId);
+      }, 40);
+    }
+  }
+
+  function scrollToSubject(subjectId: string) {
+    const subjectOffsetY = subjectCardOffsets.current[subjectId];
+    if (typeof subjectOffsetY !== "number") {
+      return;
+    }
+
+    const targetY = setupPanelOffsetY.current + subjectListOffsetY.current + subjectOffsetY - spacing.md;
+    setupScrollRef.current?.scrollTo({ y: Math.max(0, targetY), animated: true });
+
+    if (pendingSubjectScrollId.current === subjectId) {
+      pendingSubjectScrollId.current = null;
+    }
   }
 
   function removeSubject(subjectId: string) {
@@ -652,7 +686,12 @@ export default function StudentScreen() {
 
         <WizardProgress currentStep={stepIndex} form={form} onSelectStep={goToStep} />
 
-        <View style={styles.panel}>
+        <View
+          onLayout={(event) => {
+            setupPanelOffsetY.current = event.nativeEvent.layout.y;
+          }}
+          style={styles.panel}
+        >
           <View style={styles.stepHeader}>
             <View style={styles.stepBadge}>
               <Text style={styles.stepBadgeText}>
@@ -768,7 +807,12 @@ export default function StudentScreen() {
           ) : null}
 
           {currentStep === "Subjects" ? (
-            <View style={styles.subjectList}>
+            <View
+              onLayout={(event) => {
+                subjectListOffsetY.current = event.nativeEvent.layout.y;
+              }}
+              style={styles.subjectList}
+            >
               <View style={styles.sectionRow}>
                 <Text style={styles.helper}>
                   {form.subjects.length} subjects, {topicCount} topics, {pageCount} pages
@@ -782,6 +826,7 @@ export default function StudentScreen() {
               {form.subjects.map((subject, subjectIndex) => (
                 <View
                   key={subject.id}
+                  onLayout={(event) => handleSubjectLayout(subject.id, event)}
                   style={[styles.subjectCard, subject.id === newSubjectId ? styles.subjectCardActive : null]}
                 >
                   <View style={styles.subjectHeader}>
