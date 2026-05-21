@@ -1144,6 +1144,14 @@ type GeneratedPlanViewProps = {
   onEdit: () => void;
 };
 
+type FocusSessionItem = {
+  studyDate: string;
+  session: PlanSession;
+  sessionIndex: number;
+  sessionKeyValue: string;
+  status: "overdue" | "today" | "next";
+};
+
 function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: GeneratedPlanViewProps) {
   const { colors } = useTheme();
   const styles = useStudentStyles();
@@ -1167,6 +1175,12 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
     () => new Map((progress?.completions ?? []).map((completion) => [completion.session_key, completion])),
     [progress?.completions]
   );
+  const focusSessions = useMemo(() => getFocusSessions(plan, completedSessionKeys), [plan, completedSessionKeys]);
+  const focusSessionKeys = useMemo(
+    () => new Set(focusSessions.map((session) => session.sessionKeyValue)),
+    [focusSessions]
+  );
+  const overdueFocusCount = focusSessions.filter((session) => session.status === "overdue").length;
   const todayProgress = progress?.daily.find((day) => day.study_date === todayPlan?.study_date);
   const completion = todayProgress?.completion_rate ?? 0;
   const completedTodayMinutes = todayProgress?.completed_minutes ?? 0;
@@ -1330,6 +1344,120 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
           {progressMessage ? <Text style={styles.saveStatus}>{progressMessage}</Text> : null}
         </View>
 
+        <View style={styles.panel}>
+          <View style={styles.panelHeader}>
+            <Text style={styles.sectionTitle}>Study focus queue</Text>
+            <Text style={[styles.sessionKind, overdueFocusCount ? styles.overdueText : null]}>
+              {overdueFocusCount ? `${overdueFocusCount} overdue` : "ready"}
+            </Text>
+          </View>
+          <Text style={styles.helper}>
+            Start with missed work, then finish today's sessions before moving ahead.
+          </Text>
+          {focusSessions.length ? (
+            <View style={styles.focusList}>
+              {focusSessions.map(({ studyDate, session, sessionIndex, sessionKeyValue, status }) => {
+                const isActive = activeCompletionKey === sessionKeyValue;
+                const savedCompletion = completionBySessionKey.get(sessionKeyValue);
+
+                return (
+                  <View key={sessionKeyValue} style={styles.focusBlock}>
+                    <View style={[styles.focusItem, status === "overdue" ? styles.focusItemOverdue : null]}>
+                      <View style={styles.sessionIcon}>
+                        <MaterialCommunityIcons
+                          name={status === "overdue" ? "alert-circle-outline" : sessionIcon(session.kind)}
+                          size={22}
+                          color={status === "overdue" ? colors.warning : colors.brand}
+                        />
+                      </View>
+                      <View style={styles.sessionCopy}>
+                        <Text style={styles.sessionTitle}>{sessionTitle(session, sessionIndex, plan.schedule.find((day) => day.study_date === studyDate)?.sessions ?? [])}</Text>
+                        <Text style={styles.sessionMeta}>
+                          {formatReadableDate(studyDate)} - {session.subject} - {session.minutes} minutes
+                        </Text>
+                      </View>
+                      <View style={styles.sessionActions}>
+                        <Text style={[styles.sessionKind, status === "overdue" ? styles.overdueText : null]}>
+                          {focusStatusLabel(status)}
+                        </Text>
+                        <Pressable
+                          accessibilityRole="button"
+                          disabled={isSavingCompletion || !planId}
+                          onPress={() => openCompletion(sessionKeyValue, savedCompletion)}
+                          style={[styles.sessionActionButton, !planId ? styles.disabledButton : null]}
+                        >
+                          <Text style={styles.sessionActionText}>Study</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+
+                    {isActive ? (
+                      <View style={styles.completionPanel}>
+                        <Text style={styles.sessionTitle}>Quick recall check</Text>
+                        <Text style={styles.helper}>
+                          Write one thing you remember from this session before it counts as complete.
+                        </Text>
+                        <TextInput
+                          multiline
+                          onChangeText={setCompletionNote}
+                          placeholder="Example: I can solve simultaneous equations by substitution."
+                          placeholderTextColor={colors.muted}
+                          style={[styles.input, styles.textArea]}
+                          textAlignVertical="top"
+                          value={completionNote}
+                        />
+                        <View style={styles.panelHeader}>
+                          <Text style={styles.sessionTitle}>Confidence after studying</Text>
+                          <Text style={styles.sessionMeta}>1 unsure - 5 confident</Text>
+                        </View>
+                        <View style={styles.confidenceRow}>
+                          {[1, 2, 3, 4, 5].map((score) => {
+                            const isSelected = completionConfidence === score;
+                            return (
+                              <Pressable
+                                accessibilityRole="button"
+                                key={score}
+                                onPress={() => setCompletionConfidence(score)}
+                                style={[styles.confidenceChip, isSelected ? styles.confidenceChipActive : null]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.confidenceText,
+                                    isSelected ? styles.confidenceTextActive : null
+                                  ]}
+                                >
+                                  {score}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                        <Pressable
+                          accessibilityRole="button"
+                          disabled={isSavingCompletion}
+                          onPress={() => void markSessionDone(studyDate, session, sessionKeyValue)}
+                          style={[styles.primaryButton, isSavingCompletion ? styles.disabledButton : null]}
+                        >
+                          {isSavingCompletion ? (
+                            <ActivityIndicator color="#FFFFFF" />
+                          ) : (
+                            <>
+                              <MaterialCommunityIcons name="check" size={18} color="#FFFFFF" />
+                              <Text style={styles.primaryButtonText}>Mark session done</Text>
+                            </>
+                          )}
+                        </Pressable>
+                      </View>
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
+          ) : (
+            <Text style={styles.helper}>Everything due is clear. Use the next flex window for light revision.</Text>
+          )}
+        </View>
+
         <View style={styles.sessionList}>
           <Text style={styles.sectionTitle}>Full timetable</Text>
           {plan.schedule.map((day) => (
@@ -1415,7 +1543,7 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
                         </View>
                       ) : null}
 
-                      {isActive ? (
+                      {isActive && !focusSessionKeys.has(currentSessionKey) ? (
                         <View style={styles.completionPanel}>
                           <Text style={styles.sessionTitle}>{isDone ? "Edit reflection" : "Quick recall check"}</Text>
                           <Text style={styles.helper}>
@@ -2485,6 +2613,49 @@ function sessionKey(studyDate: string, index: number) {
   return `${studyDate}:${index}`;
 }
 
+function getFocusSessions(plan: StudyPlanResponse, completedSessionKeys: Set<string>): FocusSessionItem[] {
+  const today = toDateValue(new Date());
+  const dueSessions: FocusSessionItem[] = [];
+  const upcomingSessions: FocusSessionItem[] = [];
+
+  plan.schedule.forEach((day) => {
+    day.sessions.forEach((session, index) => {
+      const sessionKeyValue = sessionKey(day.study_date, index);
+      if (completedSessionKeys.has(sessionKeyValue)) {
+        return;
+      }
+
+      const item: FocusSessionItem = {
+        studyDate: day.study_date,
+        session,
+        sessionIndex: index,
+        sessionKeyValue,
+        status: day.study_date < today ? "overdue" : day.study_date === today ? "today" : "next"
+      };
+
+      if (day.study_date <= today) {
+        dueSessions.push(item);
+      } else {
+        upcomingSessions.push(item);
+      }
+    });
+  });
+
+  return [...dueSessions, ...upcomingSessions].slice(0, 3);
+}
+
+function focusStatusLabel(status: FocusSessionItem["status"]) {
+  if (status === "overdue") {
+    return "missed";
+  }
+
+  if (status === "today") {
+    return "today";
+  }
+
+  return "next";
+}
+
 function getParamValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -2668,6 +2839,26 @@ function createStyles(colors: AppColors) {
   formStack: {
     gap: spacing.md
   },
+  focusBlock: {
+    gap: spacing.sm
+  },
+  focusItem: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  focusItemOverdue: {
+    backgroundColor: colors.warningSoft,
+    borderColor: colors.warningBorder
+  },
+  focusList: {
+    gap: spacing.sm
+  },
   generatedHero: {
     backgroundColor: colors.panel,
     borderColor: colors.border,
@@ -2775,6 +2966,9 @@ function createStyles(colors: AppColors) {
     color: colors.brand,
     fontSize: 24,
     fontWeight: "800"
+  },
+  overdueText: {
+    color: colors.warningDark
   },
   latestCopy: {
     flex: 1,

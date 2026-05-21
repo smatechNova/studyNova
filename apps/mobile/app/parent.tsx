@@ -9,9 +9,15 @@ import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
 import { getLatestStudyPlan, getParentFamily, getStudyPlanHistory, getStudyPlanProgress } from "@/lib/api";
 import { getStoredAuthSession } from "@/lib/session";
-import type { ParentFamilyAccount, SavedStudyPlan, StudyPlanProgress } from "@/types";
+import type { ParentFamilyAccount, PlanSession, SavedStudyPlan, StudyPlanProgress } from "@/types";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
+
+type AttentionItem = {
+  session: PlanSession;
+  status: "overdue" | "today";
+  studyDate: string;
+};
 
 export default function ParentScreen() {
   const { colors } = useTheme();
@@ -49,6 +55,11 @@ export default function ParentScreen() {
   const streakDays = useMemo(() => calculateStreak(progress), [progress]);
   const selectedStudent =
     parentFamily?.students.find((student) => student.id === selectedStudentId) ?? parentFamily?.students[0];
+  const attentionItems = useMemo(
+    () => (savedPlan ? getAttentionItems(savedPlan, progress) : []),
+    [savedPlan, progress]
+  );
+  const overdueAttentionCount = attentionItems.filter((item) => item.status === "overdue").length;
 
   useEffect(() => {
     let isMounted = true;
@@ -323,6 +334,44 @@ export default function ParentScreen() {
           <Text style={styles.helper}>{parentSummaryCopy(weeklyRate, streakDays)}</Text>
         </View>
 
+        <View style={styles.panel}>
+          <View style={styles.panelHeader}>
+            <Text style={styles.sectionTitle}>Needs attention</Text>
+            <Text style={[styles.confidence, overdueAttentionCount ? styles.overdueText : null]}>
+              {overdueAttentionCount ? `${overdueAttentionCount} missed` : "Clear"}
+            </Text>
+          </View>
+          {attentionItems.length ? (
+            <View style={styles.attentionList}>
+              {attentionItems.slice(0, 5).map((item, index) => (
+                <View
+                  key={`${item.studyDate}-${item.session.subject}-${item.session.topic}-${index}`}
+                  style={[styles.attentionRow, item.status === "overdue" ? styles.attentionRowOverdue : null]}
+                >
+                  <MaterialCommunityIcons
+                    name={item.status === "overdue" ? "alert-circle-outline" : "calendar-check-outline"}
+                    size={22}
+                    color={item.status === "overdue" ? colors.warning : colors.brand}
+                  />
+                  <View style={styles.updateText}>
+                    <Text style={styles.updateTitle}>{item.session.topic}</Text>
+                    <Text style={styles.sessionMeta}>
+                      {item.session.subject} - {formatReadableDate(item.studyDate)} - {item.session.minutes} minutes
+                    </Text>
+                  </View>
+                  <Text style={[styles.sessionMeta, item.status === "overdue" ? styles.overdueText : null]}>
+                    {attentionStatusLabel(item.status)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.helper}>
+              No overdue sessions right now. The student is clear up to today on this saved plan.
+            </Text>
+          )}
+        </View>
+
         <View style={styles.statsGrid}>
           <StatCard label="Study streak" value={`${streakDays} days`} icon="fire" />
           <StatCard
@@ -383,6 +432,37 @@ function getParamValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function getAttentionItems(savedPlan: SavedStudyPlan, progress: StudyPlanProgress | null): AttentionItem[] {
+  const today = toDateValue(new Date());
+  const completedKeys = new Set(progress?.completed_session_keys ?? []);
+  const items: AttentionItem[] = [];
+
+  savedPlan.plan.schedule.forEach((day) => {
+    if (day.study_date > today) {
+      return;
+    }
+
+    day.sessions.forEach((session, index) => {
+      const key = `${day.study_date}:${index}`;
+      if (completedKeys.has(key)) {
+        return;
+      }
+
+      items.push({
+        session,
+        studyDate: day.study_date,
+        status: day.study_date < today ? "overdue" : "today"
+      });
+    });
+  });
+
+  return items;
+}
+
+function attentionStatusLabel(status: AttentionItem["status"]) {
+  return status === "overdue" ? "Missed" : "Today";
+}
+
 function parentSummaryCopy(weeklyRate: number, streakDays: number) {
   if (weeklyRate >= 80) {
     return `Strong week. The student has a ${streakDays}-day active streak and is keeping up well.`;
@@ -441,6 +521,23 @@ function toDateValue(date: Date) {
 
 function createStyles(colors: AppColors) {
   return StyleSheet.create({
+  attentionList: {
+    gap: spacing.sm
+  },
+  attentionRow: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  attentionRowOverdue: {
+    backgroundColor: colors.warningSoft,
+    borderColor: colors.warningBorder
+  },
   badge: {
     alignItems: "center",
     backgroundColor: colors.successSoft,
@@ -570,6 +667,9 @@ function createStyles(colors: AppColors) {
     color: colors.brand,
     fontSize: 24,
     fontWeight: "800"
+  },
+  overdueText: {
+    color: colors.warningDark
   },
   panel: {
     backgroundColor: colors.panel,
