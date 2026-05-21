@@ -22,6 +22,7 @@ import {
   completeStudySession,
   generateStudyPlan,
   getLatestStudyPlan,
+  getStudyPlanHistory,
   getStudentFamily,
   getStudyPlanProgress,
   saveStudyPlan
@@ -114,6 +115,8 @@ export default function StudentScreen() {
   const [plan, setPlan] = useState<StudyPlanResponse | null>(null);
   const [savedPlan, setSavedPlan] = useState<SavedStudyPlan | null>(null);
   const [latestPlan, setLatestPlan] = useState<SavedStudyPlan | null>(null);
+  const [planHistory, setPlanHistory] = useState<SavedStudyPlan[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [latestMessage, setLatestMessage] = useState("");
   const [linkedStudentId, setLinkedStudentId] = useState<string | undefined>();
@@ -260,6 +263,22 @@ export default function StudentScreen() {
           setLatestMessage("No saved plan yet.");
         }
       }
+
+      try {
+        setIsHistoryLoading(true);
+        const history = await getStudyPlanHistory({ studentId: activeStudentId, limit: 6 });
+        if (isMounted) {
+          setPlanHistory(history.filter((saved) => isStudyPlanUsable(saved.plan)));
+        }
+      } catch {
+        if (isMounted) {
+          setPlanHistory([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsHistoryLoading(false);
+        }
+      }
     }
 
     void loadAccountAndPlan();
@@ -293,7 +312,8 @@ export default function StudentScreen() {
         const saved = await saveStudyPlan(response, linkedStudentId ?? activeStudentId, request);
         setSavedPlan(saved);
         setLatestPlan(saved);
-        setSaveMessage("Plan saved. You can continue from here later.");
+        setPlanHistory((current) => [saved, ...current.filter((item) => item.id !== saved.id)].slice(0, 6));
+        setSaveMessage("New plan version saved. You can continue from here later.");
       } catch {
         setSaveMessage("Generated, but saving is unavailable right now.");
       }
@@ -312,19 +332,25 @@ export default function StudentScreen() {
       return;
     }
 
-    if (!isStudyPlanUsable(latestPlan.plan)) {
-      setLatestPlan(null);
-      setLatestMessage("Your latest saved plan contains an old app message. Please generate a fresh plan.");
+    openSavedPlan(latestPlan, "Loaded latest saved plan.");
+  }
+
+  function openSavedPlan(nextPlan: SavedStudyPlan, message: string) {
+    if (!isStudyPlanUsable(nextPlan.plan)) {
+      if (nextPlan.id === latestPlan?.id) {
+        setLatestPlan(null);
+      }
+      setLatestMessage("That saved plan contains an old app message. Please generate a fresh plan.");
       return;
     }
 
-    setPlan(latestPlan.plan);
-    setSavedPlan(latestPlan);
-    if (latestPlan.setup_payload) {
-      setForm(createFormFromRequest(latestPlan.setup_payload));
+    setPlan(nextPlan.plan);
+    setSavedPlan(nextPlan);
+    if (nextPlan.setup_payload) {
+      setForm(createFormFromRequest(nextPlan.setup_payload));
       setActiveSubjectId(undefined);
     }
-    setSaveMessage("Loaded latest saved plan.");
+    setSaveMessage(message);
     setIsPlanVisible(true);
   }
 
@@ -706,6 +732,13 @@ export default function StudentScreen() {
             <Text style={styles.infoText}>{latestMessage}</Text>
           </View>
         ) : null}
+
+        <PlanHistoryPanel
+          activePlanId={savedPlan?.id}
+          isLoading={isHistoryLoading}
+          onOpen={(planVersion) => openSavedPlan(planVersion, "Loaded selected plan version.")}
+          plans={planHistory}
+        />
 
         <SetupHero
           completedStepCount={completedStepCount}
@@ -1685,6 +1718,58 @@ function SetupHero({ completedStepCount, estimatedReadingMinutes, form, pageCoun
   );
 }
 
+type PlanHistoryPanelProps = {
+  activePlanId?: string;
+  isLoading: boolean;
+  plans: SavedStudyPlan[];
+  onOpen: (plan: SavedStudyPlan) => void;
+};
+
+function PlanHistoryPanel({ activePlanId, isLoading, plans, onOpen }: PlanHistoryPanelProps) {
+  const { colors } = useTheme();
+  const styles = useStudentStyles();
+
+  if (!isLoading && !plans.length) {
+    return null;
+  }
+
+  return (
+    <View style={styles.panel}>
+      <View style={styles.panelHeader}>
+        <View style={styles.latestCopy}>
+          <Text style={styles.kicker}>Plan history</Text>
+          <Text style={styles.sectionTitle}>Saved versions</Text>
+        </View>
+        {isLoading ? <ActivityIndicator color={colors.brand} /> : null}
+      </View>
+      <Text style={styles.helper}>Open a previous timetable without losing the current setup draft.</Text>
+      <View style={styles.historyList}>
+        {plans.map((planVersion) => {
+          const isActive = planVersion.id === activePlanId;
+          return (
+            <View key={planVersion.id} style={[styles.historyCard, isActive ? styles.historyCardActive : null]}>
+              <View style={styles.historyCopy}>
+                <Text style={styles.historyTitle}>{formatReadableDate(planVersion.created_at.slice(0, 10))}</Text>
+                <Text style={styles.sessionMeta}>
+                  {formatHours(planVersion.plan.metadata.average_daily_minutes)} per day - Exam{" "}
+                  {formatReadableDate(planVersion.plan.metadata.exam_start_date)}
+                </Text>
+              </View>
+              <View style={styles.historyActionGroup}>
+                {isActive ? <Text style={styles.historyBadge}>Open</Text> : null}
+                <Pressable accessibilityRole="button" onPress={() => onOpen(planVersion)} style={styles.secondaryButton}>
+                  <MaterialCommunityIcons name="folder-open-outline" size={16} color={colors.brand} />
+                  <Text style={styles.secondaryButtonText}>{isActive ? "View" : "Open"}</Text>
+                </Pressable>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 function ReviewItem({ label, value, onEdit }: ReviewItemProps) {
   const styles = useStudentStyles();
   const { colors } = useTheme();
@@ -2596,6 +2681,45 @@ function createStyles(colors: AppColors) {
     flexDirection: "row",
     gap: spacing.md,
     justifyContent: "space-between"
+  },
+  historyActionGroup: {
+    alignItems: "flex-end",
+    gap: spacing.xs
+  },
+  historyBadge: {
+    color: colors.success,
+    fontSize: 12,
+    fontWeight: "900",
+    textTransform: "uppercase"
+  },
+  historyCard: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    justifyContent: "space-between",
+    padding: spacing.md
+  },
+  historyCardActive: {
+    backgroundColor: colors.successSoft,
+    borderColor: colors.success
+  },
+  historyCopy: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 180
+  },
+  historyList: {
+    gap: spacing.sm
+  },
+  historyTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: "900"
   },
   helper: {
     color: colors.muted,

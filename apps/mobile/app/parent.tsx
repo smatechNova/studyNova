@@ -7,7 +7,7 @@ import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
 import { ProgressBar } from "@/components/ProgressBar";
 import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
-import { getLatestStudyPlan, getParentFamily, getStudyPlanProgress } from "@/lib/api";
+import { getLatestStudyPlan, getParentFamily, getStudyPlanHistory, getStudyPlanProgress } from "@/lib/api";
 import { getStoredAuthSession } from "@/lib/session";
 import type { ParentFamilyAccount, SavedStudyPlan, StudyPlanProgress } from "@/types";
 import { spacing, type AppColors } from "@/theme";
@@ -24,8 +24,10 @@ export default function ParentScreen() {
   const [parentFamily, setParentFamily] = useState<ParentFamilyAccount | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | undefined>();
   const [savedPlan, setSavedPlan] = useState<SavedStudyPlan | null>(null);
+  const [planHistory, setPlanHistory] = useState<SavedStudyPlan[]>([]);
   const [progress, setProgress] = useState<StudyPlanProgress | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [message, setMessage] = useState("");
   const activeParentId = sessionParentId;
 
@@ -95,6 +97,7 @@ export default function ParentScreen() {
 
     setIsLoading(true);
     setMessage("");
+    setIsHistoryLoading(false);
 
     try {
       const latestFamily = await getParentFamily(activeParentId);
@@ -102,6 +105,7 @@ export default function ParentScreen() {
 
       if (!latestFamily.parent || !latestFamily.students.length) {
         setSavedPlan(null);
+        setPlanHistory([]);
         setProgress(null);
         setMessage("Create and link student and parent profiles first.");
         return;
@@ -112,19 +116,27 @@ export default function ParentScreen() {
       setSelectedStudentId(activeStudent.id);
 
       try {
-        const latest = await getLatestStudyPlan({ studentId: activeStudent.id });
-        const latestProgress = await getStudyPlanProgress(latest.id);
-        setSavedPlan(latest);
-        setProgress(latestProgress);
+        setIsHistoryLoading(true);
+        const history = await getStudyPlanHistory({ studentId: activeStudent.id, limit: 6 });
+        const currentPlan = history[0] ?? (await getLatestStudyPlan({ studentId: activeStudent.id }));
+        const currentProgress = await getStudyPlanProgress(currentPlan.id);
+        setPlanHistory(history.length ? history : [currentPlan]);
+        setSavedPlan(currentPlan);
+        setProgress(currentProgress);
       } catch {
         setSavedPlan(null);
+        setPlanHistory([]);
         setProgress(null);
         setMessage(`Generate and save a study plan for ${activeStudent.name}.`);
+      } finally {
+        setIsHistoryLoading(false);
       }
     } catch {
       setParentFamily(null);
       setSavedPlan(null);
+      setPlanHistory([]);
       setProgress(null);
+      setIsHistoryLoading(false);
       setMessage("Create linked profiles, then generate and save a student plan.");
     } finally {
       setIsLoading(false);
@@ -134,6 +146,22 @@ export default function ParentScreen() {
   function selectStudent(studentId: string) {
     setSelectedStudentId(studentId);
     void loadParentView(studentId);
+  }
+
+  async function openPlanVersion(planVersion: SavedStudyPlan) {
+    setSavedPlan(planVersion);
+    setIsLoading(true);
+    setMessage("");
+
+    try {
+      const selectedProgress = await getStudyPlanProgress(planVersion.id);
+      setProgress(selectedProgress);
+    } catch {
+      setProgress(null);
+      setMessage("Progress tracking is unavailable for that saved plan.");
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   if (isSessionLoading) {
@@ -236,6 +264,50 @@ export default function ParentScreen() {
                       {student.class_level}
                     </Text>
                   </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
+
+        {planHistory.length || isHistoryLoading ? (
+          <View style={styles.panel}>
+            <View style={styles.panelHeader}>
+              <View style={styles.headerCopy}>
+                <Text style={styles.kicker}>Plan history</Text>
+                <Text style={styles.sectionTitle}>Saved versions</Text>
+              </View>
+              {isHistoryLoading ? <ActivityIndicator color={colors.brand} /> : null}
+            </View>
+            <Text style={styles.helper}>
+              Review the current plan or open an earlier saved timetable for this student.
+            </Text>
+            <View style={styles.historyList}>
+              {planHistory.map((planVersion) => {
+                const isActive = savedPlan?.id === planVersion.id;
+                return (
+                  <View key={planVersion.id} style={[styles.historyCard, isActive ? styles.historyCardActive : null]}>
+                    <View style={styles.historyCopy}>
+                      <Text style={styles.updateTitle}>{formatReadableDate(planVersion.created_at.slice(0, 10))}</Text>
+                      <Text style={styles.sessionMeta}>
+                        {formatHours(planVersion.plan.metadata.average_daily_minutes)} per day - Exam{" "}
+                        {formatReadableDate(planVersion.plan.metadata.exam_start_date)}
+                      </Text>
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={isActive}
+                      onPress={() => void openPlanVersion(planVersion)}
+                      style={[styles.linkButton, isActive ? styles.disabledButton : null]}
+                    >
+                      <MaterialCommunityIcons
+                        name={isActive ? "check-circle-outline" : "folder-open-outline"}
+                        size={18}
+                        color={colors.brand}
+                      />
+                      <Text style={styles.linkButtonText}>{isActive ? "Current" : "Open"}</Text>
+                    </Pressable>
+                  </View>
                 );
               })}
             </View>
@@ -354,6 +426,12 @@ function formatReadableDate(value: string) {
   });
 }
 
+function formatHours(minutes: number) {
+  const hours = minutes / 60;
+  const formatted = Number.isInteger(hours) ? `${hours}` : hours.toFixed(1);
+  return `${formatted}h`;
+}
+
 function toDateValue(date: Date) {
   const year = date.getFullYear();
   const month = `${date.getMonth() + 1}`.padStart(2, "0");
@@ -409,6 +487,9 @@ function createStyles(colors: AppColors) {
     gap: spacing.md,
     padding: spacing.md
   },
+  disabledButton: {
+    opacity: 0.55
+  },
   header: {
     alignItems: "center",
     flexDirection: "row",
@@ -418,6 +499,30 @@ function createStyles(colors: AppColors) {
   headerCopy: {
     flex: 1,
     gap: spacing.xs
+  },
+  historyCard: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    justifyContent: "space-between",
+    padding: spacing.md
+  },
+  historyCardActive: {
+    backgroundColor: colors.successSoft,
+    borderColor: colors.success
+  },
+  historyCopy: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 180
+  },
+  historyList: {
+    gap: spacing.sm
   },
   helper: {
     color: colors.muted,
