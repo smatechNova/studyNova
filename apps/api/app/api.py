@@ -111,7 +111,7 @@ def generate_study_plan(payload: StudyPlanRequest) -> StudyPlanResponse:
 
 @router.post("/study-plans/save", response_model=SavedStudyPlan)
 def save_study_plan(payload: StudyPlanSaveRequest) -> SavedStudyPlan:
-    return get_study_plan_store().save(payload.plan, payload.student_id)
+    return get_study_plan_store().save(payload.plan, payload.student_id, payload.setup_payload)
 
 
 @router.get("/study-plans/latest", response_model=SavedStudyPlan)
@@ -123,6 +123,15 @@ def get_latest_study_plan(
     if saved_plan is None:
         raise HTTPException(status_code=404, detail="No saved study plan found.")
     return saved_plan
+
+
+@router.get("/study-plans/history", response_model=list[SavedStudyPlan])
+def get_study_plan_history(
+    student_name: str | None = None,
+    student_id: str | None = None,
+    limit: int = 20,
+) -> list[SavedStudyPlan]:
+    return get_study_plan_store().history(student_name=student_name, student_id=student_id, limit=limit)
 
 
 @router.get("/study-plans/{plan_id}/progress", response_model=StudyPlanProgress)

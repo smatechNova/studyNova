@@ -89,11 +89,13 @@ class SavedStudyPlan(BaseModel):
     student_id: str | None = None
     created_at: datetime
     plan: StudyPlanResponse
+    setup_payload: StudyPlanRequest | None = None
 
 
 class StudyPlanSaveRequest(BaseModel):
     plan: StudyPlanResponse
     student_id: str | None = Field(default=None, max_length=80)
+    setup_payload: StudyPlanRequest | None = None
 
 
 class StudentAccountCreate(BaseModel):

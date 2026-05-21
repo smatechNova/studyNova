@@ -192,7 +192,11 @@ export async function generateStudyPlan(payload: StudyPlanRequest): Promise<Stud
   return response.json() as Promise<StudyPlanResponse>;
 }
 
-export async function saveStudyPlan(payload: StudyPlanResponse, studentId?: string): Promise<SavedStudyPlan> {
+export async function saveStudyPlan(
+  payload: StudyPlanResponse,
+  studentId?: string,
+  setupPayload?: StudyPlanRequest
+): Promise<SavedStudyPlan> {
   const response = await fetch(`${API_URL}/api/v1/study-plans/save`, {
     method: "POST",
     headers: {
@@ -200,7 +204,8 @@ export async function saveStudyPlan(payload: StudyPlanResponse, studentId?: stri
     },
     body: JSON.stringify({
       plan: payload,
-      student_id: studentId ?? null
+      student_id: studentId ?? null,
+      setup_payload: setupPayload ?? null
     })
   });
 
@@ -209,6 +214,30 @@ export async function saveStudyPlan(payload: StudyPlanResponse, studentId?: stri
   }
 
   return response.json() as Promise<SavedStudyPlan>;
+}
+
+export async function getStudyPlanHistory(options?: {
+  studentName?: string;
+  studentId?: string;
+  limit?: number;
+}): Promise<SavedStudyPlan[]> {
+  const params = new URLSearchParams();
+  if (options?.studentId) {
+    params.set("student_id", options.studentId);
+  } else if (options?.studentName) {
+    params.set("student_name", options.studentName);
+  }
+  if (options?.limit) {
+    params.set("limit", `${options.limit}`);
+  }
+  const query = params.toString() ? `?${params.toString()}` : "";
+  const response = await fetch(`${API_URL}/api/v1/study-plans/history${query}`);
+
+  if (!response.ok) {
+    throw await createApiError(response, "Study plan history request failed");
+  }
+
+  return response.json() as Promise<SavedStudyPlan[]>;
 }
 
 export async function getLatestStudyPlan(options?: { studentName?: string; studentId?: string }): Promise<SavedStudyPlan> {

@@ -290,7 +290,7 @@ export default function StudentScreen() {
       setSavedPlan(null);
       setSaveMessage("Saving generated plan...");
       try {
-        const saved = await saveStudyPlan(response, linkedStudentId ?? activeStudentId);
+        const saved = await saveStudyPlan(response, linkedStudentId ?? activeStudentId, request);
         setSavedPlan(saved);
         setLatestPlan(saved);
         setSaveMessage("Plan saved. You can continue from here later.");
@@ -320,6 +320,10 @@ export default function StudentScreen() {
 
     setPlan(latestPlan.plan);
     setSavedPlan(latestPlan);
+    if (latestPlan.setup_payload) {
+      setForm(createFormFromRequest(latestPlan.setup_payload));
+      setActiveSubjectId(undefined);
+    }
     setSaveMessage("Loaded latest saved plan.");
     setIsPlanVisible(true);
   }
@@ -2120,6 +2124,37 @@ function createDefaultForm(): PlanForm {
     breakMinutes: "",
     studyStrengthNote: "",
     subjects: [createSubject("", [createTopic("", "", "Textbook")])]
+  };
+}
+
+function createFormFromRequest(payload: StudyPlanRequest): PlanForm {
+  return {
+    studentName: payload.student_profile?.name ?? payload.student_name ?? "",
+    classLevel: payload.student_profile?.class_level ?? "",
+    age: payload.student_profile?.age ? `${payload.student_profile.age}` : "",
+    parentName: payload.student_profile?.parent_name ?? "",
+    parentContact: payload.student_profile?.parent_contact ?? "",
+    examStartDate: payload.exam_start_date || payload.exam_date || futureDate(30),
+    examEndDate: payload.exam_end_date || payload.exam_start_date || payload.exam_date || futureDate(35),
+    availableDailyMinutes: `${payload.available_daily_minutes}`,
+    minutesPerPage: `${payload.minutes_per_page}`,
+    sessionMinutes: `${payload.session_minutes}`,
+    breakMinutes: `${payload.break_minutes}`,
+    studyStrengthNote: payload.study_strength_note ?? "",
+    subjects: payload.subjects.length
+      ? payload.subjects.map((subject) =>
+          createSubject(
+            subject.name,
+            subject.topics.map((topic) => ({
+              id: createId("topic"),
+              name: topic.name,
+              pages: `${topic.pages}`,
+              priority: `${topic.priority}`,
+              resourceType: topic.resource_type || "Textbook"
+            }))
+          )
+        )
+      : [createSubject("", [createTopic("", "", "Textbook")])]
   };
 }
 

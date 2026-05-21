@@ -83,6 +83,7 @@ export type SavedStudyPlan = {
   student_id?: string | null;
   created_at: string;
   plan: StudyPlanResponse;
+  setup_payload?: StudyPlanRequest | null;
 };
 
 export type StudentAccountInput = {
