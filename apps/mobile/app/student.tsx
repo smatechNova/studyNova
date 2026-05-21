@@ -125,14 +125,19 @@ export default function StudentScreen() {
   const setupScrollRef = useRef<ScrollView>(null);
   const setupPanelOffsetY = useRef(0);
   const subjectListOffsetY = useRef(0);
-  const subjectCardOffsets = useRef<Record<string, number>>({});
-  const pendingSubjectScrollId = useRef<string | null>(null);
+  const subjectEditorOffsetY = useRef(0);
   const [newSubjectId, setNewSubjectId] = useState<string | undefined>();
+  const [activeSubjectId, setActiveSubjectId] = useState<string | undefined>();
+  const [bulkTopicText, setBulkTopicText] = useState("");
   const [isDraftReady, setIsDraftReady] = useState(false);
   const activeStudentId = sessionStudentId;
 
   const currentStep = STEPS[stepIndex];
   const completedStepCount = getCompletedStepCount(form);
+  const activeSubject = form.subjects.find((subject) => subject.id === activeSubjectId) ?? form.subjects[0] ?? null;
+  const activeSubjectIndex = activeSubject
+    ? form.subjects.findIndex((subject) => subject.id === activeSubject.id)
+    : -1;
   const topicCount = form.subjects.reduce((total, subject) => total + subject.topics.length, 0);
   const pageCount = form.subjects.reduce(
     (total, subject) => total + subject.topics.reduce((sum, topic) => sum + toNumber(topic.pages), 0),
@@ -479,19 +484,20 @@ export default function StudentScreen() {
     const nextSubject = createSubject("", [createTopic("", "", "Textbook")]);
 
     setError("");
-    pendingSubjectScrollId.current = nextSubject.id;
     setNewSubjectId(nextSubject.id);
+    setActiveSubjectId(nextSubject.id);
+    setBulkTopicText("");
     setForm((current) => ({
       ...current,
       subjects: [...current.subjects, nextSubject]
     }));
 
     setTimeout(() => {
-      scrollToSubject(nextSubject.id);
+      scrollToSubjectEditor();
     }, 120);
 
     setTimeout(() => {
-      scrollToSubject(nextSubject.id);
+      scrollToSubjectEditor();
     }, 320);
 
     setTimeout(() => {
@@ -499,28 +505,19 @@ export default function StudentScreen() {
     }, 1800);
   }
 
-  function handleSubjectLayout(subjectId: string, event: LayoutChangeEvent) {
-    subjectCardOffsets.current[subjectId] = event.nativeEvent.layout.y;
+  function selectSubject(subjectId: string) {
+    setError("");
+    setActiveSubjectId(subjectId);
+    setBulkTopicText("");
 
-    if (pendingSubjectScrollId.current === subjectId) {
-      setTimeout(() => {
-        scrollToSubject(subjectId);
-      }, 40);
-    }
+    setTimeout(() => {
+      scrollToSubjectEditor();
+    }, 80);
   }
 
-  function scrollToSubject(subjectId: string) {
-    const subjectOffsetY = subjectCardOffsets.current[subjectId];
-    if (typeof subjectOffsetY !== "number") {
-      return;
-    }
-
-    const targetY = setupPanelOffsetY.current + subjectListOffsetY.current + subjectOffsetY - spacing.md;
+  function scrollToSubjectEditor() {
+    const targetY = setupPanelOffsetY.current + subjectListOffsetY.current + subjectEditorOffsetY.current - spacing.md;
     setupScrollRef.current?.scrollTo({ y: Math.max(0, targetY), animated: true });
-
-    if (pendingSubjectScrollId.current === subjectId) {
-      pendingSubjectScrollId.current = null;
-    }
   }
 
   function removeSubject(subjectId: string) {
@@ -531,6 +528,14 @@ export default function StudentScreen() {
           ? current.subjects.filter((subject) => subject.id !== subjectId)
           : current.subjects
     }));
+    setActiveSubjectId((currentActive) => {
+      if (currentActive !== subjectId) {
+        return currentActive;
+      }
+
+      const nextSubject = form.subjects.find((subject) => subject.id !== subjectId);
+      return nextSubject?.id;
+    });
   }
 
   function updateTopic(subjectId: string, topicId: string, field: keyof Omit<TopicForm, "id">, value: string) {
@@ -559,6 +564,28 @@ export default function StudentScreen() {
       subjects: current.subjects.map((subject) =>
         subject.id === subjectId
           ? { ...subject, topics: [...subject.topics, createTopic("", "", "Textbook")] }
+          : subject
+      )
+    }));
+  }
+
+  function importBulkTopics(subjectId: string) {
+    const topics = parseBulkTopics(bulkTopicText);
+    if (!topics.length) {
+      setError("Paste one topic per line, such as Algebra, 18, Textbook.");
+      return;
+    }
+
+    setError("");
+    setBulkTopicText("");
+    setForm((current) => ({
+      ...current,
+      subjects: current.subjects.map((subject) =>
+        subject.id === subjectId
+          ? {
+              ...subject,
+              topics: shouldReplaceStarterTopic(subject.topics) ? topics : [...subject.topics, ...topics]
+            }
           : subject
       )
     }));
@@ -813,82 +840,174 @@ export default function StudentScreen() {
               }}
               style={styles.subjectList}
             >
-              <View style={styles.sectionRow}>
-                <Text style={styles.helper}>
-                  {form.subjects.length} subjects, {topicCount} topics, {pageCount} pages
-                </Text>
-                <Pressable accessibilityRole="button" onPress={addSubject} style={styles.secondaryButton}>
-                  <MaterialCommunityIcons name="plus" size={18} color={colors.brand} />
-                  <Text style={styles.secondaryButtonText}>Add subject</Text>
+              <View style={styles.subjectLibraryHeader}>
+                <View style={styles.subjectLibraryCopy}>
+                  <Text style={styles.sectionTitle}>Subject library</Text>
+                  <Text style={styles.helper}>
+                    {form.subjects.length} subjects, {topicCount} topics, {pageCount} pages
+                  </Text>
+                </View>
+                <Pressable accessibilityRole="button" onPress={addSubject} style={styles.primaryButton}>
+                  <MaterialCommunityIcons name="plus" size={18} color="#FFFFFF" />
+                  <Text style={styles.primaryButtonText}>Add subject</Text>
                 </Pressable>
               </View>
 
-              {form.subjects.map((subject, subjectIndex) => (
+              {activeSubject ? (
                 <View
-                  key={subject.id}
-                  onLayout={(event) => handleSubjectLayout(subject.id, event)}
-                  style={[styles.subjectCard, subject.id === newSubjectId ? styles.subjectCardActive : null]}
+                  onLayout={(event) => {
+                    subjectEditorOffsetY.current = event.nativeEvent.layout.y;
+                  }}
+                  style={[
+                    styles.subjectEditor,
+                    activeSubject.id === newSubjectId ? styles.subjectCardActive : null
+                  ]}
                 >
-                  <View style={styles.subjectHeader}>
-                    <View style={styles.subjectNameField}>
-                      <FormField
-                        label={`Subject ${subjectIndex + 1}`}
-                        placeholder="Mathematics"
-                        value={subject.name}
-                        onChangeText={(value) => updateSubject(subject.id, value)}
-                      />
+                  <View style={styles.subjectEditorHeader}>
+                    <View style={styles.subjectLibraryCopy}>
+                      <Text style={styles.kicker}>Editing subject {activeSubjectIndex + 1}</Text>
+                      <Text style={styles.sectionTitle}>{activeSubject.name.trim() || "New subject"}</Text>
+                      <Text style={styles.helper}>
+                        {activeSubject.topics.length} topics, {getSubjectPageCount(activeSubject)} pages
+                      </Text>
                     </View>
                     <Pressable
                       accessibilityRole="button"
-                      onPress={() => removeSubject(subject.id)}
+                      onPress={() => removeSubject(activeSubject.id)}
                       style={styles.removeButton}
                     >
                       <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.warning} />
                     </Pressable>
                   </View>
 
-                  {subject.topics.map((topic, topicIndex) => (
-                    <View key={topic.id} style={styles.topicCard}>
-                      <View style={styles.topicHeader}>
-                        <Text style={styles.topicTitle}>Topic {topicIndex + 1}</Text>
-                        <Pressable
-                          accessibilityRole="button"
-                          onPress={() => removeTopic(subject.id, topic.id)}
-                          style={styles.smallIconButton}
-                        >
-                          <MaterialCommunityIcons name="minus-circle-outline" size={20} color={colors.muted} />
-                        </Pressable>
-                      </View>
-                      <FormField
-                        label="Topic name"
-                        placeholder="Algebra"
-                        value={topic.name}
-                        onChangeText={(value) => updateTopic(subject.id, topic.id, "name", value)}
-                      />
-                      <FormField
-                        keyboardType="number-pad"
-                        label="Pages in this topic"
-                        placeholder="25"
-                        value={topic.pages}
-                        onChangeText={(value) => updateTopic(subject.id, topic.id, "pages", value)}
-                      />
-                      <ResourcePicker
-                        selected={topic.resourceType}
-                        onSelect={(value) => updateTopic(subject.id, topic.id, "resourceType", value)}
-                      />
-                    </View>
-                  ))}
+                  <FormField
+                    label="Subject name"
+                    placeholder="Mathematics"
+                    value={activeSubject.name}
+                    onChangeText={(value) => updateSubject(activeSubject.id, value)}
+                  />
 
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => addTopic(subject.id)}
-                    style={styles.addTopicButton}
-                  >
-                    <MaterialCommunityIcons name="plus-circle-outline" size={18} color={colors.brand} />
-                    <Text style={styles.secondaryButtonText}>Add topic</Text>
-                  </Pressable>
+                  <View style={styles.bulkTopicPanel}>
+                    <View style={styles.sectionRow}>
+                      <View style={styles.subjectLibraryCopy}>
+                        <Text style={styles.fieldLabel}>Paste topics</Text>
+                        <Text style={styles.helper}>One line per topic: Algebra, 18, Textbook</Text>
+                      </View>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => importBulkTopics(activeSubject.id)}
+                        style={styles.secondaryButton}
+                      >
+                        <MaterialCommunityIcons name="tray-arrow-down" size={18} color={colors.brand} />
+                        <Text style={styles.secondaryButtonText}>Import</Text>
+                      </Pressable>
+                    </View>
+                    <TextInput
+                      multiline
+                      onChangeText={setBulkTopicText}
+                      placeholder={"Algebra, 18, Textbook\nGeometry, 20, Class notes"}
+                      placeholderTextColor={colors.muted}
+                      style={[styles.input, styles.textArea]}
+                      textAlignVertical="top"
+                      value={bulkTopicText}
+                    />
+                  </View>
+
+                  <View style={styles.topicTable}>
+                    <View style={styles.topicTableHeader}>
+                      <Text style={styles.fieldLabel}>Topics</Text>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => addTopic(activeSubject.id)}
+                        style={styles.secondaryButton}
+                      >
+                        <MaterialCommunityIcons name="plus-circle-outline" size={18} color={colors.brand} />
+                        <Text style={styles.secondaryButtonText}>Add topic</Text>
+                      </Pressable>
+                    </View>
+
+                    {activeSubject.topics.map((topic, topicIndex) => (
+                      <View key={topic.id} style={styles.topicCompactRow}>
+                        <View style={styles.topicCompactHeader}>
+                          <Text style={styles.topicIndex}>{topicIndex + 1}</Text>
+                          <View style={styles.topicNameInput}>
+                            <TextInput
+                              onChangeText={(value) => updateTopic(activeSubject.id, topic.id, "name", value)}
+                              placeholder="Topic name"
+                              placeholderTextColor={colors.muted}
+                              style={styles.compactInput}
+                              value={topic.name}
+                            />
+                          </View>
+                          <View style={styles.topicPagesInput}>
+                            <TextInput
+                              keyboardType="number-pad"
+                              onChangeText={(value) => updateTopic(activeSubject.id, topic.id, "pages", value)}
+                              placeholder="Pages"
+                              placeholderTextColor={colors.muted}
+                              style={styles.compactInput}
+                              value={topic.pages}
+                            />
+                          </View>
+                          <Pressable
+                            accessibilityRole="button"
+                            onPress={() => removeTopic(activeSubject.id, topic.id)}
+                            style={styles.smallIconButton}
+                          >
+                            <MaterialCommunityIcons name="minus-circle-outline" size={20} color={colors.muted} />
+                          </Pressable>
+                        </View>
+                        <MiniResourcePicker
+                          selected={topic.resourceType}
+                          onSelect={(value) => updateTopic(activeSubject.id, topic.id, "resourceType", value)}
+                        />
+                      </View>
+                    ))}
+                  </View>
                 </View>
-              ))}
+              ) : null}
+
+              <View style={styles.subjectCardGrid}>
+                {form.subjects.map((subject, subjectIndex) => {
+                  const subjectPages = getSubjectPageCount(subject);
+                  const subjectMinutes = subjectPages * Math.max(toNumber(form.minutesPerPage), 0);
+                  const isActive = subject.id === activeSubject?.id;
+
+                  return (
+                    <Pressable
+                      accessibilityRole="button"
+                      key={subject.id}
+                      onPress={() => selectSubject(subject.id)}
+                      style={[
+                        styles.subjectSummaryCard,
+                        isActive ? styles.subjectSummaryCardActive : null,
+                        subject.id === newSubjectId ? styles.subjectCardActive : null
+                      ]}
+                    >
+                      <View style={styles.subjectSummaryTop}>
+                        <View style={styles.subjectSummaryIcon}>
+                          <MaterialCommunityIcons name="book-open-page-variant-outline" size={20} color={colors.brand} />
+                        </View>
+                        <View style={styles.subjectLibraryCopy}>
+                          <Text style={styles.subjectSummaryTitle}>
+                            {subject.name.trim() || `Subject ${subjectIndex + 1}`}
+                          </Text>
+                          <Text style={styles.helper}>
+                            {subject.topics.length} topics, {subjectPages} pages
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.subjectSummaryFooter}>
+                        <Text style={styles.sessionMeta}>{subjectMinutes ? formatHours(subjectMinutes) : "Pace pending"}</Text>
+                        <View style={styles.subjectStatusPill}>
+                          <Text style={styles.subjectStatusText}>{isActive ? "Editing" : "Edit"}</Text>
+                          <MaterialCommunityIcons name="chevron-right" size={14} color={colors.brand} />
+                        </View>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
           ) : null}
 
@@ -1484,29 +1603,26 @@ type ResourcePickerProps = {
   onSelect: (value: string) => void;
 };
 
-function ResourcePicker({ selected, onSelect }: ResourcePickerProps) {
+function MiniResourcePicker({ selected, onSelect }: ResourcePickerProps) {
   const styles = useStudentStyles();
 
   return (
-    <View style={styles.resourceBlock}>
-      <Text style={styles.fieldLabel}>Study resource</Text>
-      <View style={styles.resourceGrid}>
-        {RESOURCE_OPTIONS.map((resource) => {
-          const isSelected = resource === selected;
-          return (
-            <Pressable
-              accessibilityRole="button"
-              key={resource}
-              onPress={() => onSelect(resource)}
-              style={[styles.resourceChip, isSelected ? styles.resourceChipActive : null]}
-            >
-              <Text style={[styles.resourceChipText, isSelected ? styles.resourceChipTextActive : null]}>
-                {resource}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+    <View style={styles.miniResourceGrid}>
+      {RESOURCE_OPTIONS.map((resource) => {
+        const isSelected = resource === selected;
+        return (
+          <Pressable
+            accessibilityRole="button"
+            key={resource}
+            onPress={() => onSelect(resource)}
+            style={[styles.miniResourceChip, isSelected ? styles.resourceChipActive : null]}
+          >
+            <Text style={[styles.miniResourceText, isSelected ? styles.resourceChipTextActive : null]}>
+              {resource}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -2027,6 +2143,40 @@ function createTopic(name: string, pages: string, resourceType: string): TopicFo
 
 function createId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function getSubjectPageCount(subject: SubjectForm) {
+  return subject.topics.reduce((total, topic) => total + toNumber(topic.pages), 0);
+}
+
+function shouldReplaceStarterTopic(topics: TopicForm[]) {
+  return topics.length === 1 && !topics[0]?.name.trim() && !topics[0]?.pages.trim();
+}
+
+function parseBulkTopics(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const parts = line
+        .split(/[,\t|;]/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+      const name = parts[0] ?? "";
+      const pages = parts.find((part, index) => index > 0 && isWholeNumber(part)) ?? "";
+      const resourceCandidate = parts.find(
+        (part, index) => index > 0 && !isWholeNumber(part) && normalizeResourceType(part) !== "Textbook"
+      );
+
+      return createTopic(name, pages, normalizeResourceType(resourceCandidate ?? parts[2] ?? "Textbook"));
+    })
+    .filter((topic) => topic.name.trim());
+}
+
+function normalizeResourceType(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return RESOURCE_OPTIONS.find((resource) => resource.toLowerCase() === normalized) ?? "Textbook";
 }
 
 function futureDate(daysFromToday: number) {
@@ -2926,6 +3076,161 @@ function createStyles(colors: AppColors) {
   },
   subjectList: {
     gap: spacing.md
+  },
+  subjectLibraryHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    justifyContent: "space-between"
+  },
+  subjectLibraryCopy: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 180
+  },
+  subjectEditor: {
+    backgroundColor: colors.panel,
+    borderColor: colors.brand,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  subjectEditorHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: spacing.md,
+    justifyContent: "space-between"
+  },
+  bulkTopicPanel: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  topicTable: {
+    gap: spacing.sm
+  },
+  topicTableHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    justifyContent: "space-between"
+  },
+  topicCompactRow: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.sm
+  },
+  topicCompactHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.sm
+  },
+  topicIndex: {
+    color: colors.brand,
+    fontSize: 13,
+    fontWeight: "900",
+    textAlign: "center",
+    width: 24
+  },
+  topicNameInput: {
+    flex: 1,
+    minWidth: 120
+  },
+  topicPagesInput: {
+    width: 84
+  },
+  compactInput: {
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    color: colors.text,
+    fontSize: 14,
+    minHeight: 42,
+    paddingHorizontal: spacing.sm
+  },
+  miniResourceGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs,
+    paddingLeft: 32
+  },
+  miniResourceChip: {
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    minHeight: 30,
+    paddingHorizontal: spacing.sm,
+    justifyContent: "center"
+  },
+  miniResourceText: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  subjectCardGrid: {
+    gap: spacing.sm
+  },
+  subjectSummaryCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  subjectSummaryCardActive: {
+    backgroundColor: colors.brandSoft,
+    borderColor: colors.brand
+  },
+  subjectSummaryTop: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.md
+  },
+  subjectSummaryIcon: {
+    alignItems: "center",
+    backgroundColor: colors.brandSoft,
+    borderRadius: 8,
+    height: 42,
+    justifyContent: "center",
+    width: 42
+  },
+  subjectSummaryTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: "900"
+  },
+  subjectSummaryFooter: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  subjectStatusPill: {
+    alignItems: "center",
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    minHeight: 30,
+    paddingHorizontal: spacing.sm
+  },
+  subjectStatusText: {
+    color: colors.brand,
+    fontSize: 12,
+    fontWeight: "900"
   },
   subjectNameField: {
     flex: 1
