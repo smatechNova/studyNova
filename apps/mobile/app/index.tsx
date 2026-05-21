@@ -1,8 +1,9 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Link, router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
 import { RoleCard } from "@/components/RoleCard";
 import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";

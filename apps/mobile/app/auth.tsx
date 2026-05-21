@@ -6,7 +6,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Linking,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,6 +13,7 @@ import {
   View
 } from "react-native";
 
+import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
 import { Screen } from "@/components/Screen";
 import { firebaseSignInAccount, signInAccount } from "@/lib/api";
 import {

@@ -1,9 +1,8 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Link, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,6 +11,7 @@ import {
   type TextInputProps
 } from "react-native";
 
+import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
 import { ProgressBar } from "@/components/ProgressBar";
 import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
@@ -107,6 +107,8 @@ export default function StudentScreen() {
   const [isPlanVisible, setIsPlanVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const setupScrollRef = useRef<ScrollView>(null);
+  const [newSubjectId, setNewSubjectId] = useState<string | undefined>();
   const activeStudentId = sessionStudentId;
 
   const currentStep = STEPS[stepIndex];
@@ -407,11 +409,22 @@ export default function StudentScreen() {
   }
 
   function addSubject() {
+    const nextSubject = createSubject("", [createTopic("", "", "Textbook")]);
+
     setError("");
+    setNewSubjectId(nextSubject.id);
     setForm((current) => ({
       ...current,
-      subjects: [...current.subjects, createSubject("", [createTopic("", "", "Textbook")])]
+      subjects: [...current.subjects, nextSubject]
     }));
+
+    setTimeout(() => {
+      setupScrollRef.current?.scrollToEnd({ animated: true });
+    }, 80);
+
+    setTimeout(() => {
+      setNewSubjectId((current) => (current === nextSubject.id ? undefined : current));
+    }, 1800);
   }
 
   function removeSubject(subjectId: string) {
@@ -525,6 +538,7 @@ export default function StudentScreen() {
   return (
     <Screen>
       <ScrollView
+        ref={setupScrollRef}
         contentContainerStyle={styles.content}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
@@ -688,12 +702,15 @@ export default function StudentScreen() {
                 </Text>
                 <Pressable accessibilityRole="button" onPress={addSubject} style={styles.secondaryButton}>
                   <MaterialCommunityIcons name="plus" size={18} color={colors.brand} />
-                  <Text style={styles.secondaryButtonText}>Subject</Text>
+                  <Text style={styles.secondaryButtonText}>Add subject</Text>
                 </Pressable>
               </View>
 
               {form.subjects.map((subject, subjectIndex) => (
-                <View key={subject.id} style={styles.subjectCard}>
+                <View
+                  key={subject.id}
+                  style={[styles.subjectCard, subject.id === newSubjectId ? styles.subjectCardActive : null]}
+                >
                   <View style={styles.subjectHeader}>
                     <View style={styles.subjectNameField}>
                       <FormField
@@ -2328,6 +2345,10 @@ function createStyles(colors: AppColors) {
     borderWidth: 1,
     gap: spacing.md,
     padding: spacing.md
+  },
+  subjectCardActive: {
+    backgroundColor: colors.brandSoft,
+    borderColor: colors.brand
   },
   subjectHeader: {
     alignItems: "flex-end",

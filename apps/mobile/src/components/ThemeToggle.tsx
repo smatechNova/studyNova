@@ -1,6 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text } from "react-native";
+import { StyleSheet, Text } from "react-native";
 
+import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
 import { spacing } from "@/theme";
 import { useTheme } from "@/themeContext";
 
