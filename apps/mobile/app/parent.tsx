@@ -16,15 +16,17 @@ export default function ParentScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const params = useLocalSearchParams<{ parentId?: string }>();
-  const signedInParentId = getParamValue(params.parentId);
-  const [storedParentId, setStoredParentId] = useState<string | undefined>();
+  const routeParentId = getParamValue(params.parentId);
+  const [sessionParentId, setSessionParentId] = useState<string | undefined>();
+  const [isSessionLoading, setIsSessionLoading] = useState(true);
+  const [authMessage, setAuthMessage] = useState("");
   const [parentFamily, setParentFamily] = useState<ParentFamilyAccount | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | undefined>();
   const [savedPlan, setSavedPlan] = useState<SavedStudyPlan | null>(null);
   const [progress, setProgress] = useState<StudyPlanProgress | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState("");
-  const activeParentId = signedInParentId ?? storedParentId;
+  const activeParentId = sessionParentId;
 
   const latestCompletion = progress?.completions.at(-1);
   const recentDays = useMemo(() => {
@@ -49,14 +51,29 @@ export default function ParentScreen() {
     let isMounted = true;
 
     async function loadStoredSession() {
-      if (signedInParentId) {
+      setIsSessionLoading(true);
+      const session = await getStoredAuthSession();
+      if (!isMounted) {
         return;
       }
 
-      const session = await getStoredAuthSession();
-      if (isMounted && session?.role === "parent" && session.parent) {
-        setStoredParentId(session.parent.id);
+      if (session?.role === "parent" && session.parent) {
+        if (routeParentId && routeParentId !== session.parent.id) {
+          setSessionParentId(undefined);
+          setAuthMessage("This parent link belongs to another parent account. Sign in with the correct parent.");
+        } else {
+          setSessionParentId(session.parent.id);
+          setAuthMessage("");
+        }
+      } else if (session?.role === "student") {
+        setSessionParentId(undefined);
+        setAuthMessage("Student accounts cannot open the parent dashboard. Sign in with a parent account.");
+      } else {
+        setSessionParentId(undefined);
+        setAuthMessage("Sign in as a parent or guardian to monitor linked students.");
       }
+
+      setIsSessionLoading(false);
     }
 
     void loadStoredSession();
@@ -64,7 +81,7 @@ export default function ParentScreen() {
     return () => {
       isMounted = false;
     };
-  }, [signedInParentId]);
+  }, [routeParentId]);
 
   useEffect(() => {
     void loadParentView();
@@ -118,6 +135,20 @@ export default function ParentScreen() {
     void loadParentView(studentId);
   }
 
+  if (isSessionLoading) {
+    return (
+      <Screen>
+        <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.panel}>
+            <ActivityIndicator color={colors.brand} />
+            <Text style={styles.sectionTitle}>Checking parent access</Text>
+            <Text style={styles.helper}>Opening the monitoring dashboard for the signed-in parent account.</Text>
+          </View>
+        </ScrollView>
+      </Screen>
+    );
+  }
+
   if (!activeParentId) {
     return (
       <Screen>
@@ -126,7 +157,7 @@ export default function ParentScreen() {
             <MaterialCommunityIcons name="lock-outline" size={28} color={colors.brand} />
             <Text style={styles.sectionTitle}>Parent sign in required</Text>
             <Text style={styles.helper}>
-              Sign in as a parent or guardian to monitor linked student accounts.
+              {authMessage || "Sign in as a parent or guardian to monitor linked student accounts."}
             </Text>
             <Link href="/auth?role=parent" asChild>
               <Pressable accessibilityRole="button" style={styles.linkButton}>

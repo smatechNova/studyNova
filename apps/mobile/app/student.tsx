@@ -91,8 +91,10 @@ export default function StudentScreen() {
   const { colors } = useTheme();
   const styles = useStudentStyles();
   const params = useLocalSearchParams<{ studentId?: string }>();
-  const signedInStudentId = getParamValue(params.studentId);
-  const [storedStudentId, setStoredStudentId] = useState<string | undefined>();
+  const routeStudentId = getParamValue(params.studentId);
+  const [sessionStudentId, setSessionStudentId] = useState<string | undefined>();
+  const [isSessionLoading, setIsSessionLoading] = useState(true);
+  const [authMessage, setAuthMessage] = useState("");
   const [form, setForm] = useState<PlanForm>(() => createDefaultForm());
   const [plan, setPlan] = useState<StudyPlanResponse | null>(null);
   const [savedPlan, setSavedPlan] = useState<SavedStudyPlan | null>(null);
@@ -105,7 +107,7 @@ export default function StudentScreen() {
   const [isPlanVisible, setIsPlanVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const activeStudentId = signedInStudentId ?? storedStudentId;
+  const activeStudentId = sessionStudentId;
 
   const currentStep = STEPS[stepIndex];
   const topicCount = form.subjects.reduce((total, subject) => total + subject.topics.length, 0);
@@ -119,14 +121,29 @@ export default function StudentScreen() {
     let isMounted = true;
 
     async function loadStoredSession() {
-      if (signedInStudentId) {
+      setIsSessionLoading(true);
+      const session = await getStoredAuthSession();
+      if (!isMounted) {
         return;
       }
 
-      const session = await getStoredAuthSession();
-      if (isMounted && session?.role === "student" && session.student) {
-        setStoredStudentId(session.student.id);
+      if (session?.role === "student" && session.student) {
+        if (routeStudentId && routeStudentId !== session.student.id) {
+          setSessionStudentId(undefined);
+          setAuthMessage("This student link belongs to another student account. Sign in with the correct student.");
+        } else {
+          setSessionStudentId(session.student.id);
+          setAuthMessage("");
+        }
+      } else if (session?.role === "parent") {
+        setSessionStudentId(undefined);
+        setAuthMessage("Parent accounts cannot open a student dashboard. Sign in with the student's account.");
+      } else {
+        setSessionStudentId(undefined);
+        setAuthMessage("Sign in as a student to open this dashboard.");
       }
+
+      setIsSessionLoading(false);
     }
 
     void loadStoredSession();
@@ -134,7 +151,7 @@ export default function StudentScreen() {
     return () => {
       isMounted = false;
     };
-  }, [signedInStudentId]);
+  }, [routeStudentId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -454,6 +471,20 @@ export default function StudentScreen() {
     }));
   }
 
+  if (isSessionLoading) {
+    return (
+      <Screen>
+        <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.panel}>
+            <ActivityIndicator color={colors.brand} />
+            <Text style={styles.sectionTitle}>Checking student access</Text>
+            <Text style={styles.helper}>Opening the dashboard for the signed-in student account.</Text>
+          </View>
+        </ScrollView>
+      </Screen>
+    );
+  }
+
   if (!activeStudentId) {
     return (
       <Screen>
@@ -462,7 +493,7 @@ export default function StudentScreen() {
             <MaterialCommunityIcons name="lock-outline" size={28} color={colors.brand} />
             <Text style={styles.sectionTitle}>Student sign in required</Text>
             <Text style={styles.helper}>
-              Sign in as a student to open only that student's dashboard and study plan.
+              {authMessage || "Sign in as a student to open only that student's dashboard and study plan."}
             </Text>
             <Link href="/auth?role=student" asChild>
               <Pressable accessibilityRole="button" style={styles.secondaryButton}>
