@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
 import { Link, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -49,6 +49,15 @@ const BLOCKED_STUDY_CONTENT_PHRASES = [
 
 type StepName = (typeof STEPS)[number];
 type DateFieldName = "examStartDate" | "examEndDate";
+type MaterialIconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
+
+const STEP_DETAILS: Record<StepName, { icon: MaterialIconName; eyebrow: string }> = {
+  Profile: { icon: "account-school-outline", eyebrow: "Identity" },
+  Exam: { icon: "calendar-month-outline", eyebrow: "Timeline" },
+  Pace: { icon: "speedometer-slow", eyebrow: "Rhythm" },
+  Subjects: { icon: "bookshelf", eyebrow: "Syllabus" },
+  Review: { icon: "clipboard-check-outline", eyebrow: "Ready" }
+};
 
 type TopicForm = {
   id: string;
@@ -118,6 +127,7 @@ export default function StudentScreen() {
   const activeStudentId = sessionStudentId;
 
   const currentStep = STEPS[stepIndex];
+  const completedStepCount = getCompletedStepCount(form);
   const topicCount = form.subjects.reduce((total, subject) => total + subject.topics.length, 0);
   const pageCount = form.subjects.reduce(
     (total, subject) => total + subject.topics.reduce((sum, topic) => sum + toNumber(topic.pages), 0),
@@ -632,6 +642,14 @@ export default function StudentScreen() {
           </View>
         ) : null}
 
+        <SetupHero
+          completedStepCount={completedStepCount}
+          estimatedReadingMinutes={estimatedReadingMinutes}
+          form={form}
+          pageCount={pageCount}
+          topicCount={topicCount}
+        />
+
         <WizardProgress currentStep={stepIndex} form={form} onSelectStep={goToStep} />
 
         <View style={styles.panel}>
@@ -831,13 +849,41 @@ export default function StudentScreen() {
 
           {currentStep === "Review" ? (
             <View style={styles.reviewGrid}>
-              <ReviewItem label="Student" value={`${form.studentName} - ${form.classLevel}`} />
-              <ReviewItem label="Exam window" value={`${formatReadableDate(form.examStartDate)} to ${formatReadableDate(form.examEndDate)}`} />
-              <ReviewItem label="Daily study time" value={`${form.availableDailyMinutes} minutes`} />
-              <ReviewItem label="Reading pace" value={`${form.minutesPerPage} minutes per page`} />
-              <ReviewItem label="Subjects" value={`${form.subjects.length}`} />
-              <ReviewItem label="Topics" value={`${topicCount}`} />
-              <ReviewItem label="Total pages" value={`${pageCount}`} />
+              <ReviewItem
+                label="Student"
+                onEdit={() => goToStep(STEPS.indexOf("Profile"))}
+                value={`${form.studentName} - ${form.classLevel}`}
+              />
+              <ReviewItem
+                label="Exam window"
+                onEdit={() => goToStep(STEPS.indexOf("Exam"))}
+                value={`${formatReadableDate(form.examStartDate)} to ${formatReadableDate(form.examEndDate)}`}
+              />
+              <ReviewItem
+                label="Daily study time"
+                onEdit={() => goToStep(STEPS.indexOf("Exam"))}
+                value={`${form.availableDailyMinutes} minutes`}
+              />
+              <ReviewItem
+                label="Reading pace"
+                onEdit={() => goToStep(STEPS.indexOf("Pace"))}
+                value={`${form.minutesPerPage} minutes per page`}
+              />
+              <ReviewItem
+                label="Subjects"
+                onEdit={() => goToStep(STEPS.indexOf("Subjects"))}
+                value={`${form.subjects.length}`}
+              />
+              <ReviewItem
+                label="Topics"
+                onEdit={() => goToStep(STEPS.indexOf("Subjects"))}
+                value={`${topicCount}`}
+              />
+              <ReviewItem
+                label="Total pages"
+                onEdit={() => goToStep(STEPS.indexOf("Subjects"))}
+                value={`${pageCount}`}
+              />
               <ReviewItem label="Estimated reading time" value={formatHours(estimatedReadingMinutes)} />
             </View>
           ) : null}
@@ -1423,14 +1469,72 @@ function ResourcePicker({ selected, onSelect }: ResourcePickerProps) {
 type ReviewItemProps = {
   label: string;
   value: string;
+  onEdit?: () => void;
 };
 
-function ReviewItem({ label, value }: ReviewItemProps) {
+type SetupHeroProps = {
+  completedStepCount: number;
+  estimatedReadingMinutes: number;
+  form: PlanForm;
+  pageCount: number;
+  topicCount: number;
+};
+
+function SetupHero({ completedStepCount, estimatedReadingMinutes, form, pageCount, topicCount }: SetupHeroProps) {
   const styles = useStudentStyles();
+  const progressValue = Math.round((completedStepCount / STEPS.length) * 100);
+  const studentName = form.studentName.trim() || "New study plan";
+
+  return (
+    <View style={styles.setupHero}>
+      <View style={styles.setupHeroHeader}>
+        <View style={styles.setupHeroCopy}>
+          <Text style={styles.kicker}>Study blueprint</Text>
+          <Text style={styles.title}>{studentName}</Text>
+          <Text style={styles.helper}>
+            {completedStepCount}/{STEPS.length} sections ready
+          </Text>
+        </View>
+        <View style={styles.setupScorePill}>
+          <Text style={styles.setupScoreText}>{progressValue}%</Text>
+        </View>
+      </View>
+
+      <ProgressBar value={progressValue} />
+
+      <View style={styles.setupMetricRow}>
+        <View style={styles.setupMetric}>
+          <Text style={styles.fieldLabel}>Topics</Text>
+          <Text style={styles.setupMetricValue}>{topicCount}</Text>
+        </View>
+        <View style={styles.setupMetric}>
+          <Text style={styles.fieldLabel}>Pages</Text>
+          <Text style={styles.setupMetricValue}>{pageCount}</Text>
+        </View>
+        <View style={styles.setupMetric}>
+          <Text style={styles.fieldLabel}>Reading</Text>
+          <Text style={styles.setupMetricValue}>{formatHours(estimatedReadingMinutes)}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function ReviewItem({ label, value, onEdit }: ReviewItemProps) {
+  const styles = useStudentStyles();
+  const { colors } = useTheme();
 
   return (
     <View style={styles.reviewItem}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <View style={styles.reviewItemHeader}>
+        <Text style={styles.fieldLabel}>{label}</Text>
+        {onEdit ? (
+          <Pressable accessibilityRole="button" onPress={onEdit} style={styles.reviewEditButton}>
+            <MaterialCommunityIcons name="pencil-outline" size={14} color={colors.brand} />
+            <Text style={styles.reviewEditText}>Edit</Text>
+          </Pressable>
+        ) : null}
+      </View>
       <Text style={styles.reviewValue}>{value}</Text>
     </View>
   );
@@ -1443,15 +1547,27 @@ type WizardProgressProps = {
 };
 
 function WizardProgress({ currentStep, form, onSelectStep }: WizardProgressProps) {
+  const { colors } = useTheme();
   const styles = useStudentStyles();
+  const completedStepCount = getCompletedStepCount(form);
 
   return (
     <View style={styles.progressPanel}>
+      <View style={styles.progressPanelHeader}>
+        <View>
+          <Text style={styles.kicker}>Setup map</Text>
+          <Text style={styles.sectionTitle}>{completedStepCount}/{STEPS.length} sections complete</Text>
+        </View>
+        <Text style={styles.progressPanelMeta}>{STEPS[currentStep]}</Text>
+      </View>
       {STEPS.map((step, index) => {
+        const detail = STEP_DETAILS[step];
         const isActive = index === currentStep;
         const isComplete = !getStepValidationError(step, form);
         const isDone = isComplete && !isActive;
         const canSelect = isActive || isComplete || hasStepDraft(step, form);
+        const status = isActive ? "Editing" : isComplete ? "Complete" : canSelect ? "Started" : "Locked";
+        const statusIcon = isDone ? "check" : canSelect ? "chevron-right" : "lock-outline";
 
         return (
           <Pressable
@@ -1460,7 +1576,12 @@ function WizardProgress({ currentStep, form, onSelectStep }: WizardProgressProps
             disabled={!canSelect}
             key={step}
             onPress={() => onSelectStep(index)}
-            style={[styles.progressStep, !canSelect ? styles.progressStepDisabled : null]}
+            style={[
+              styles.progressStep,
+              isActive ? styles.progressStepActive : null,
+              isDone ? styles.progressStepDone : null,
+              !canSelect ? styles.progressStepDisabled : null
+            ]}
           >
             <View
               style={[
@@ -1469,19 +1590,36 @@ function WizardProgress({ currentStep, form, onSelectStep }: WizardProgressProps
                 !canSelect ? styles.progressDotLocked : null
               ]}
             >
-              {isDone ? <MaterialCommunityIcons name="check" size={13} color="#FFFFFF" /> : null}
+              <MaterialCommunityIcons
+                name={isDone ? "check" : detail.icon}
+                size={isDone ? 14 : 18}
+                color={isActive || isDone ? "#FFFFFF" : colors.muted}
+              />
             </View>
-            <Text
-              style={[
-                styles.progressText,
-                isActive ? styles.progressTextActive : null,
-                isDone ? styles.progressTextDone : null,
-                !canSelect ? styles.progressTextLocked : null
-              ]}
-              numberOfLines={1}
-            >
-              {step}
-            </Text>
+            <View style={styles.progressCopy}>
+              <Text style={styles.progressEyebrow}>{detail.eyebrow}</Text>
+              <Text
+                style={[
+                  styles.progressText,
+                  isActive ? styles.progressTextActive : null,
+                  isDone ? styles.progressTextDone : null,
+                  !canSelect ? styles.progressTextLocked : null
+                ]}
+                numberOfLines={1}
+              >
+                {step}
+              </Text>
+            </View>
+            <View style={[styles.progressStatusPill, isDone ? styles.progressStatusPillDone : null]}>
+              <Text style={[styles.progressStatusText, isDone ? styles.progressStatusTextDone : null]}>
+                {status}
+              </Text>
+              <MaterialCommunityIcons
+                name={statusIcon}
+                size={14}
+                color={isDone ? colors.success : canSelect ? colors.brand : colors.muted}
+              />
+            </View>
           </Pressable>
         );
       })}
@@ -1518,6 +1656,10 @@ function getFirstValidationError(nextForm: PlanForm): ValidationResult | null {
   }
 
   return null;
+}
+
+function getCompletedStepCount(nextForm: PlanForm) {
+  return STEPS.filter((step) => !getStepValidationError(step, nextForm)).length;
 }
 
 function getStepValidationError(step: StepName, nextForm: PlanForm): string {
@@ -2318,9 +2460,9 @@ function createStyles(colors: AppColors) {
     alignItems: "center",
     backgroundColor: colors.border,
     borderRadius: 999,
-    height: 22,
+    height: 42,
     justifyContent: "center",
-    width: 22
+    width: 42
   },
   progressDotActive: {
     backgroundColor: colors.brand
@@ -2333,23 +2475,57 @@ function createStyles(colors: AppColors) {
     borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
-    flexDirection: "row",
-    gap: spacing.sm,
+    gap: spacing.md,
     padding: spacing.md
+  },
+  progressPanelHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    justifyContent: "space-between"
+  },
+  progressPanelMeta: {
+    color: colors.brand,
+    fontSize: 13,
+    fontWeight: "900"
   },
   progressStep: {
     alignItems: "center",
-    flex: 1,
-    gap: spacing.xs,
-    minWidth: 0
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.md,
+    minHeight: 74,
+    padding: spacing.md
+  },
+  progressStepActive: {
+    backgroundColor: colors.brandSoft,
+    borderColor: colors.brand
+  },
+  progressStepDone: {
+    borderColor: colors.success
   },
   progressStepDisabled: {
     opacity: 0.58
   },
-  progressText: {
+  progressCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0
+  },
+  progressEyebrow: {
     color: colors.muted,
     fontSize: 11,
-    fontWeight: "700"
+    fontWeight: "800",
+    textTransform: "uppercase"
+  },
+  progressText: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: "900"
   },
   progressTextActive: {
     color: colors.brand
@@ -2359,6 +2535,29 @@ function createStyles(colors: AppColors) {
   },
   progressTextLocked: {
     color: colors.muted
+  },
+  progressStatusPill: {
+    alignItems: "center",
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    minHeight: 32,
+    paddingHorizontal: spacing.sm
+  },
+  progressStatusPillDone: {
+    backgroundColor: colors.successSoft,
+    borderColor: colors.success
+  },
+  progressStatusText: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  progressStatusTextDone: {
+    color: colors.success
   },
   removeButton: {
     alignItems: "center",
@@ -2402,6 +2601,20 @@ function createStyles(colors: AppColors) {
   reviewGrid: {
     gap: spacing.sm
   },
+  reviewEditButton: {
+    alignItems: "center",
+    backgroundColor: colors.brandSoft,
+    borderRadius: 8,
+    flexDirection: "row",
+    gap: spacing.xs,
+    minHeight: 30,
+    paddingHorizontal: spacing.sm
+  },
+  reviewEditText: {
+    color: colors.brand,
+    fontSize: 12,
+    fontWeight: "900"
+  },
   reviewItem: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
@@ -2409,6 +2622,12 @@ function createStyles(colors: AppColors) {
     borderWidth: 1,
     gap: spacing.xs,
     padding: spacing.md
+  },
+  reviewItemHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.sm,
+    justifyContent: "space-between"
   },
   reviewValue: {
     color: colors.text,
@@ -2419,6 +2638,61 @@ function createStyles(colors: AppColors) {
     color: colors.success,
     fontSize: 14,
     fontWeight: "800"
+  },
+  setupHero: {
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  setupHeroCopy: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 190
+  },
+  setupHeroHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    justifyContent: "space-between"
+  },
+  setupMetric: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 92,
+    padding: spacing.md
+  },
+  setupMetricRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  setupMetricValue: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  setupScorePill: {
+    alignItems: "center",
+    backgroundColor: colors.secondarySoft,
+    borderColor: colors.secondary,
+    borderRadius: 8,
+    borderWidth: 1,
+    minHeight: 46,
+    justifyContent: "center",
+    paddingHorizontal: spacing.md
+  },
+  setupScoreText: {
+    color: colors.secondaryDark,
+    fontSize: 16,
+    fontWeight: "900"
   },
   secondaryButton: {
     alignItems: "center",
