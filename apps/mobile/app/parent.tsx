@@ -256,6 +256,13 @@ export default function ParentScreen() {
           </View>
         ) : null}
 
+        {isRebalancedPlan(savedPlan) ? (
+          <View style={styles.infoPanel}>
+            <MaterialCommunityIcons name="calendar-sync-outline" size={22} color={colors.brand} />
+            <Text style={styles.infoText}>Plan rebalanced after missed sessions.</Text>
+          </View>
+        ) : null}
+
         {parentFamily?.students.length ? (
           <View style={styles.panel}>
             <View style={styles.panelHeader}>
@@ -470,6 +477,10 @@ export default function ParentScreen() {
 
 function getParamValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function isRebalancedPlan(savedPlan: SavedStudyPlan | null) {
+  return savedPlan?.plan.metadata.recommendation.startsWith("Plan rebalanced after missed sessions.") ?? false;
 }
 
 function getAttentionItems(savedPlan: SavedStudyPlan, progress: StudyPlanProgress | null): AttentionItem[] {

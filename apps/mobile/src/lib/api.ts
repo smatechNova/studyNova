@@ -267,6 +267,18 @@ export async function getStudyPlanProgress(planId: string): Promise<StudyPlanPro
   return response.json() as Promise<StudyPlanProgress>;
 }
 
+export async function rebalanceStudyPlan(planId: string): Promise<SavedStudyPlan> {
+  const response = await fetch(`${API_URL}/api/v1/study-plans/${planId}/reschedule`, {
+    method: "POST"
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Study plan rebalance request failed");
+  }
+
+  return response.json() as Promise<SavedStudyPlan>;
+}
+
 export async function completeStudySession(
   planId: string,
   payload: StudySessionCompletionRequest

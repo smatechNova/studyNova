@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from app.auth import FirebaseAuthUnavailable, InvalidFirebaseToken, verify_firebase_id_token
-from app.domain.study_planner import build_study_plan
+from app.domain.study_planner import build_rebalanced_study_plan, build_study_plan
 from app.schemas import (
     AccountSignInRequest,
     AuthSession,
@@ -140,6 +140,19 @@ def get_study_plan_progress(plan_id: str) -> StudyPlanProgress:
     if progress is None:
         raise HTTPException(status_code=404, detail="No saved study plan found.")
     return progress
+
+
+@router.post("/study-plans/{plan_id}/reschedule", response_model=SavedStudyPlan)
+def reschedule_study_plan(plan_id: str) -> SavedStudyPlan:
+    store = get_study_plan_store()
+    saved_plan = store.by_id(plan_id)
+    if saved_plan is None:
+        raise HTTPException(status_code=404, detail="No saved study plan found.")
+
+    progress = store.progress(plan_id)
+    completed_keys = set(progress.completed_session_keys if progress is not None else [])
+    rebalanced_plan = build_rebalanced_study_plan(saved_plan.plan, completed_keys)
+    return store.save(rebalanced_plan, saved_plan.student_id, saved_plan.setup_payload)
 
 
 @router.post(

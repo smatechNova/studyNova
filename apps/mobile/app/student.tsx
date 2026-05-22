@@ -25,6 +25,7 @@ import {
   getStudyPlanHistory,
   getStudentFamily,
   getStudyPlanProgress,
+  rebalanceStudyPlan,
   saveStudyPlan
 } from "@/lib/api";
 import { getStoredAuthSession } from "@/lib/session";
@@ -351,6 +352,17 @@ export default function StudentScreen() {
       setActiveSubjectId(undefined);
     }
     setSaveMessage(message);
+    setIsPlanVisible(true);
+  }
+
+  function handlePlanRebalanced(rebalancedPlan: SavedStudyPlan) {
+    setPlan(rebalancedPlan.plan);
+    setSavedPlan(rebalancedPlan);
+    setLatestPlan(rebalancedPlan);
+    setPlanHistory((current) =>
+      [rebalancedPlan, ...current.filter((item) => item.id !== rebalancedPlan.id)].slice(0, 6)
+    );
+    setSaveMessage("Plan rebalanced after missed sessions.");
     setIsPlanVisible(true);
   }
 
@@ -684,6 +696,7 @@ export default function StudentScreen() {
           setIsPlanVisible(false);
           setStepIndex(STEPS.length - 1);
         }}
+        onPlanRebalanced={handlePlanRebalanced}
         plan={plan}
         savedPlan={savedPlan}
         saveMessage={saveMessage}
@@ -1142,6 +1155,7 @@ type GeneratedPlanViewProps = {
   saveMessage: string;
   onBack: () => void;
   onEdit: () => void;
+  onPlanRebalanced: (plan: SavedStudyPlan) => void;
 };
 
 type FocusSessionItem = {
@@ -1160,7 +1174,14 @@ type RecoverySummary = {
   targetDailyMinutes: number;
 };
 
-function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: GeneratedPlanViewProps) {
+function GeneratedPlanView({
+  plan,
+  savedPlan,
+  saveMessage,
+  onBack,
+  onEdit,
+  onPlanRebalanced
+}: GeneratedPlanViewProps) {
   const { colors } = useTheme();
   const styles = useStudentStyles();
   const todayPlan = plan.schedule[0];
@@ -1172,6 +1193,7 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
   const [completionConfidence, setCompletionConfidence] = useState(3);
   const [isProgressLoading, setIsProgressLoading] = useState(false);
   const [isSavingCompletion, setIsSavingCompletion] = useState(false);
+  const [isRebalancing, setIsRebalancing] = useState(false);
   const averageDailyMinutes =
     plan.metadata.average_daily_minutes ??
     Math.ceil(plan.metadata.total_study_minutes / Math.max(plan.metadata.days_until_exam, 1));
@@ -1269,6 +1291,28 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
       setProgressMessage("Could not save this session. Check that the API is running.");
     } finally {
       setIsSavingCompletion(false);
+    }
+  }
+
+  async function rebalancePlan() {
+    if (!planId) {
+      setProgressMessage("Save the generated plan before rebalancing missed sessions.");
+      return;
+    }
+
+    setIsRebalancing(true);
+    try {
+      const rebalancedPlan = await rebalanceStudyPlan(planId);
+      setActiveCompletionKey("");
+      setCompletionNote("");
+      setProgress(null);
+      setProgressMessage("Plan rebalanced after missed sessions.");
+      onPlanRebalanced(rebalancedPlan);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "";
+      setProgressMessage(detail || "Could not rebalance this plan. Check that missed sessions exist.");
+    } finally {
+      setIsRebalancing(false);
     }
   }
 
@@ -1370,6 +1414,23 @@ function GeneratedPlanView({ plan, savedPlan, saveMessage, onBack, onEdit }: Gen
             <ReviewItem label="Extra daily" value={formatHours(recoverySummary.dailyExtraMinutes)} />
             <ReviewItem label="New target" value={formatHours(recoverySummary.targetDailyMinutes)} />
           </View>
+          {recoverySummary.overdueSessions ? (
+            <Pressable
+              accessibilityRole="button"
+              disabled={isRebalancing || !planId}
+              onPress={() => void rebalancePlan()}
+              style={[styles.primaryButton, isRebalancing || !planId ? styles.disabledButton : null]}
+            >
+              {isRebalancing ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <MaterialCommunityIcons name="calendar-sync-outline" size={18} color="#FFFFFF" />
+                  <Text style={styles.primaryButtonText}>Rebalance plan</Text>
+                </>
+              )}
+            </Pressable>
+          ) : null}
         </View>
 
         <View style={styles.panel}>

@@ -89,6 +89,77 @@ def build_study_plan(payload: StudyPlanRequest) -> StudyPlanResponse:
     )
 
 
+def build_rebalanced_study_plan(
+    plan: StudyPlanResponse,
+    completed_session_keys: set[str],
+    today: date | None = None,
+) -> StudyPlanResponse:
+    current_date = today or date.today()
+    exam_start_date = plan.metadata.exam_start_date
+    if exam_start_date <= current_date:
+        raise HTTPException(status_code=422, detail="Exam start date has passed. Create a new plan.")
+
+    remaining_sessions: list[tuple[date, int, PlanSession]] = []
+    missed_session_count = 0
+    for daily_plan in plan.schedule:
+        for index, session in enumerate(daily_plan.sessions):
+            session_key = f"{daily_plan.study_date.isoformat()}:{index}"
+            if session_key in completed_session_keys:
+                continue
+
+            remaining_sessions.append((daily_plan.study_date, index, session))
+            if daily_plan.study_date < current_date:
+                missed_session_count += 1
+
+    if not remaining_sessions:
+        raise HTTPException(status_code=422, detail="There are no unfinished sessions to rebalance.")
+    if missed_session_count == 0:
+        raise HTTPException(status_code=422, detail="There are no missed sessions to rebalance yet.")
+
+    remaining_sessions.sort(key=lambda item: (item[0], item[1]))
+    days_until_exam = max(1, (exam_start_date - current_date).days)
+    total_minutes = sum(session.minutes for _date, _index, session in remaining_sessions)
+    required_daily_minutes = ceil(total_minutes / days_until_exam)
+    available_daily_minutes = plan.metadata.available_daily_minutes
+    daily_gap_minutes = max(0, required_daily_minutes - available_daily_minutes)
+    daily_planning_limit = max(available_daily_minutes, required_daily_minutes)
+    status = _status(required_daily_minutes, available_daily_minutes)
+    schedule = _build_rebalanced_schedule(
+        remaining_sessions,
+        current_date,
+        days_until_exam,
+        daily_planning_limit,
+    )
+
+    return StudyPlanResponse(
+        metadata=PlanMetadata(
+            student_name=plan.metadata.student_name,
+            class_level=plan.metadata.class_level,
+            exam_date=exam_start_date,
+            exam_start_date=exam_start_date,
+            exam_end_date=plan.metadata.exam_end_date,
+            days_until_exam=days_until_exam,
+            total_study_minutes=total_minutes,
+            average_daily_minutes=ceil(total_minutes / days_until_exam),
+            required_daily_minutes=required_daily_minutes,
+            available_daily_minutes=available_daily_minutes,
+            daily_gap_minutes=daily_gap_minutes,
+            status=status,
+            recommendation=_rebalanced_recommendation(
+                missed_session_count,
+                days_until_exam,
+                daily_gap_minutes,
+                required_daily_minutes,
+                status,
+            ),
+            resources_used=sorted({session.resource_type for _date, _index, session in remaining_sessions}),
+            study_strength_note=plan.metadata.study_strength_note,
+        ),
+        subject_distribution=_session_subject_distribution(remaining_sessions, total_minutes),
+        schedule=schedule,
+    )
+
+
 def _validate_study_content(payload: StudyPlanRequest) -> None:
     if _contains_blocked_content(payload.study_strength_note):
         raise HTTPException(status_code=422, detail="Study strength note should describe how the student studies.")
@@ -185,6 +256,85 @@ def _subject_distribution(
         )
         for subject, minutes in sorted(subject_minutes.items())
     ]
+
+
+def _session_subject_distribution(
+    sessions: list[tuple[date, int, PlanSession]],
+    total_minutes: int,
+) -> list[SubjectDistribution]:
+    subject_minutes: dict[str, int] = defaultdict(int)
+    for _study_date, _index, session in sessions:
+        subject_minutes[session.subject] += session.minutes
+
+    return [
+        SubjectDistribution(
+            subject=subject,
+            estimated_minutes=minutes,
+            percentage=round((minutes / total_minutes) * 100, 1),
+        )
+        for subject, minutes in sorted(subject_minutes.items())
+    ]
+
+
+def _rebalanced_recommendation(
+    missed_session_count: int,
+    days_until_exam: int,
+    daily_gap_minutes: int,
+    required_daily_minutes: int,
+    status: str,
+) -> str:
+    base = (
+        "Plan rebalanced after missed sessions. "
+        f"{missed_session_count} missed sessions were moved into the remaining "
+        f"{days_until_exam} study days."
+    )
+    if status == "behind":
+        return (
+            f"{base} The recovery pace needs about {required_daily_minutes} minutes daily, "
+            "which is above the student's available time."
+        )
+    if status == "tight":
+        return f"{base} Add about {daily_gap_minutes} minutes daily or keep sessions very focused."
+    return f"{base} The student can recover within the current daily study time."
+
+
+def _build_rebalanced_schedule(
+    remaining_sessions: list[tuple[date, int, PlanSession]],
+    today: date,
+    days_until_exam: int,
+    daily_planning_limit: int,
+) -> list[DailyPlan]:
+    queue = [session.model_copy() for _study_date, _index, session in remaining_sessions]
+    schedule: list[DailyPlan] = []
+
+    for offset in range(days_until_exam):
+        plan_date = today + timedelta(days=offset)
+        minutes_left = daily_planning_limit
+        sessions: list[PlanSession] = []
+
+        while queue:
+            next_session = queue[0]
+            if sessions and next_session.minutes > minutes_left:
+                break
+
+            sessions.append(queue.pop(0))
+            minutes_left -= next_session.minutes
+            if minutes_left <= 0:
+                break
+
+        schedule.append(
+            DailyPlan(
+                study_date=plan_date,
+                total_minutes=sum(session.minutes for session in sessions),
+                sessions=sessions,
+            )
+        )
+
+    while queue:
+        schedule[-1].sessions.append(queue.pop(0))
+        schedule[-1].total_minutes = sum(session.minutes for session in schedule[-1].sessions)
+
+    return schedule
 
 
 def _build_schedule(
