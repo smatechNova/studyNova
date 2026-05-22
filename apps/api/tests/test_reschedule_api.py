@@ -47,3 +47,29 @@ def test_reschedule_endpoint_saves_rebalanced_plan_version(tmp_path, monkeypatch
     )
     assert len(history) == 2
     assert history[0].id == body["id"]
+
+
+def test_reminder_settings_endpoint_round_trips_plan_preferences(tmp_path, monkeypatch) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)
+    saved = store.save(build_study_plan(_request()), student_id="student-1", setup_payload=_request())
+    client = TestClient(app)
+
+    default_response = client.get(f"/api/v1/study-plans/{saved.id}/reminders")
+    update_response = client.put(
+        f"/api/v1/study-plans/{saved.id}/reminders",
+        json={
+            "reminders_enabled": True,
+            "reminder_time": "19:30",
+            "reminder_minutes_before": 30,
+            "missed_session_alerts_enabled": True,
+            "missed_session_followup_time": "21:00",
+            "parent_alerts_enabled": False,
+        },
+    )
+
+    assert default_response.status_code == 200
+    assert default_response.json()["reminder_time"] == "18:00"
+    assert update_response.status_code == 200
+    assert update_response.json()["reminder_time"] == "19:30"
+    assert update_response.json()["parent_alerts_enabled"] is False

@@ -1,8 +1,19 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import * as Notifications from "expo-notifications";
 
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ThemeProvider, useTheme } from "@/themeContext";
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldPlaySound: false,
+    shouldSetBadge: false,
+    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true
+  })
+});
 
 export default function RootLayout() {
   return (

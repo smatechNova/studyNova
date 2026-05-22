@@ -19,6 +19,8 @@ from app.schemas import (
     SavedStudyPlan,
     StudentAccount,
     StudentAccountCreate,
+    StudyReminderSettings,
+    StudyReminderSettingsUpdate,
     StudyPlanProgress,
     StudyPlanRequest,
     StudyPlanResponse,
@@ -140,6 +142,25 @@ def get_study_plan_progress(plan_id: str) -> StudyPlanProgress:
     if progress is None:
         raise HTTPException(status_code=404, detail="No saved study plan found.")
     return progress
+
+
+@router.get("/study-plans/{plan_id}/reminders", response_model=StudyReminderSettings)
+def get_study_reminder_settings(plan_id: str) -> StudyReminderSettings:
+    settings = get_study_plan_store().reminder_settings(plan_id)
+    if settings is None:
+        raise HTTPException(status_code=404, detail="No saved study plan found.")
+    return settings
+
+
+@router.put("/study-plans/{plan_id}/reminders", response_model=StudyReminderSettings)
+def update_study_reminder_settings(
+    plan_id: str,
+    payload: StudyReminderSettingsUpdate,
+) -> StudyReminderSettings:
+    settings = get_study_plan_store().upsert_reminder_settings(plan_id, payload)
+    if settings is None:
+        raise HTTPException(status_code=404, detail="No saved study plan found.")
+    return settings
 
 
 @router.post("/study-plans/{plan_id}/reschedule", response_model=SavedStudyPlan)

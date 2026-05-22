@@ -263,6 +263,16 @@ export default function ParentScreen() {
           </View>
         ) : null}
 
+        {progress?.missed_sessions_count ? (
+          <View style={[styles.infoPanel, styles.warningPanel]}>
+            <MaterialCommunityIcons name="bell-alert-outline" size={22} color={colors.warning} />
+            <Text style={styles.infoText}>
+              {selectedStudent?.name ?? "This student"} has {progress.missed_sessions_count} missed study{" "}
+              {progress.missed_sessions_count === 1 ? "session" : "sessions"} to recover.
+            </Text>
+          </View>
+        ) : null}
+
         {parentFamily?.students.length ? (
           <View style={styles.panel}>
             <View style={styles.panelHeader}>
@@ -484,6 +494,21 @@ function isRebalancedPlan(savedPlan: SavedStudyPlan | null) {
 }
 
 function getAttentionItems(savedPlan: SavedStudyPlan, progress: StudyPlanProgress | null): AttentionItem[] {
+  if (progress?.missed_sessions.length) {
+    return progress.missed_sessions.map((session) => ({
+      session: {
+        kind: session.kind,
+        subject: session.subject,
+        topic: session.topic,
+        resource_type: session.resource_type,
+        minutes: session.minutes,
+        break_after_minutes: 0
+      },
+      studyDate: session.study_date,
+      status: "overdue"
+    }));
+  }
+
   const today = toDateValue(new Date());
   const completedKeys = new Set(progress?.completed_session_keys ?? []);
   const items: AttentionItem[] = [];
@@ -520,23 +545,25 @@ function getRecoverySummary(savedPlan: SavedStudyPlan, progress: StudyPlanProgre
   const averageDailyMinutes =
     savedPlan.plan.metadata.average_daily_minutes ??
     Math.ceil(savedPlan.plan.metadata.total_study_minutes / Math.max(savedPlan.plan.metadata.days_until_exam, 1));
-  let overdueMinutes = 0;
-  let overdueSessions = 0;
+  let overdueMinutes = progress?.missed_minutes ?? 0;
+  let overdueSessions = progress?.missed_sessions_count ?? 0;
 
-  savedPlan.plan.schedule.forEach((day) => {
-    if (day.study_date >= today) {
-      return;
-    }
-
-    day.sessions.forEach((session, index) => {
-      if (completedKeys.has(`${day.study_date}:${index}`)) {
+  if (!progress) {
+    savedPlan.plan.schedule.forEach((day) => {
+      if (day.study_date >= today) {
         return;
       }
 
-      overdueMinutes += session.minutes;
-      overdueSessions += 1;
+      day.sessions.forEach((session, index) => {
+        if (completedKeys.has(`${day.study_date}:${index}`)) {
+          return;
+        }
+
+        overdueMinutes += session.minutes;
+        overdueSessions += 1;
+      });
     });
-  });
+  }
 
   const recoveryDays = Math.max(1, savedPlan.plan.schedule.filter((day) => day.study_date >= today).length);
   const dailyExtraMinutes = overdueMinutes ? Math.ceil(overdueMinutes / recoveryDays) : 0;
@@ -864,6 +891,10 @@ function createStyles(colors: AppColors) {
     color: colors.text,
     fontSize: 16,
     fontWeight: "700"
+  },
+  warningPanel: {
+    backgroundColor: colors.warningSoft,
+    borderColor: colors.warningBorder
   }
 });
 }

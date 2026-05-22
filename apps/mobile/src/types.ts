@@ -172,13 +172,26 @@ export type StudySessionCompletion = StudySessionCompletionRequest & {
   completed_at: string;
 };
 
+export type MissedStudySession = {
+  session_key: string;
+  study_date: string;
+  kind: PlanSession["kind"];
+  subject: string;
+  topic: string;
+  resource_type: string;
+  minutes: number;
+  days_overdue: number;
+};
+
 export type DailyProgress = {
   study_date: string;
   planned_minutes: number;
   completed_minutes: number;
   planned_sessions: number;
   completed_sessions: number;
+  missed_sessions: number;
   completion_rate: number;
+  status: "complete" | "missed" | "today" | "upcoming" | "rest";
 };
 
 export type StudyPlanProgress = {
@@ -187,8 +200,25 @@ export type StudyPlanProgress = {
   completed_minutes: number;
   planned_sessions: number;
   completed_sessions: number;
+  missed_sessions_count: number;
+  missed_minutes: number;
   completion_rate: number;
   completed_session_keys: string[];
   daily: DailyProgress[];
   completions: StudySessionCompletion[];
+  missed_sessions: MissedStudySession[];
+};
+
+export type StudyReminderSettingsUpdate = {
+  reminders_enabled: boolean;
+  reminder_time: string;
+  reminder_minutes_before: number;
+  missed_session_alerts_enabled: boolean;
+  missed_session_followup_time: string;
+  parent_alerts_enabled: boolean;
+};
+
+export type StudyReminderSettings = StudyReminderSettingsUpdate & {
+  plan_id: string;
+  updated_at: string;
 };

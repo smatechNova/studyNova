@@ -205,13 +205,26 @@ class StudySessionCompletion(BaseModel):
     completed_at: datetime
 
 
+class MissedStudySession(BaseModel):
+    session_key: str
+    study_date: date
+    kind: Literal["study", "revision", "practice"]
+    subject: str
+    topic: str
+    resource_type: str = "Textbook"
+    minutes: int
+    days_overdue: int
+
+
 class DailyProgress(BaseModel):
     study_date: date
     planned_minutes: int
     completed_minutes: int
     planned_sessions: int
     completed_sessions: int
+    missed_sessions: int = 0
     completion_rate: float
+    status: Literal["complete", "missed", "today", "upcoming", "rest"] = "upcoming"
 
 
 class StudyPlanProgress(BaseModel):
@@ -220,10 +233,27 @@ class StudyPlanProgress(BaseModel):
     completed_minutes: int
     planned_sessions: int
     completed_sessions: int
+    missed_sessions_count: int = 0
+    missed_minutes: int = 0
     completion_rate: float
     completed_session_keys: list[str] = Field(default_factory=list)
     daily: list[DailyProgress] = Field(default_factory=list)
     completions: list[StudySessionCompletion] = Field(default_factory=list)
+    missed_sessions: list[MissedStudySession] = Field(default_factory=list)
+
+
+class StudyReminderSettingsUpdate(BaseModel):
+    reminders_enabled: bool = True
+    reminder_time: str = Field(default="18:00", pattern=r"^\d{2}:\d{2}$")
+    reminder_minutes_before: int = Field(default=15, ge=0, le=180)
+    missed_session_alerts_enabled: bool = True
+    missed_session_followup_time: str = Field(default="20:00", pattern=r"^\d{2}:\d{2}$")
+    parent_alerts_enabled: bool = True
+
+
+class StudyReminderSettings(StudyReminderSettingsUpdate):
+    plan_id: str
+    updated_at: datetime
 
 
 class DeleteResponse(BaseModel):

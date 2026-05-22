@@ -22,16 +22,20 @@ import {
   completeStudySession,
   generateStudyPlan,
   getLatestStudyPlan,
+  getStudyReminderSettings,
   getStudyPlanHistory,
   getStudentFamily,
   getStudyPlanProgress,
   rebalanceStudyPlan,
-  saveStudyPlan
+  saveStudyPlan,
+  updateStudyReminderSettings
 } from "@/lib/api";
+import { scheduleStudyReminders } from "@/lib/reminders";
 import { getStoredAuthSession } from "@/lib/session";
 import type {
   PlanSession,
   SavedStudyPlan,
+  StudyReminderSettings,
   StudyPlanProgress,
   StudyPlanRequest,
   StudyPlanResponse,
@@ -43,6 +47,12 @@ import { useTheme } from "@/themeContext";
 const RESOURCE_OPTIONS = ["Textbook", "Class notes", "Notebook", "Online notes", "Past questions"];
 const STEPS = ["Profile", "Exam", "Pace", "Subjects", "Review"] as const;
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const REMINDER_TIME_OPTIONS = [
+  { label: "Morning", value: "07:00" },
+  { label: "After school", value: "16:30" },
+  { label: "Evening", value: "18:00" },
+  { label: "Night", value: "20:00" }
+];
 const PLAN_FORM_DRAFT_KEY_PREFIX = "studynova.student-plan-form.v1";
 const BLOCKED_STUDY_CONTENT_PHRASES = [
   "could not generate the plan",
@@ -1187,11 +1197,14 @@ function GeneratedPlanView({
   const todayPlan = plan.schedule[0];
   const planId = savedPlan?.id;
   const [progress, setProgress] = useState<StudyPlanProgress | null>(null);
+  const [reminderSettings, setReminderSettings] = useState<StudyReminderSettings | null>(null);
   const [progressMessage, setProgressMessage] = useState("");
+  const [reminderMessage, setReminderMessage] = useState("");
   const [activeCompletionKey, setActiveCompletionKey] = useState("");
   const [completionNote, setCompletionNote] = useState("");
   const [completionConfidence, setCompletionConfidence] = useState(3);
   const [isProgressLoading, setIsProgressLoading] = useState(false);
+  const [isReminderSaving, setIsReminderSaving] = useState(false);
   const [isSavingCompletion, setIsSavingCompletion] = useState(false);
   const [isRebalancing, setIsRebalancing] = useState(false);
   const averageDailyMinutes =
@@ -1212,8 +1225,8 @@ function GeneratedPlanView({
   );
   const overdueFocusCount = focusSessions.filter((session) => session.status === "overdue").length;
   const recoverySummary = useMemo(
-    () => getRecoverySummary(plan, completedSessionKeys, averageDailyMinutes),
-    [averageDailyMinutes, completedSessionKeys, plan]
+    () => getRecoverySummary(plan, completedSessionKeys, averageDailyMinutes, progress),
+    [averageDailyMinutes, completedSessionKeys, plan, progress]
   );
   const todayProgress = progress?.daily.find((day) => day.study_date === todayPlan?.study_date);
   const completion = todayProgress?.completion_rate ?? 0;
@@ -1223,10 +1236,12 @@ function GeneratedPlanView({
   useEffect(() => {
     if (!planId) {
       setProgress(null);
+      setReminderSettings(null);
       return;
     }
 
     void refreshProgress(planId);
+    void refreshReminderSettings(planId);
   }, [planId]);
 
   async function refreshProgress(nextPlanId = planId) {
@@ -1244,6 +1259,66 @@ function GeneratedPlanView({
     } finally {
       setIsProgressLoading(false);
     }
+  }
+
+  async function refreshReminderSettings(nextPlanId = planId) {
+    if (!nextPlanId) {
+      return;
+    }
+
+    try {
+      const settings = await getStudyReminderSettings(nextPlanId);
+      setReminderSettings(settings);
+      setReminderMessage("");
+    } catch {
+      setReminderMessage("Reminder settings are unavailable until the API is running.");
+    }
+  }
+
+  async function saveReminderSettings(nextSettings: StudyReminderSettings) {
+    if (!planId || !savedPlan) {
+      setReminderMessage("Save the generated plan before setting reminders.");
+      return;
+    }
+
+    setIsReminderSaving(true);
+    try {
+      const updatedSettings = await updateStudyReminderSettings(planId, {
+        reminders_enabled: nextSettings.reminders_enabled,
+        reminder_time: nextSettings.reminder_time,
+        reminder_minutes_before: nextSettings.reminder_minutes_before,
+        missed_session_alerts_enabled: nextSettings.missed_session_alerts_enabled,
+        missed_session_followup_time: nextSettings.missed_session_followup_time,
+        parent_alerts_enabled: nextSettings.parent_alerts_enabled
+      });
+      setReminderSettings(updatedSettings);
+      const result = await scheduleStudyReminders(savedPlan, updatedSettings);
+      setReminderMessage(result.message);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "";
+      setReminderMessage(detail || "Could not save reminder settings.");
+    } finally {
+      setIsReminderSaving(false);
+    }
+  }
+
+  function updateReminderTime(reminderTime: string) {
+    if (!reminderSettings) {
+      return;
+    }
+
+    void saveReminderSettings({ ...reminderSettings, reminders_enabled: true, reminder_time: reminderTime });
+  }
+
+  function toggleMissedSessionAlerts() {
+    if (!reminderSettings) {
+      return;
+    }
+
+    void saveReminderSettings({
+      ...reminderSettings,
+      missed_session_alerts_enabled: !reminderSettings.missed_session_alerts_enabled
+    });
   }
 
   function openCompletion(sessionKeyValue: string, savedCompletion?: StudySessionCompletion) {
@@ -1398,6 +1473,67 @@ function GeneratedPlanView({
           </Text>
           {isProgressLoading ? <Text style={styles.sessionMeta}>Loading saved progress...</Text> : null}
           {progressMessage ? <Text style={styles.saveStatus}>{progressMessage}</Text> : null}
+        </View>
+
+        <View style={styles.panel}>
+          <View style={styles.panelHeader}>
+            <View style={styles.headerCopy}>
+              <Text style={styles.sectionTitle}>Study reminders</Text>
+              <Text style={styles.helper}>Set a gentle daily nudge on the phone running this app.</Text>
+            </View>
+            {isReminderSaving ? <ActivityIndicator color={colors.brand} /> : null}
+          </View>
+          {reminderSettings ? (
+            <>
+              <View style={styles.reminderGrid}>
+                {REMINDER_TIME_OPTIONS.map((option) => {
+                  const isSelected = reminderSettings.reminder_time === option.value;
+                  return (
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={isReminderSaving}
+                      key={option.value}
+                      onPress={() => updateReminderTime(option.value)}
+                      style={[styles.reminderChip, isSelected ? styles.reminderChipActive : null]}
+                    >
+                      <Text style={[styles.reminderChipText, isSelected ? styles.reminderChipTextActive : null]}>
+                        {option.label}
+                      </Text>
+                      <Text style={[styles.sessionMeta, isSelected ? styles.reminderChipTextActive : null]}>
+                        {formatReminderTime(option.value)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                disabled={isReminderSaving}
+                onPress={toggleMissedSessionAlerts}
+                style={styles.reminderToggle}
+              >
+                <MaterialCommunityIcons
+                  name={reminderSettings.missed_session_alerts_enabled ? "bell-check-outline" : "bell-off-outline"}
+                  size={20}
+                  color={reminderSettings.missed_session_alerts_enabled ? colors.success : colors.muted}
+                />
+                <View style={styles.sessionCopy}>
+                  <Text style={styles.sessionTitle}>Missed-session nudge</Text>
+                  <Text style={styles.helper}>
+                    {reminderSettings.missed_session_alerts_enabled
+                      ? `On at ${formatReminderTime(reminderSettings.missed_session_followup_time)}`
+                      : "Off for this saved plan"}
+                  </Text>
+                </View>
+              </Pressable>
+              {!reminderMessage ? (
+                <Text style={styles.helper}>Tap a time to activate reminders on this phone.</Text>
+              ) : null}
+            </>
+          ) : (
+            <Text style={styles.helper}>Save the plan and keep the API running to activate study reminders.</Text>
+          )}
+          {reminderMessage ? <Text style={styles.saveStatus}>{reminderMessage}</Text> : null}
         </View>
 
         <View style={styles.panel}>
@@ -2672,6 +2808,17 @@ function formatReadableDate(value: string) {
   return date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
 
+function formatReminderTime(value: string) {
+  const [hourValue, minuteValue] = value.split(":").map(Number);
+  if (!Number.isFinite(hourValue) || !Number.isFinite(minuteValue)) {
+    return value;
+  }
+
+  const date = new Date();
+  date.setHours(hourValue, minuteValue, 0, 0);
+  return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
 function formatHours(minutes: number) {
   const hours = minutes / 60;
   const formatted = Number.isInteger(hours) ? `${hours}` : hours.toFixed(1);
@@ -2736,26 +2883,29 @@ function getFocusSessions(plan: StudyPlanResponse, completedSessionKeys: Set<str
 function getRecoverySummary(
   plan: StudyPlanResponse,
   completedSessionKeys: Set<string>,
-  averageDailyMinutes: number
+  averageDailyMinutes: number,
+  progress: StudyPlanProgress | null
 ): RecoverySummary {
   const today = toDateValue(new Date());
-  let overdueMinutes = 0;
-  let overdueSessions = 0;
+  let overdueMinutes = progress?.missed_minutes ?? 0;
+  let overdueSessions = progress?.missed_sessions_count ?? 0;
 
-  plan.schedule.forEach((day) => {
-    if (day.study_date >= today) {
-      return;
-    }
-
-    day.sessions.forEach((session, index) => {
-      if (completedSessionKeys.has(sessionKey(day.study_date, index))) {
+  if (!progress) {
+    plan.schedule.forEach((day) => {
+      if (day.study_date >= today) {
         return;
       }
 
-      overdueMinutes += session.minutes;
-      overdueSessions += 1;
+      day.sessions.forEach((session, index) => {
+        if (completedSessionKeys.has(sessionKey(day.study_date, index))) {
+          return;
+        }
+
+        overdueMinutes += session.minutes;
+        overdueSessions += 1;
+      });
     });
-  });
+  }
 
   const recoveryDays = Math.max(1, plan.schedule.filter((day) => day.study_date >= today).length);
   const dailyExtraMinutes = overdueMinutes ? Math.ceil(overdueMinutes / recoveryDays) : 0;
@@ -3010,6 +3160,10 @@ function createStyles(colors: AppColors) {
     gap: spacing.md,
     justifyContent: "space-between"
   },
+  headerCopy: {
+    flex: 1,
+    gap: spacing.xs
+  },
   historyActionGroup: {
     alignItems: "flex-end",
     gap: spacing.xs
@@ -3253,6 +3407,43 @@ function createStyles(colors: AppColors) {
     height: 44,
     justifyContent: "center",
     width: 44
+  },
+  reminderChip: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 2,
+    minHeight: 58,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  reminderChipActive: {
+    backgroundColor: colors.brandSoft,
+    borderColor: colors.brand
+  },
+  reminderChipText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  reminderChipTextActive: {
+    color: colors.brand
+  },
+  reminderGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  reminderToggle: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.md,
+    padding: spacing.md
   },
   resourceBlock: {
     gap: spacing.xs

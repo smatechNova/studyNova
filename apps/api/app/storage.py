@@ -2,7 +2,7 @@ import hashlib
 import hmac
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from uuid import uuid4
@@ -24,11 +24,14 @@ from app.schemas import (
     SavedStudyPlan,
     StudentAccount,
     StudentAccountCreate,
+    StudyReminderSettings,
+    StudyReminderSettingsUpdate,
     StudyPlanRequest,
     StudyPlanProgress,
     StudyPlanResponse,
     StudySessionCompletion,
     StudySessionCompletionRequest,
+    MissedStudySession,
 )
 
 
@@ -683,6 +686,71 @@ class StudyPlanStore:
 
         return _saved_plan_from_row(row)
 
+    def reminder_settings(self, plan_id: str) -> StudyReminderSettings | None:
+        if self.by_id(plan_id) is None:
+            return None
+
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                select *
+                from study_reminder_settings
+                where plan_id = ?
+                """,
+                (plan_id,),
+            ).fetchone()
+
+        if row is None:
+            return _default_reminder_settings(plan_id)
+
+        return _reminder_settings_from_row(row)
+
+    def upsert_reminder_settings(
+        self,
+        plan_id: str,
+        payload: StudyReminderSettingsUpdate,
+    ) -> StudyReminderSettings | None:
+        if self.by_id(plan_id) is None:
+            return None
+
+        updated_at = datetime.now(timezone.utc)
+        with self._connect() as connection:
+            connection.execute(
+                """
+                insert into study_reminder_settings (
+                    plan_id,
+                    reminders_enabled,
+                    reminder_time,
+                    reminder_minutes_before,
+                    missed_session_alerts_enabled,
+                    missed_session_followup_time,
+                    parent_alerts_enabled,
+                    updated_at
+                )
+                values (?, ?, ?, ?, ?, ?, ?, ?)
+                on conflict(plan_id) do update set
+                    reminders_enabled = excluded.reminders_enabled,
+                    reminder_time = excluded.reminder_time,
+                    reminder_minutes_before = excluded.reminder_minutes_before,
+                    missed_session_alerts_enabled = excluded.missed_session_alerts_enabled,
+                    missed_session_followup_time = excluded.missed_session_followup_time,
+                    parent_alerts_enabled = excluded.parent_alerts_enabled,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    plan_id,
+                    int(payload.reminders_enabled),
+                    payload.reminder_time,
+                    payload.reminder_minutes_before,
+                    int(payload.missed_session_alerts_enabled),
+                    payload.missed_session_followup_time,
+                    int(payload.parent_alerts_enabled),
+                    updated_at.isoformat(),
+                ),
+            )
+
+        return StudyReminderSettings(plan_id=plan_id, updated_at=updated_at, **payload.model_dump())
+
     def complete_session(
         self,
         plan_id: str,
@@ -887,16 +955,46 @@ class StudyPlanStore:
 
         completions = self._completion_rows(plan_id)
         completed_session_keys = [completion.session_key for completion in completions]
+        completed_session_key_set = set(completed_session_keys)
         completion_by_date: dict[str, list[StudySessionCompletion]] = {}
         for completion in completions:
             completion_by_date.setdefault(completion.study_date.isoformat(), []).append(completion)
 
+        today = date.today()
         daily: list[DailyProgress] = []
+        missed_sessions: list[MissedStudySession] = []
         for day in saved_plan.plan.schedule:
             completed_for_day = completion_by_date.get(day.study_date.isoformat(), [])
             completed_minutes = sum(completion.minutes_completed for completion in completed_for_day)
             planned_sessions = len(day.sessions)
+            missed_for_day = 0
+            for index, session in enumerate(day.sessions):
+                session_key = f"{day.study_date.isoformat()}:{index}"
+                if day.study_date >= today or session_key in completed_session_key_set:
+                    continue
+
+                missed_for_day += 1
+                missed_sessions.append(
+                    MissedStudySession(
+                        session_key=session_key,
+                        study_date=day.study_date,
+                        kind=session.kind,
+                        subject=session.subject,
+                        topic=session.topic,
+                        resource_type=session.resource_type,
+                        minutes=session.minutes,
+                        days_overdue=(today - day.study_date).days,
+                    )
+                )
+
             completion_rate = round((completed_minutes / day.total_minutes) * 100, 1) if day.total_minutes else 0
+            daily_status = _daily_progress_status(
+                study_date=day.study_date,
+                today=today,
+                planned_sessions=planned_sessions,
+                completed_sessions=len(completed_for_day),
+                missed_sessions=missed_for_day,
+            )
             daily.append(
                 DailyProgress(
                     study_date=day.study_date,
@@ -904,13 +1002,16 @@ class StudyPlanStore:
                     completed_minutes=completed_minutes,
                     planned_sessions=planned_sessions,
                     completed_sessions=len(completed_for_day),
+                    missed_sessions=missed_for_day,
                     completion_rate=min(100, completion_rate),
+                    status=daily_status,
                 )
             )
 
         planned_minutes = sum(day.total_minutes for day in saved_plan.plan.schedule)
         planned_sessions = sum(len(day.sessions) for day in saved_plan.plan.schedule)
         completed_minutes = sum(completion.minutes_completed for completion in completions)
+        missed_minutes = sum(session.minutes for session in missed_sessions)
         completion_rate = round((completed_minutes / planned_minutes) * 100, 1) if planned_minutes else 0
 
         return StudyPlanProgress(
@@ -919,10 +1020,13 @@ class StudyPlanStore:
             completed_minutes=completed_minutes,
             planned_sessions=planned_sessions,
             completed_sessions=len(completions),
+            missed_sessions_count=len(missed_sessions),
+            missed_minutes=missed_minutes,
             completion_rate=min(100, completion_rate),
             completed_session_keys=completed_session_keys,
             daily=daily,
             completions=completions,
+            missed_sessions=missed_sessions,
         )
 
     def _completion_rows(self, plan_id: str) -> list[StudySessionCompletion]:
@@ -1131,6 +1235,20 @@ class StudyPlanStore:
             )
             connection.execute(
                 """
+                create table if not exists study_reminder_settings (
+                    plan_id text primary key,
+                    reminders_enabled integer not null,
+                    reminder_time text not null,
+                    reminder_minutes_before integer not null,
+                    missed_session_alerts_enabled integer not null,
+                    missed_session_followup_time text not null,
+                    parent_alerts_enabled integer not null,
+                    updated_at text not null
+                )
+                """
+            )
+            connection.execute(
+                """
                 create table if not exists study_check_ins (
                     id text primary key,
                     student_id text not null,
@@ -1154,6 +1272,51 @@ class StudyPlanStore:
 @lru_cache
 def get_study_plan_store() -> StudyPlanStore:
     return StudyPlanStore(get_settings().local_data_path)
+
+
+def _daily_progress_status(
+    *,
+    study_date: date,
+    today: date,
+    planned_sessions: int,
+    completed_sessions: int,
+    missed_sessions: int,
+) -> str:
+    if planned_sessions == 0:
+        return "rest"
+    if completed_sessions >= planned_sessions:
+        return "complete"
+    if missed_sessions:
+        return "missed"
+    if study_date == today:
+        return "today"
+    return "upcoming"
+
+
+def _default_reminder_settings(plan_id: str) -> StudyReminderSettings:
+    return StudyReminderSettings(
+        plan_id=plan_id,
+        reminders_enabled=True,
+        reminder_time="18:00",
+        reminder_minutes_before=15,
+        missed_session_alerts_enabled=True,
+        missed_session_followup_time="20:00",
+        parent_alerts_enabled=True,
+        updated_at=datetime.now(timezone.utc),
+    )
+
+
+def _reminder_settings_from_row(row: sqlite3.Row) -> StudyReminderSettings:
+    return StudyReminderSettings(
+        plan_id=row["plan_id"],
+        reminders_enabled=bool(row["reminders_enabled"]),
+        reminder_time=row["reminder_time"],
+        reminder_minutes_before=row["reminder_minutes_before"],
+        missed_session_alerts_enabled=bool(row["missed_session_alerts_enabled"]),
+        missed_session_followup_time=row["missed_session_followup_time"],
+        parent_alerts_enabled=bool(row["parent_alerts_enabled"]),
+        updated_at=row["updated_at"],
+    )
 
 
 def _saved_plan_from_row(row: sqlite3.Row) -> SavedStudyPlan:

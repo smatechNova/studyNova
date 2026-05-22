@@ -10,6 +10,8 @@ import type {
   SavedStudyPlan,
   StudentAccount,
   StudentAccountInput,
+  StudyReminderSettings,
+  StudyReminderSettingsUpdate,
   StudyPlanProgress,
   StudyPlanRequest,
   StudyPlanResponse,
@@ -265,6 +267,35 @@ export async function getStudyPlanProgress(planId: string): Promise<StudyPlanPro
   }
 
   return response.json() as Promise<StudyPlanProgress>;
+}
+
+export async function getStudyReminderSettings(planId: string): Promise<StudyReminderSettings> {
+  const response = await fetch(`${API_URL}/api/v1/study-plans/${planId}/reminders`);
+
+  if (!response.ok) {
+    throw await createApiError(response, "Study reminder settings request failed");
+  }
+
+  return response.json() as Promise<StudyReminderSettings>;
+}
+
+export async function updateStudyReminderSettings(
+  planId: string,
+  payload: StudyReminderSettingsUpdate
+): Promise<StudyReminderSettings> {
+  const response = await fetch(`${API_URL}/api/v1/study-plans/${planId}/reminders`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Study reminder settings update failed");
+  }
+
+  return response.json() as Promise<StudyReminderSettings>;
 }
 
 export async function rebalanceStudyPlan(planId: string): Promise<SavedStudyPlan> {

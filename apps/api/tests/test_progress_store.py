@@ -6,6 +6,7 @@ from app.schemas import (
     ParentAccountCreate,
     ParentStudentLinkCreate,
     StudentAccountCreate,
+    StudyReminderSettingsUpdate,
     StudyPlanRequest,
     StudySessionCompletionRequest,
     SubjectInput,
@@ -73,6 +74,65 @@ def test_study_plan_store_tracks_session_progress(tmp_path) -> None:
 
     assert reset_progress is not None
     assert reset_progress.completed_sessions == 0
+
+
+def test_study_plan_progress_reports_missed_sessions(tmp_path) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    plan = build_study_plan(_sample_request())
+    plan.schedule[0].study_date = date.today() - timedelta(days=1)
+    saved_plan = store.save(plan)
+    first_day = saved_plan.plan.schedule[0]
+    first_session = first_day.sessions[0]
+
+    store.complete_session(
+        saved_plan.id,
+        StudySessionCompletionRequest(
+            session_key=f"{first_day.study_date}:0",
+            study_date=first_day.study_date,
+            kind=first_session.kind,
+            subject=first_session.subject,
+            topic=first_session.topic,
+            resource_type=first_session.resource_type,
+            minutes_planned=first_session.minutes,
+            minutes_completed=first_session.minutes,
+            recall_note="I can explain the core idea from the first session.",
+            confidence=4,
+        ),
+    )
+    progress = store.progress(saved_plan.id)
+
+    assert progress is not None
+    assert progress.missed_sessions_count == len(first_day.sessions) - 1
+    assert progress.missed_minutes == sum(session.minutes for session in first_day.sessions[1:])
+    assert progress.daily[0].status == "missed"
+    assert progress.daily[0].missed_sessions == len(first_day.sessions) - 1
+    assert all(session.days_overdue == 1 for session in progress.missed_sessions)
+
+
+def test_study_plan_store_persists_reminder_settings(tmp_path) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    saved_plan = store.save(build_study_plan(_sample_request()))
+
+    default_settings = store.reminder_settings(saved_plan.id)
+    updated_settings = store.upsert_reminder_settings(
+        saved_plan.id,
+        StudyReminderSettingsUpdate(
+            reminders_enabled=True,
+            reminder_time="19:30",
+            reminder_minutes_before=30,
+            missed_session_alerts_enabled=True,
+            missed_session_followup_time="21:00",
+            parent_alerts_enabled=False,
+        ),
+    )
+
+    assert default_settings is not None
+    assert default_settings.reminder_time == "18:00"
+    assert updated_settings is not None
+    assert updated_settings.reminder_time == "19:30"
+    assert updated_settings.reminder_minutes_before == 30
+    assert updated_settings.parent_alerts_enabled is False
+    assert store.reminder_settings(saved_plan.id) == updated_settings
 
 
 def test_study_plan_store_persists_check_ins_for_parent_summary(tmp_path) -> None:
