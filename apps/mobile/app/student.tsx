@@ -26,6 +26,7 @@ import {
   getStudyPlanHistory,
   getStudentFamily,
   getStudyPlanProgress,
+  getWeeklyStudyDigest,
   rebalanceStudyPlan,
   saveStudyPlan,
   updateStudyReminderSettings
@@ -39,7 +40,8 @@ import type {
   StudyPlanProgress,
   StudyPlanRequest,
   StudyPlanResponse,
-  StudySessionCompletion
+  StudySessionCompletion,
+  WeeklyStudyDigest
 } from "@/types";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
@@ -1197,6 +1199,7 @@ function GeneratedPlanView({
   const todayPlan = plan.schedule[0];
   const planId = savedPlan?.id;
   const [progress, setProgress] = useState<StudyPlanProgress | null>(null);
+  const [weeklyDigest, setWeeklyDigest] = useState<WeeklyStudyDigest | null>(null);
   const [reminderSettings, setReminderSettings] = useState<StudyReminderSettings | null>(null);
   const [progressMessage, setProgressMessage] = useState("");
   const [reminderMessage, setReminderMessage] = useState("");
@@ -1236,6 +1239,7 @@ function GeneratedPlanView({
   useEffect(() => {
     if (!planId) {
       setProgress(null);
+      setWeeklyDigest(null);
       setReminderSettings(null);
       return;
     }
@@ -1251,8 +1255,12 @@ function GeneratedPlanView({
 
     setIsProgressLoading(true);
     try {
-      const nextProgress = await getStudyPlanProgress(nextPlanId);
+      const [nextProgress, nextDigest] = await Promise.all([
+        getStudyPlanProgress(nextPlanId),
+        getWeeklyStudyDigest(nextPlanId)
+      ]);
       setProgress(nextProgress);
+      setWeeklyDigest(nextDigest);
       setProgressMessage("");
     } catch {
       setProgressMessage("Progress tracking is unavailable until the API is running.");
@@ -1474,6 +1482,30 @@ function GeneratedPlanView({
           {isProgressLoading ? <Text style={styles.sessionMeta}>Loading saved progress...</Text> : null}
           {progressMessage ? <Text style={styles.saveStatus}>{progressMessage}</Text> : null}
         </View>
+
+        {weeklyDigest ? (
+          <View style={styles.panel}>
+            <View style={styles.panelHeader}>
+              <View style={styles.headerCopy}>
+                <Text style={styles.kicker}>Weekly review</Text>
+                <Text style={styles.sectionTitle}>{weeklyDigest.headline}</Text>
+              </View>
+              <Text style={styles.metric}>{Math.round(weeklyDigest.completion_rate)}%</Text>
+            </View>
+            <ProgressBar value={weeklyDigest.completion_rate} />
+            <Text style={styles.helper}>{weeklyDigest.insight}</Text>
+            <View style={styles.reviewGrid}>
+              <ReviewItem label="Completed" value={`${weeklyDigest.completed_sessions}/${weeklyDigest.planned_sessions}`} />
+              <ReviewItem label="Active days" value={`${weeklyDigest.active_days}`} />
+              <ReviewItem label="Missed" value={`${weeklyDigest.missed_sessions}`} />
+              <ReviewItem label="Streak" value={`${weeklyDigest.streak_days}d`} />
+            </View>
+            <View style={styles.infoPanel}>
+              <MaterialCommunityIcons name="lightbulb-on-outline" size={22} color={colors.brand} />
+              <Text style={styles.infoText}>{weeklyDigest.next_action}</Text>
+            </View>
+          </View>
+        ) : null}
 
         <View style={styles.panel}>
           <View style={styles.panelHeader}>

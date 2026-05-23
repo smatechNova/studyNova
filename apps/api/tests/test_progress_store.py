@@ -109,6 +109,41 @@ def test_study_plan_progress_reports_missed_sessions(tmp_path) -> None:
     assert all(session.days_overdue == 1 for session in progress.missed_sessions)
 
 
+def test_study_plan_store_builds_weekly_digest(tmp_path) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    plan = build_study_plan(_sample_request())
+    plan.schedule[0].study_date = date.today() - timedelta(days=1)
+    saved_plan = store.save(plan)
+    first_day = saved_plan.plan.schedule[0]
+    first_session = first_day.sessions[0]
+
+    store.complete_session(
+        saved_plan.id,
+        StudySessionCompletionRequest(
+            session_key=f"{first_day.study_date}:0",
+            study_date=first_day.study_date,
+            kind=first_session.kind,
+            subject=first_session.subject,
+            topic=first_session.topic,
+            resource_type=first_session.resource_type,
+            minutes_planned=first_session.minutes,
+            minutes_completed=first_session.minutes,
+            recall_note="I can explain the weekly digest progress for this session.",
+            confidence=4,
+        ),
+    )
+    digest = store.weekly_digest(saved_plan.id)
+
+    assert digest is not None
+    assert digest.plan_id == saved_plan.id
+    assert digest.student_name == saved_plan.student_name
+    assert digest.completed_sessions == 1
+    assert digest.completed_minutes == first_session.minutes
+    assert digest.missed_sessions == len(first_day.sessions) - 1
+    assert digest.days
+    assert digest.next_action
+
+
 def test_study_plan_store_persists_reminder_settings(tmp_path) -> None:
     store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
     saved_plan = store.save(build_study_plan(_sample_request()))

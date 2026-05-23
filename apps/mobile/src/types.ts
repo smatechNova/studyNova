@@ -209,6 +209,38 @@ export type StudyPlanProgress = {
   missed_sessions: MissedStudySession[];
 };
 
+export type WeeklyDigestDay = {
+  study_date: string;
+  planned_minutes: number;
+  completed_minutes: number;
+  planned_sessions: number;
+  completed_sessions: number;
+  missed_sessions: number;
+  completion_rate: number;
+  status: DailyProgress["status"];
+};
+
+export type WeeklyStudyDigest = {
+  plan_id: string;
+  student_name: string;
+  week_start: string;
+  week_end: string;
+  planned_minutes: number;
+  completed_minutes: number;
+  missed_minutes: number;
+  planned_sessions: number;
+  completed_sessions: number;
+  missed_sessions: number;
+  completion_rate: number;
+  active_days: number;
+  streak_days: number;
+  strongest_day: string | null;
+  headline: string;
+  insight: string;
+  next_action: string;
+  days: WeeklyDigestDay[];
+};
+
 export type StudyReminderSettingsUpdate = {
   reminders_enabled: boolean;
   reminder_time: string;

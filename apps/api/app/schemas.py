@@ -242,6 +242,38 @@ class StudyPlanProgress(BaseModel):
     missed_sessions: list[MissedStudySession] = Field(default_factory=list)
 
 
+class WeeklyDigestDay(BaseModel):
+    study_date: date
+    planned_minutes: int
+    completed_minutes: int
+    planned_sessions: int
+    completed_sessions: int
+    missed_sessions: int = 0
+    completion_rate: float
+    status: Literal["complete", "missed", "today", "upcoming", "rest"] = "upcoming"
+
+
+class WeeklyStudyDigest(BaseModel):
+    plan_id: str
+    student_name: str
+    week_start: date
+    week_end: date
+    planned_minutes: int
+    completed_minutes: int
+    missed_minutes: int
+    planned_sessions: int
+    completed_sessions: int
+    missed_sessions: int
+    completion_rate: float
+    active_days: int
+    streak_days: int
+    strongest_day: date | None = None
+    headline: str
+    insight: str
+    next_action: str
+    days: list[WeeklyDigestDay] = Field(default_factory=list)
+
+
 class StudyReminderSettingsUpdate(BaseModel):
     reminders_enabled: bool = True
     reminder_time: str = Field(default="18:00", pattern=r"^\d{2}:\d{2}$")

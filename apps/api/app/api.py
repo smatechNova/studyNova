@@ -27,6 +27,7 @@ from app.schemas import (
     StudyPlanSaveRequest,
     StudySessionCompletion,
     StudySessionCompletionRequest,
+    WeeklyStudyDigest,
 )
 from app.storage import AccountAccessCodeError, get_study_plan_store
 
@@ -142,6 +143,14 @@ def get_study_plan_progress(plan_id: str) -> StudyPlanProgress:
     if progress is None:
         raise HTTPException(status_code=404, detail="No saved study plan found.")
     return progress
+
+
+@router.get("/study-plans/{plan_id}/weekly-digest", response_model=WeeklyStudyDigest)
+def get_study_weekly_digest(plan_id: str) -> WeeklyStudyDigest:
+    digest = get_study_plan_store().weekly_digest(plan_id)
+    if digest is None:
+        raise HTTPException(status_code=404, detail="No saved study plan found.")
+    return digest
 
 
 @router.get("/study-plans/{plan_id}/reminders", response_model=StudyReminderSettings)

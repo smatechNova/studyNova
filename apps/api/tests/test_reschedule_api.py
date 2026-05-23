@@ -52,7 +52,11 @@ def test_reschedule_endpoint_saves_rebalanced_plan_version(tmp_path, monkeypatch
 def test_reminder_settings_endpoint_round_trips_plan_preferences(tmp_path, monkeypatch) -> None:
     store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
     monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)
-    saved = store.save(build_study_plan(_request()), student_id="student-1", setup_payload=_request())
+    saved = store.save(
+        build_study_plan(_request()),
+        student_id="student-1",
+        setup_payload=_request(),
+    )
     client = TestClient(app)
 
     default_response = client.get(f"/api/v1/study-plans/{saved.id}/reminders")
@@ -73,3 +77,21 @@ def test_reminder_settings_endpoint_round_trips_plan_preferences(tmp_path, monke
     assert update_response.status_code == 200
     assert update_response.json()["reminder_time"] == "19:30"
     assert update_response.json()["parent_alerts_enabled"] is False
+
+
+def test_weekly_digest_endpoint_returns_current_progress_review(tmp_path, monkeypatch) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)
+    plan = build_study_plan(_request())
+    plan.schedule[0].study_date = date.today() - timedelta(days=1)
+    saved = store.save(plan, student_id="student-1", setup_payload=_request())
+    client = TestClient(app)
+
+    response = client.get(f"/api/v1/study-plans/{saved.id}/weekly-digest")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["plan_id"] == saved.id
+    assert body["missed_sessions"] == len(plan.schedule[0].sessions)
+    assert body["headline"] == "Catch-up week needed"
+    assert body["days"]

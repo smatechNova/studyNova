@@ -16,7 +16,8 @@ import type {
   StudyPlanRequest,
   StudyPlanResponse,
   StudySessionCompletion,
-  StudySessionCompletionRequest
+  StudySessionCompletionRequest,
+  WeeklyStudyDigest
 } from "@/types";
 
 const API_URL = getApiUrl();
@@ -267,6 +268,16 @@ export async function getStudyPlanProgress(planId: string): Promise<StudyPlanPro
   }
 
   return response.json() as Promise<StudyPlanProgress>;
+}
+
+export async function getWeeklyStudyDigest(planId: string): Promise<WeeklyStudyDigest> {
+  const response = await fetch(`${API_URL}/api/v1/study-plans/${planId}/weekly-digest`);
+
+  if (!response.ok) {
+    throw await createApiError(response, "Weekly study digest request failed");
+  }
+
+  return response.json() as Promise<WeeklyStudyDigest>;
 }
 
 export async function getStudyReminderSettings(planId: string): Promise<StudyReminderSettings> {

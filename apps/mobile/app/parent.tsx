@@ -7,9 +7,15 @@ import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
 import { ProgressBar } from "@/components/ProgressBar";
 import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
-import { getLatestStudyPlan, getParentFamily, getStudyPlanHistory, getStudyPlanProgress } from "@/lib/api";
+import {
+  getLatestStudyPlan,
+  getParentFamily,
+  getStudyPlanHistory,
+  getStudyPlanProgress,
+  getWeeklyStudyDigest
+} from "@/lib/api";
 import { getStoredAuthSession } from "@/lib/session";
-import type { ParentFamilyAccount, PlanSession, SavedStudyPlan, StudyPlanProgress } from "@/types";
+import type { ParentFamilyAccount, PlanSession, SavedStudyPlan, StudyPlanProgress, WeeklyStudyDigest } from "@/types";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
 
@@ -40,6 +46,7 @@ export default function ParentScreen() {
   const [savedPlan, setSavedPlan] = useState<SavedStudyPlan | null>(null);
   const [planHistory, setPlanHistory] = useState<SavedStudyPlan[]>([]);
   const [progress, setProgress] = useState<StudyPlanProgress | null>(null);
+  const [weeklyDigest, setWeeklyDigest] = useState<WeeklyStudyDigest | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -47,20 +54,28 @@ export default function ParentScreen() {
 
   const latestCompletion = progress?.completions.at(-1);
   const recentDays = useMemo(() => {
+    if (weeklyDigest?.days.length) {
+      return weeklyDigest.days;
+    }
+
     const days = progress?.daily ?? [];
     const today = toDateValue(new Date());
     const elapsedDays = days.filter((day) => day.study_date <= today);
     return (elapsedDays.length ? elapsedDays : days).slice(-7);
-  }, [progress?.daily]);
+  }, [progress?.daily, weeklyDigest]);
   const weeklyRate = useMemo(() => {
+    if (weeklyDigest) {
+      return Math.round(weeklyDigest.completion_rate);
+    }
+
     if (!recentDays.length) {
       return 0;
     }
 
     const total = recentDays.reduce((sum, day) => sum + day.completion_rate, 0);
     return Math.round(total / recentDays.length);
-  }, [recentDays]);
-  const streakDays = useMemo(() => calculateStreak(progress), [progress]);
+  }, [recentDays, weeklyDigest]);
+  const streakDays = useMemo(() => weeklyDigest?.streak_days ?? calculateStreak(progress), [progress, weeklyDigest]);
   const selectedStudent =
     parentFamily?.students.find((student) => student.id === selectedStudentId) ?? parentFamily?.students[0];
   const attentionItems = useMemo(
@@ -130,6 +145,7 @@ export default function ParentScreen() {
         setSavedPlan(null);
         setPlanHistory([]);
         setProgress(null);
+        setWeeklyDigest(null);
         setMessage("Create and link student and parent profiles first.");
         return;
       }
@@ -142,14 +158,19 @@ export default function ParentScreen() {
         setIsHistoryLoading(true);
         const history = await getStudyPlanHistory({ studentId: activeStudent.id, limit: 6 });
         const currentPlan = history[0] ?? (await getLatestStudyPlan({ studentId: activeStudent.id }));
-        const currentProgress = await getStudyPlanProgress(currentPlan.id);
+        const [currentProgress, currentDigest] = await Promise.all([
+          getStudyPlanProgress(currentPlan.id),
+          getWeeklyStudyDigest(currentPlan.id)
+        ]);
         setPlanHistory(history.length ? history : [currentPlan]);
         setSavedPlan(currentPlan);
         setProgress(currentProgress);
+        setWeeklyDigest(currentDigest);
       } catch {
         setSavedPlan(null);
         setPlanHistory([]);
         setProgress(null);
+        setWeeklyDigest(null);
         setMessage(`Generate and save a study plan for ${activeStudent.name}.`);
       } finally {
         setIsHistoryLoading(false);
@@ -159,6 +180,7 @@ export default function ParentScreen() {
       setSavedPlan(null);
       setPlanHistory([]);
       setProgress(null);
+      setWeeklyDigest(null);
       setIsHistoryLoading(false);
       setMessage("Create linked profiles, then generate and save a student plan.");
     } finally {
@@ -177,10 +199,15 @@ export default function ParentScreen() {
     setMessage("");
 
     try {
-      const selectedProgress = await getStudyPlanProgress(planVersion.id);
+      const [selectedProgress, selectedDigest] = await Promise.all([
+        getStudyPlanProgress(planVersion.id),
+        getWeeklyStudyDigest(planVersion.id)
+      ]);
       setProgress(selectedProgress);
+      setWeeklyDigest(selectedDigest);
     } catch {
       setProgress(null);
+      setWeeklyDigest(null);
       setMessage("Progress tracking is unavailable for that saved plan.");
     } finally {
       setIsLoading(false);
@@ -356,11 +383,38 @@ export default function ParentScreen() {
 
         <View style={styles.panel}>
           <View style={styles.panelHeader}>
-            <Text style={styles.sectionTitle}>Weekly consistency</Text>
+            <View style={styles.headerCopy}>
+              <Text style={styles.kicker}>Weekly review</Text>
+              <Text style={styles.sectionTitle}>{weeklyDigest?.headline ?? "Weekly consistency"}</Text>
+            </View>
             <Text style={styles.metric}>{weeklyRate}%</Text>
           </View>
           <ProgressBar value={weeklyRate} />
-          <Text style={styles.helper}>{parentSummaryCopy(weeklyRate, streakDays)}</Text>
+          <Text style={styles.helper}>{weeklyDigest?.insight ?? parentSummaryCopy(weeklyRate, streakDays)}</Text>
+          {weeklyDigest ? (
+            <>
+              <View style={styles.recoveryGrid}>
+                <View style={styles.recoveryItem}>
+                  <Text style={styles.kicker}>Completed</Text>
+                  <Text style={styles.updateTitle}>
+                    {weeklyDigest.completed_sessions}/{weeklyDigest.planned_sessions}
+                  </Text>
+                </View>
+                <View style={styles.recoveryItem}>
+                  <Text style={styles.kicker}>Active days</Text>
+                  <Text style={styles.updateTitle}>{weeklyDigest.active_days}</Text>
+                </View>
+                <View style={styles.recoveryItem}>
+                  <Text style={styles.kicker}>Missed</Text>
+                  <Text style={styles.updateTitle}>{weeklyDigest.missed_sessions}</Text>
+                </View>
+              </View>
+              <View style={styles.infoPanel}>
+                <MaterialCommunityIcons name="lightbulb-on-outline" size={22} color={colors.brand} />
+                <Text style={styles.infoText}>{weeklyDigest.next_action}</Text>
+              </View>
+            </>
+          ) : null}
         </View>
 
         <View style={styles.panel}>

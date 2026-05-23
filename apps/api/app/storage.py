@@ -26,6 +26,8 @@ from app.schemas import (
     StudentAccountCreate,
     StudyReminderSettings,
     StudyReminderSettingsUpdate,
+    WeeklyDigestDay,
+    WeeklyStudyDigest,
     StudyPlanRequest,
     StudyPlanProgress,
     StudyPlanResponse,
@@ -987,7 +989,9 @@ class StudyPlanStore:
                     )
                 )
 
-            completion_rate = round((completed_minutes / day.total_minutes) * 100, 1) if day.total_minutes else 0
+            completion_rate = (
+                round((completed_minutes / day.total_minutes) * 100, 1) if day.total_minutes else 0
+            )
             daily_status = _daily_progress_status(
                 study_date=day.study_date,
                 today=today,
@@ -1012,7 +1016,9 @@ class StudyPlanStore:
         planned_sessions = sum(len(day.sessions) for day in saved_plan.plan.schedule)
         completed_minutes = sum(completion.minutes_completed for completion in completions)
         missed_minutes = sum(session.minutes for session in missed_sessions)
-        completion_rate = round((completed_minutes / planned_minutes) * 100, 1) if planned_minutes else 0
+        completion_rate = (
+            round((completed_minutes / planned_minutes) * 100, 1) if planned_minutes else 0
+        )
 
         return StudyPlanProgress(
             plan_id=plan_id,
@@ -1027,6 +1033,95 @@ class StudyPlanStore:
             daily=daily,
             completions=completions,
             missed_sessions=missed_sessions,
+        )
+
+    def weekly_digest(self, plan_id: str) -> WeeklyStudyDigest | None:
+        saved_plan = self.by_id(plan_id)
+        progress = self.progress(plan_id)
+        if saved_plan is None or progress is None:
+            return None
+
+        today = date.today()
+        elapsed_days = [day for day in progress.daily if day.study_date <= today]
+        digest_days = (elapsed_days or progress.daily[:7])[-7:]
+        if not digest_days:
+            return WeeklyStudyDigest(
+                plan_id=plan_id,
+                student_name=saved_plan.student_name,
+                week_start=today,
+                week_end=today,
+                planned_minutes=0,
+                completed_minutes=0,
+                missed_minutes=0,
+                planned_sessions=0,
+                completed_sessions=0,
+                missed_sessions=0,
+                completion_rate=0,
+                active_days=0,
+                streak_days=0,
+                headline="No study week yet",
+                insight="Generate a study plan to start weekly review.",
+                next_action="Create a plan and complete the first session.",
+                days=[],
+            )
+
+        planned_minutes = sum(day.planned_minutes for day in digest_days)
+        completed_minutes = sum(day.completed_minutes for day in digest_days)
+        planned_sessions = sum(day.planned_sessions for day in digest_days)
+        completed_sessions = sum(day.completed_sessions for day in digest_days)
+        missed_sessions = sum(day.missed_sessions for day in digest_days)
+        week_start = digest_days[0].study_date
+        week_end = digest_days[-1].study_date
+        missed_minutes = sum(
+            missed.minutes
+            for missed in progress.missed_sessions
+            if week_start <= missed.study_date <= week_end
+        )
+        completion_rate = (
+            round((completed_sessions / planned_sessions) * 100, 1) if planned_sessions else 0
+        )
+        active_days = sum(1 for day in digest_days if day.completed_sessions > 0)
+        streak_days = _progress_streak_days(progress.daily, today)
+        strongest_day = (
+            max(digest_days, key=lambda day: day.completion_rate).study_date
+            if digest_days
+            else None
+        )
+        headline = _weekly_digest_headline(completion_rate, missed_sessions)
+        insight = _weekly_digest_insight(completion_rate, active_days, missed_sessions, streak_days)
+        next_action = _weekly_digest_next_action(completion_rate, missed_sessions)
+
+        return WeeklyStudyDigest(
+            plan_id=plan_id,
+            student_name=saved_plan.student_name,
+            week_start=week_start,
+            week_end=week_end,
+            planned_minutes=planned_minutes,
+            completed_minutes=completed_minutes,
+            missed_minutes=missed_minutes,
+            planned_sessions=planned_sessions,
+            completed_sessions=completed_sessions,
+            missed_sessions=missed_sessions,
+            completion_rate=min(100, completion_rate),
+            active_days=active_days,
+            streak_days=streak_days,
+            strongest_day=strongest_day,
+            headline=headline,
+            insight=insight,
+            next_action=next_action,
+            days=[
+                WeeklyDigestDay(
+                    study_date=day.study_date,
+                    planned_minutes=day.planned_minutes,
+                    completed_minutes=day.completed_minutes,
+                    planned_sessions=day.planned_sessions,
+                    completed_sessions=day.completed_sessions,
+                    missed_sessions=day.missed_sessions,
+                    completion_rate=day.completion_rate,
+                    status=day.status,
+                )
+                for day in digest_days
+            ],
         )
 
     def _completion_rows(self, plan_id: str) -> list[StudySessionCompletion]:
@@ -1291,6 +1386,51 @@ def _daily_progress_status(
     if study_date == today:
         return "today"
     return "upcoming"
+
+
+def _progress_streak_days(daily: list[DailyProgress], today: date) -> int:
+    completed_dates = {day.study_date for day in daily if day.completed_sessions > 0}
+    streak = 0
+    cursor = today
+    while cursor in completed_dates:
+        streak += 1
+        cursor = date.fromordinal(cursor.toordinal() - 1)
+    return streak
+
+
+def _weekly_digest_headline(completion_rate: float, missed_sessions: int) -> str:
+    if completion_rate >= 85 and missed_sessions == 0:
+        return "Strong study week"
+    if completion_rate >= 60:
+        return "Steady week with room to tighten"
+    if missed_sessions:
+        return "Catch-up week needed"
+    return "Build the first study rhythm"
+
+
+def _weekly_digest_insight(
+    completion_rate: float,
+    active_days: int,
+    missed_sessions: int,
+    streak_days: int,
+) -> str:
+    if completion_rate >= 85 and missed_sessions == 0:
+        return f"The student studied on {active_days} days and has a {streak_days}-day streak."
+    if missed_sessions:
+        return f"{missed_sessions} planned sessions were missed this week. A short catch-up block will help."
+    if active_days:
+        return f"The student studied on {active_days} days. Keep sessions short, visible, and consistent."
+    return "No completed study day has been recorded in this review window."
+
+
+def _weekly_digest_next_action(completion_rate: float, missed_sessions: int) -> str:
+    if missed_sessions:
+        return "Open the Catch-up plan and rebalance if the missed work is piling up."
+    if completion_rate >= 85:
+        return "Protect the same routine next week and add one light revision session."
+    if completion_rate >= 60:
+        return "Choose one fixed study time and finish today's focus queue."
+    return "Complete one short session today and write a recall note before closing the app."
 
 
 def _default_reminder_settings(plan_id: str) -> StudyReminderSettings:
