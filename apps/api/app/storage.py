@@ -1,8 +1,10 @@
 import hashlib
 import hmac
 import json
+import re
+import secrets
 import sqlite3
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
 from uuid import uuid4
@@ -18,6 +20,7 @@ from app.schemas import (
     ParentAccount,
     ParentAccountCreate,
     ParentFamilyAccount,
+    ParentInviteCode,
     ParentProgressSummary,
     ParentStudentLink,
     ParentStudentLinkCreate,
@@ -330,6 +333,94 @@ class StudyPlanStore:
                     link.student_id,
                     link.created_at.isoformat(),
                 ),
+            )
+
+        return link
+
+    def create_parent_invite_code(self, student_id: str, ttl_minutes: int = 60) -> ParentInviteCode | None:
+        if self.student_account_by_id(student_id) is None:
+            return None
+
+        created_at = datetime.now(timezone.utc)
+        expires_at = created_at + timedelta(minutes=max(5, min(ttl_minutes, 24 * 60)))
+
+        with self._connect() as connection:
+            for _ in range(12):
+                invite = ParentInviteCode(
+                    code=_generate_parent_invite_code(),
+                    student_id=student_id,
+                    created_at=created_at,
+                    expires_at=expires_at,
+                )
+                try:
+                    connection.execute(
+                        """
+                        insert into parent_invite_codes (
+                            id,
+                            code,
+                            student_id,
+                            created_at,
+                            expires_at,
+                            redeemed_at,
+                            redeemed_by_parent_id
+                        )
+                        values (?, ?, ?, ?, ?, null, null)
+                        """,
+                        (
+                            str(uuid4()),
+                            invite.code,
+                            invite.student_id,
+                            invite.created_at.isoformat(),
+                            invite.expires_at.isoformat(),
+                        ),
+                    )
+                    return invite
+                except sqlite3.IntegrityError:
+                    continue
+
+        return None
+
+    def redeem_parent_invite_code(self, parent_id: str, code: str) -> ParentStudentLink | None:
+        parent = self.parent_account_by_id(parent_id)
+        normalized_code = _normalize_parent_invite_code(code)
+        if parent is None or normalized_code is None:
+            return None
+
+        now = datetime.now(timezone.utc)
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                select id, code, student_id, created_at, expires_at, redeemed_at, redeemed_by_parent_id
+                from parent_invite_codes
+                where code = ?
+                order by created_at desc
+                limit 1
+                """,
+                (normalized_code,),
+            ).fetchone()
+
+        if row is None or row["redeemed_at"]:
+            return None
+
+        expires_at = datetime.fromisoformat(row["expires_at"])
+        if expires_at < now or self.student_account_by_id(row["student_id"]) is None:
+            return None
+
+        link = self.link_parent_student(
+            ParentStudentLinkCreate(parent_id=parent.id, student_id=row["student_id"])
+        )
+        if link is None:
+            return None
+
+        with self._connect() as connection:
+            connection.execute(
+                """
+                update parent_invite_codes
+                set redeemed_at = ?,
+                    redeemed_by_parent_id = ?
+                where id = ? and redeemed_at is null
+                """,
+                (now.isoformat(), parent.id, row["id"]),
             )
 
         return link
@@ -1304,6 +1395,25 @@ class StudyPlanStore:
             )
             connection.execute(
                 """
+                create table if not exists parent_invite_codes (
+                    id text primary key,
+                    code text not null unique,
+                    student_id text not null,
+                    created_at text not null,
+                    expires_at text not null,
+                    redeemed_at text,
+                    redeemed_by_parent_id text
+                )
+                """
+            )
+            connection.execute(
+                """
+                create index if not exists idx_parent_invite_codes_student_created
+                on parent_invite_codes (student_id, created_at desc)
+                """
+            )
+            connection.execute(
+                """
                 create table if not exists study_session_completions (
                     id text primary key,
                     plan_id text not null,
@@ -1507,6 +1617,20 @@ def _contact_key(contact: str) -> str:
 
     digits = "".join(character for character in normalized if character.isdigit())
     return digits or _compact_text(normalized)
+
+
+def _generate_parent_invite_code() -> str:
+    return f"SN-{secrets.randbelow(900000) + 100000}"
+
+
+def _normalize_parent_invite_code(code: str) -> str | None:
+    normalized = code.strip().upper().replace(" ", "")
+    if re.fullmatch(r"\d{6}", normalized):
+        return f"SN-{normalized}"
+    if re.fullmatch(r"SN-?\d{6}", normalized):
+        digits = normalized.replace("SN", "").replace("-", "")
+        return f"SN-{digits}"
+    return None
 
 
 def _compact_text(value: str) -> str:

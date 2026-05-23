@@ -20,6 +20,7 @@ import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
 import {
   completeStudySession,
+  createParentInviteCode,
   generateStudyPlan,
   getLatestStudyPlan,
   getStudyReminderSettings,
@@ -34,6 +35,7 @@ import {
 import { scheduleStudyReminders } from "@/lib/reminders";
 import { getStoredAuthSession } from "@/lib/session";
 import type {
+  ParentInviteCode,
   PlanSession,
   SavedStudyPlan,
   StudyReminderSettings,
@@ -133,6 +135,9 @@ export default function StudentScreen() {
   const [saveMessage, setSaveMessage] = useState("");
   const [latestMessage, setLatestMessage] = useState("");
   const [linkedStudentId, setLinkedStudentId] = useState<string | undefined>();
+  const [parentInvite, setParentInvite] = useState<ParentInviteCode | null>(null);
+  const [parentInviteMessage, setParentInviteMessage] = useState("");
+  const [isParentInviteLoading, setIsParentInviteLoading] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [activeCalendar, setActiveCalendar] = useState<DateFieldName | null>(null);
   const [isPlanVisible, setIsPlanVisible] = useState(false);
@@ -376,6 +381,25 @@ export default function StudentScreen() {
     );
     setSaveMessage("Plan rebalanced after missed sessions.");
     setIsPlanVisible(true);
+  }
+
+  async function generateParentInvite() {
+    if (!activeStudentId) {
+      return;
+    }
+
+    setIsParentInviteLoading(true);
+    setParentInviteMessage("");
+
+    try {
+      const invite = await createParentInviteCode(activeStudentId);
+      setParentInvite(invite);
+      setParentInviteMessage("Share this code with the parent or guardian. It can only be used once.");
+    } catch {
+      setParentInviteMessage("Could not create a parent invite code. Confirm the student is signed in.");
+    } finally {
+      setIsParentInviteLoading(false);
+    }
   }
 
   function buildRequest(nextForm: PlanForm): StudyPlanRequest | null {
@@ -757,6 +781,41 @@ export default function StudentScreen() {
             <Text style={styles.infoText}>{latestMessage}</Text>
           </View>
         ) : null}
+
+        <View style={styles.panel}>
+          <View style={styles.panelHeader}>
+            <View style={styles.latestCopy}>
+              <Text style={styles.kicker}>Parent link</Text>
+              <Text style={styles.sectionTitle}>Invite parent or guardian</Text>
+              <Text style={styles.helper}>
+                Generate a one-time code for a signed-in parent to connect their monitoring dashboard.
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              disabled={isParentInviteLoading}
+              onPress={() => void generateParentInvite()}
+              style={[styles.primaryButton, isParentInviteLoading ? styles.disabledButton : null]}
+            >
+              {isParentInviteLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <MaterialCommunityIcons name="shield-link-variant-outline" size={18} color="#FFFFFF" />
+                  <Text style={styles.primaryButtonText}>{parentInvite ? "New code" : "Generate"}</Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+          {parentInvite ? (
+            <View style={styles.inviteCodeCard}>
+              <Text style={styles.kicker}>Parent invite code</Text>
+              <Text style={styles.inviteCode}>{parentInvite.code}</Text>
+              <Text style={styles.helper}>Expires {formatInviteExpiry(parentInvite.expires_at)}</Text>
+            </View>
+          ) : null}
+          {parentInviteMessage ? <Text style={styles.saveStatus}>{parentInviteMessage}</Text> : null}
+        </View>
 
         <PlanHistoryPanel
           activePlanId={savedPlan?.id}
@@ -2851,6 +2910,18 @@ function formatReminderTime(value: string) {
   return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
+function formatInviteExpiry(value: string) {
+  const expiry = new Date(value);
+  if (Number.isNaN(expiry.getTime())) {
+    return "soon";
+  }
+
+  return expiry.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
+
 function formatHours(minutes: number) {
   const hours = minutes / 60;
   const formatted = Number.isInteger(hours) ? `${hours}` : hours.toFixed(1);
@@ -3278,6 +3349,20 @@ function createStyles(colors: AppColors) {
     fontSize: 14,
     fontWeight: "700",
     lineHeight: 20
+  },
+  inviteCode: {
+    color: colors.text,
+    fontSize: 30,
+    fontWeight: "900",
+    letterSpacing: 0
+  },
+  inviteCodeCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: spacing.xs,
+    padding: spacing.md
   },
   kicker: {
     color: colors.muted,

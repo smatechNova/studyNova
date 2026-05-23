@@ -5,6 +5,7 @@ import type {
   FirebaseSignInInput,
   ParentAccount,
   ParentFamilyAccount,
+  ParentInviteCode,
   ParentAccountInput,
   ParentStudentLink,
   SavedStudyPlan,
@@ -120,6 +121,34 @@ export async function linkParentStudent(parentId: string, studentId: string): Pr
   }
 
   return response.json() as Promise<ParentStudentLink>;
+}
+
+export async function createParentInviteCode(studentId: string): Promise<ParentInviteCode> {
+  const response = await apiFetch(`${API_URL}/api/v1/accounts/students/${studentId}/parent-invites`, {
+    method: "POST"
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Parent invite code request failed");
+  }
+
+  return response.json() as Promise<ParentInviteCode>;
+}
+
+export async function redeemParentInviteCode(parentId: string, code: string): Promise<ParentFamilyAccount> {
+  const response = await apiFetch(`${API_URL}/api/v1/accounts/parents/${parentId}/parent-invites/redeem`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ code })
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Parent invite redeem request failed");
+  }
+
+  return response.json() as Promise<ParentFamilyAccount>;
 }
 
 export async function signInAccount(payload: AccountSignInInput): Promise<AuthSession> {

@@ -18,6 +18,8 @@ from app.schemas import (
     ParentAccount,
     ParentAccountCreate,
     ParentFamilyAccount,
+    ParentInviteCode,
+    ParentInviteRedeemRequest,
     ParentProgressSummary,
     ParentStudentLink,
     ParentStudentLinkCreate,
@@ -184,6 +186,31 @@ def link_parent_student(payload: ParentStudentLinkCreate) -> ParentStudentLink:
     if link is None:
         raise HTTPException(status_code=404, detail="Parent or student account was not found.")
     return link
+
+
+@router.post("/accounts/students/{student_id}/parent-invites", response_model=ParentInviteCode)
+def create_parent_invite_code(
+    student_id: str,
+    session: SessionIdentity = Depends(require_session),
+) -> ParentInviteCode:
+    _require_own_student(session, student_id)
+    invite = get_study_plan_store().create_parent_invite_code(student_id)
+    if invite is None:
+        raise HTTPException(status_code=404, detail="Student account was not found.")
+    return invite
+
+
+@router.post("/accounts/parents/{parent_id}/parent-invites/redeem", response_model=ParentFamilyAccount)
+def redeem_parent_invite_code(
+    parent_id: str,
+    payload: ParentInviteRedeemRequest,
+    session: SessionIdentity = Depends(require_session),
+) -> ParentFamilyAccount:
+    _require_own_parent(session, parent_id)
+    link = get_study_plan_store().redeem_parent_invite_code(parent_id, payload.code)
+    if link is None:
+        raise HTTPException(status_code=404, detail="Invite code is invalid, expired, or already used.")
+    return get_study_plan_store().parent_family(parent_id)
 
 
 @router.post("/accounts/sign-in", response_model=AuthSession)

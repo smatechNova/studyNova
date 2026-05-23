@@ -146,6 +146,17 @@ class ParentStudentLink(ParentStudentLinkCreate):
     created_at: datetime
 
 
+class ParentInviteCode(BaseModel):
+    code: str
+    student_id: str
+    created_at: datetime
+    expires_at: datetime
+
+
+class ParentInviteRedeemRequest(BaseModel):
+    code: str = Field(min_length=4, max_length=20)
+
+
 class FamilyAccount(BaseModel):
     parent: ParentAccount | None = None
     student: StudentAccount | None = None

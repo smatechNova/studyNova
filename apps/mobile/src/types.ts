@@ -121,6 +121,13 @@ export type ParentStudentLink = {
   created_at: string;
 };
 
+export type ParentInviteCode = {
+  code: string;
+  student_id: string;
+  created_at: string;
+  expires_at: string;
+};
+
 export type FamilyAccount = {
   parent: ParentAccount | null;
   student: StudentAccount | null;

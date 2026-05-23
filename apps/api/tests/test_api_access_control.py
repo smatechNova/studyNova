@@ -148,3 +148,89 @@ def test_save_plan_uses_signed_in_student_not_posted_student_id(tmp_path, monkey
 
     assert response.status_code == 200
     assert response.json()["student_id"] == signed_in_student.id
+
+
+def test_student_invite_code_links_parent_to_student(tmp_path, monkeypatch) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)
+    client = TestClient(app)
+    student = _student(store, "alliyah@example.com", "Alliyah Olaniyan")
+    parent = store.create_parent_account(
+        ParentAccountCreate(
+            name="Mrs Olaniyan",
+            contact="08012345678",
+            access_code="4321",
+            relationship="Mother",
+        )
+    )
+
+    invite_response = client.post(
+        f"/api/v1/accounts/students/{student.id}/parent-invites",
+        headers=_headers(client, "student", student.login_id),
+    )
+    redeem_response = client.post(
+        f"/api/v1/accounts/parents/{parent.id}/parent-invites/redeem",
+        headers=_headers(client, "parent", parent.contact, "4321"),
+        json={"code": invite_response.json()["code"]},
+    )
+
+    assert invite_response.status_code == 200
+    assert invite_response.json()["code"].startswith("SN-")
+    assert redeem_response.status_code == 200
+    assert [linked_student["id"] for linked_student in redeem_response.json()["students"]] == [student.id]
+
+
+def test_student_cannot_generate_invite_for_another_student(tmp_path, monkeypatch) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)
+    client = TestClient(app)
+    first_student = _student(store, "alliyah@example.com", "Alliyah Olaniyan")
+    second_student = _student(store, "aminah@example.com", "Aminah Olaniyan")
+
+    response = client.post(
+        f"/api/v1/accounts/students/{second_student.id}/parent-invites",
+        headers=_headers(client, "student", first_student.login_id),
+    )
+
+    assert response.status_code == 403
+
+
+def test_invite_code_can_only_be_redeemed_once(tmp_path, monkeypatch) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)
+    client = TestClient(app)
+    student = _student(store, "alliyah@example.com", "Alliyah Olaniyan")
+    first_parent = store.create_parent_account(
+        ParentAccountCreate(
+            name="Mrs Olaniyan",
+            contact="08012345678",
+            access_code="4321",
+            relationship="Mother",
+        )
+    )
+    second_parent = store.create_parent_account(
+        ParentAccountCreate(
+            name="Mr Adeyemi",
+            contact="08087654321",
+            access_code="5678",
+            relationship="Guardian",
+        )
+    )
+    invite = client.post(
+        f"/api/v1/accounts/students/{student.id}/parent-invites",
+        headers=_headers(client, "student", student.login_id),
+    ).json()
+
+    first_response = client.post(
+        f"/api/v1/accounts/parents/{first_parent.id}/parent-invites/redeem",
+        headers=_headers(client, "parent", first_parent.contact, "4321"),
+        json={"code": invite["code"]},
+    )
+    second_response = client.post(
+        f"/api/v1/accounts/parents/{second_parent.id}/parent-invites/redeem",
+        headers=_headers(client, "parent", second_parent.contact, "5678"),
+        json={"code": invite["code"]},
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 404

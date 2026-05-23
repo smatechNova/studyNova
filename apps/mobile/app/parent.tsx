@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Link, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
 import { ProgressBar } from "@/components/ProgressBar";
@@ -12,7 +12,8 @@ import {
   getParentFamily,
   getStudyPlanHistory,
   getStudyPlanProgress,
-  getWeeklyStudyDigest
+  getWeeklyStudyDigest,
+  redeemParentInviteCode
 } from "@/lib/api";
 import { getStoredAuthSession } from "@/lib/session";
 import type { ParentFamilyAccount, PlanSession, SavedStudyPlan, StudyPlanProgress, WeeklyStudyDigest } from "@/types";
@@ -50,6 +51,9 @@ export default function ParentScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
+  const [inviteMessage, setInviteMessage] = useState("");
+  const [isInviteRedeeming, setIsInviteRedeeming] = useState(false);
   const activeParentId = sessionParentId;
 
   const latestCompletion = progress?.completions.at(-1);
@@ -146,7 +150,7 @@ export default function ParentScreen() {
         setPlanHistory([]);
         setProgress(null);
         setWeeklyDigest(null);
-        setMessage("Create and link student and parent profiles first.");
+        setMessage("Ask the student to generate a parent invite code, then enter it below.");
         return;
       }
 
@@ -182,7 +186,7 @@ export default function ParentScreen() {
       setProgress(null);
       setWeeklyDigest(null);
       setIsHistoryLoading(false);
-      setMessage("Create linked profiles, then generate and save a student plan.");
+      setMessage("Sign in as a parent, then link a student with their invite code.");
     } finally {
       setIsLoading(false);
     }
@@ -191,6 +195,32 @@ export default function ParentScreen() {
   function selectStudent(studentId: string) {
     setSelectedStudentId(studentId);
     void loadParentView(studentId);
+  }
+
+  async function redeemStudentInvite() {
+    if (!activeParentId || !inviteCode.trim()) {
+      setInviteMessage("Enter the code from the student account.");
+      return;
+    }
+
+    setIsInviteRedeeming(true);
+    setInviteMessage("");
+
+    try {
+      const family = await redeemParentInviteCode(activeParentId, inviteCode.trim());
+      setParentFamily(family);
+      const linkedStudent = family.students.at(-1) ?? family.students[0];
+      setInviteCode("");
+      setInviteMessage(linkedStudent ? `${linkedStudent.name} is now linked.` : "Student account linked.");
+      if (linkedStudent) {
+        setSelectedStudentId(linkedStudent.id);
+        void loadParentView(linkedStudent.id);
+      }
+    } catch {
+      setInviteMessage("That code is invalid, expired, or already used.");
+    } finally {
+      setIsInviteRedeeming(false);
+    }
   }
 
   async function openPlanVersion(planVersion: SavedStudyPlan) {
@@ -334,6 +364,44 @@ export default function ParentScreen() {
                 );
               })}
             </View>
+          </View>
+        ) : null}
+
+        {parentFamily?.parent ? (
+          <View style={styles.panel}>
+            <View style={styles.panelHeader}>
+              <View style={styles.headerCopy}>
+                <Text style={styles.kicker}>Secure linking</Text>
+                <Text style={styles.sectionTitle}>Add student by invite code</Text>
+              </View>
+              {isInviteRedeeming ? <ActivityIndicator color={colors.brand} /> : null}
+            </View>
+            <Text style={styles.helper}>
+              Ask the student to generate a parent invite code from their dashboard, then enter it here.
+            </Text>
+            <View style={styles.inviteInputRow}>
+              <TextInput
+                autoCapitalize="characters"
+                onChangeText={(value) => {
+                  setInviteMessage("");
+                  setInviteCode(value.toUpperCase());
+                }}
+                placeholder="SN-123456"
+                placeholderTextColor={colors.muted}
+                style={styles.input}
+                value={inviteCode}
+              />
+              <Pressable
+                accessibilityRole="button"
+                disabled={isInviteRedeeming}
+                onPress={() => void redeemStudentInvite()}
+                style={[styles.linkButton, isInviteRedeeming ? styles.disabledButton : null]}
+              >
+                <MaterialCommunityIcons name="link-variant-plus" size={18} color={colors.brand} />
+                <Text style={styles.linkButtonText}>Link</Text>
+              </Pressable>
+            </View>
+            {inviteMessage ? <Text style={styles.infoText}>{inviteMessage}</Text> : null}
           </View>
         ) : null}
 
@@ -822,6 +890,25 @@ function createStyles(colors: AppColors) {
     fontSize: 14,
     fontWeight: "700",
     lineHeight: 20
+  },
+  input: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    color: colors.text,
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "800",
+    minHeight: 44,
+    minWidth: 180,
+    paddingHorizontal: spacing.md
+  },
+  inviteInputRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
   },
   kicker: {
     color: colors.muted,
