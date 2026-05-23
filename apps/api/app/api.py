@@ -1,6 +1,11 @@
-from fastapi import APIRouter, HTTPException
+import hashlib
+import hmac
+from dataclasses import dataclass
+
+from fastapi import APIRouter, Depends, Header, HTTPException
 
 from app.auth import FirebaseAuthUnavailable, InvalidFirebaseToken, verify_firebase_id_token
+from app.config import get_settings
 from app.domain.study_planner import build_rebalanced_study_plan, build_study_plan
 from app.schemas import (
     AccountSignInRequest,
@@ -34,6 +39,129 @@ from app.storage import AccountAccessCodeError, get_study_plan_store
 router = APIRouter(prefix="/api/v1")
 
 
+@dataclass(frozen=True)
+class SessionIdentity:
+    role: str
+    account_id: str
+
+
+def _session_message(role: str, account_id: str) -> str:
+    return f"{role}:{account_id}"
+
+
+def _session_signature(role: str, account_id: str) -> str:
+    secret = get_settings().session_secret.encode("utf-8")
+    return hmac.new(secret, _session_message(role, account_id).encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _session_token(role: str, account_id: str) -> str:
+    return f"{role}.{account_id}.{_session_signature(role, account_id)}"
+
+
+def _with_session_token(session: AuthSession) -> AuthSession:
+    if session.role == "student" and session.student is not None:
+        return session.model_copy(update={"session_token": _session_token("student", session.student.id)})
+    if session.role == "parent" and session.parent is not None:
+        return session.model_copy(update={"session_token": _session_token("parent", session.parent.id)})
+    return session
+
+
+def require_session(authorization: str | None = Header(default=None)) -> SessionIdentity:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Sign in required.")
+
+    token = authorization.removeprefix("Bearer ").strip()
+    parts = token.split(".")
+    if len(parts) != 3:
+        raise HTTPException(status_code=401, detail="Invalid sign-in session.")
+
+    role, account_id, signature = parts
+    if role not in {"student", "parent"} or not account_id:
+        raise HTTPException(status_code=401, detail="Invalid sign-in session.")
+
+    expected_signature = _session_signature(role, account_id)
+    if not hmac.compare_digest(signature, expected_signature):
+        raise HTTPException(status_code=401, detail="Invalid sign-in session.")
+
+    return SessionIdentity(role=role, account_id=account_id)
+
+
+def _deny_access() -> None:
+    raise HTTPException(status_code=403, detail="You do not have access to this resource.")
+
+
+def _require_student_session(session: SessionIdentity) -> None:
+    if session.role != "student":
+        _deny_access()
+
+
+def _require_parent_session(session: SessionIdentity) -> None:
+    if session.role != "parent":
+        _deny_access()
+
+
+def _require_own_student(session: SessionIdentity, student_id: str) -> None:
+    if session.role != "student" or session.account_id != student_id:
+        _deny_access()
+
+
+def _require_own_parent(session: SessionIdentity, parent_id: str) -> None:
+    if session.role != "parent" or session.account_id != parent_id:
+        _deny_access()
+
+
+def _parent_has_student(parent_id: str, student_id: str) -> bool:
+    family = get_study_plan_store().parent_family(parent_id)
+    return any(student.id == student_id for student in family.students)
+
+
+def _require_student_visible_to_parent(session: SessionIdentity, student_id: str) -> None:
+    _require_parent_session(session)
+    if not _parent_has_student(session.account_id, student_id):
+        _deny_access()
+
+
+def _resolve_readable_student_id(session: SessionIdentity, student_id: str | None) -> str:
+    if session.role == "student":
+        if student_id and student_id != session.account_id:
+            _deny_access()
+        return session.account_id
+
+    _require_parent_session(session)
+    if not student_id:
+        family = get_study_plan_store().parent_family(session.account_id)
+        if len(family.students) != 1:
+            raise HTTPException(status_code=400, detail="Choose which linked student to view.")
+        return family.students[0].id
+
+    _require_student_visible_to_parent(session, student_id)
+    return student_id
+
+
+def _require_readable_plan(plan_id: str, session: SessionIdentity) -> SavedStudyPlan:
+    saved_plan = get_study_plan_store().by_id(plan_id)
+    if saved_plan is None:
+        raise HTTPException(status_code=404, detail="No saved study plan found.")
+    if saved_plan.student_id is None:
+        _deny_access()
+    if session.role == "student":
+        if saved_plan.student_id != session.account_id:
+            _deny_access()
+    else:
+        _require_student_visible_to_parent(session, saved_plan.student_id)
+    return saved_plan
+
+
+def _require_student_plan_owner(plan_id: str, session: SessionIdentity) -> SavedStudyPlan:
+    _require_student_session(session)
+    saved_plan = get_study_plan_store().by_id(plan_id)
+    if saved_plan is None:
+        raise HTTPException(status_code=404, detail="No saved study plan found.")
+    if saved_plan.student_id != session.account_id:
+        _deny_access()
+    return saved_plan
+
+
 @router.post("/accounts/students", response_model=StudentAccount)
 def create_student_account(payload: StudentAccountCreate) -> StudentAccount:
     try:
@@ -63,7 +191,7 @@ def sign_in_account(payload: AccountSignInRequest) -> AuthSession:
     session = get_study_plan_store().sign_in(payload)
     if session is None:
         raise HTTPException(status_code=404, detail="No account matched that role, sign-in ID, and access code.")
-    return session
+    return _with_session_token(session)
 
 
 @router.post("/accounts/firebase-sign-in", response_model=AuthSession)
@@ -78,11 +206,15 @@ def firebase_sign_in_account(payload: FirebaseSignInRequest) -> AuthSession:
     session = get_study_plan_store().firebase_sign_in(payload.role, identity.uid, identity.login_id)
     if session is None:
         raise HTTPException(status_code=404, detail="No StudyNova account matched this Google sign-in.")
-    return session
+    return _with_session_token(session)
 
 
 @router.get("/accounts/students/{student_id}/family", response_model=FamilyAccount)
-def get_student_family_account(student_id: str) -> FamilyAccount:
+def get_student_family_account(
+    student_id: str,
+    session: SessionIdentity = Depends(require_session),
+) -> FamilyAccount:
+    _require_own_student(session, student_id)
     family = get_study_plan_store().student_family(student_id)
     if family.student is None:
         raise HTTPException(status_code=404, detail="Student account was not found.")
@@ -90,17 +222,28 @@ def get_student_family_account(student_id: str) -> FamilyAccount:
 
 
 @router.get("/accounts/family/latest", response_model=FamilyAccount)
-def get_latest_family_account() -> FamilyAccount:
-    return get_study_plan_store().latest_family()
+def get_latest_family_account(session: SessionIdentity = Depends(require_session)) -> FamilyAccount:
+    if session.role == "student":
+        return get_study_plan_store().student_family(session.account_id)
+
+    family = get_study_plan_store().parent_family(session.account_id)
+    student = family.students[0] if family.students else None
+    link = family.links[0] if family.links else None
+    return FamilyAccount(parent=family.parent, student=student, link=link)
 
 
 @router.get("/accounts/parents/latest/family", response_model=ParentFamilyAccount)
-def get_latest_parent_family_account() -> ParentFamilyAccount:
-    return get_study_plan_store().latest_parent_family()
+def get_latest_parent_family_account(session: SessionIdentity = Depends(require_session)) -> ParentFamilyAccount:
+    _require_parent_session(session)
+    return get_study_plan_store().parent_family(session.account_id)
 
 
 @router.get("/accounts/parents/{parent_id}/family", response_model=ParentFamilyAccount)
-def get_parent_family_account(parent_id: str) -> ParentFamilyAccount:
+def get_parent_family_account(
+    parent_id: str,
+    session: SessionIdentity = Depends(require_session),
+) -> ParentFamilyAccount:
+    _require_own_parent(session, parent_id)
     family = get_study_plan_store().parent_family(parent_id)
     if family.parent is None:
         raise HTTPException(status_code=404, detail="Parent account was not found.")
@@ -113,16 +256,22 @@ def generate_study_plan(payload: StudyPlanRequest) -> StudyPlanResponse:
 
 
 @router.post("/study-plans/save", response_model=SavedStudyPlan)
-def save_study_plan(payload: StudyPlanSaveRequest) -> SavedStudyPlan:
-    return get_study_plan_store().save(payload.plan, payload.student_id, payload.setup_payload)
+def save_study_plan(
+    payload: StudyPlanSaveRequest,
+    session: SessionIdentity = Depends(require_session),
+) -> SavedStudyPlan:
+    _require_student_session(session)
+    return get_study_plan_store().save(payload.plan, session.account_id, payload.setup_payload)
 
 
 @router.get("/study-plans/latest", response_model=SavedStudyPlan)
 def get_latest_study_plan(
     student_name: str | None = None,
     student_id: str | None = None,
+    session: SessionIdentity = Depends(require_session),
 ) -> SavedStudyPlan:
-    saved_plan = get_study_plan_store().latest(student_name=student_name, student_id=student_id)
+    readable_student_id = _resolve_readable_student_id(session, student_id)
+    saved_plan = get_study_plan_store().latest(student_name=None, student_id=readable_student_id)
     if saved_plan is None:
         raise HTTPException(status_code=404, detail="No saved study plan found.")
     return saved_plan
@@ -133,12 +282,18 @@ def get_study_plan_history(
     student_name: str | None = None,
     student_id: str | None = None,
     limit: int = 20,
+    session: SessionIdentity = Depends(require_session),
 ) -> list[SavedStudyPlan]:
-    return get_study_plan_store().history(student_name=student_name, student_id=student_id, limit=limit)
+    readable_student_id = _resolve_readable_student_id(session, student_id)
+    return get_study_plan_store().history(student_name=None, student_id=readable_student_id, limit=limit)
 
 
 @router.get("/study-plans/{plan_id}/progress", response_model=StudyPlanProgress)
-def get_study_plan_progress(plan_id: str) -> StudyPlanProgress:
+def get_study_plan_progress(
+    plan_id: str,
+    session: SessionIdentity = Depends(require_session),
+) -> StudyPlanProgress:
+    _require_readable_plan(plan_id, session)
     progress = get_study_plan_store().progress(plan_id)
     if progress is None:
         raise HTTPException(status_code=404, detail="No saved study plan found.")
@@ -146,7 +301,11 @@ def get_study_plan_progress(plan_id: str) -> StudyPlanProgress:
 
 
 @router.get("/study-plans/{plan_id}/weekly-digest", response_model=WeeklyStudyDigest)
-def get_study_weekly_digest(plan_id: str) -> WeeklyStudyDigest:
+def get_study_weekly_digest(
+    plan_id: str,
+    session: SessionIdentity = Depends(require_session),
+) -> WeeklyStudyDigest:
+    _require_readable_plan(plan_id, session)
     digest = get_study_plan_store().weekly_digest(plan_id)
     if digest is None:
         raise HTTPException(status_code=404, detail="No saved study plan found.")
@@ -154,7 +313,11 @@ def get_study_weekly_digest(plan_id: str) -> WeeklyStudyDigest:
 
 
 @router.get("/study-plans/{plan_id}/reminders", response_model=StudyReminderSettings)
-def get_study_reminder_settings(plan_id: str) -> StudyReminderSettings:
+def get_study_reminder_settings(
+    plan_id: str,
+    session: SessionIdentity = Depends(require_session),
+) -> StudyReminderSettings:
+    _require_readable_plan(plan_id, session)
     settings = get_study_plan_store().reminder_settings(plan_id)
     if settings is None:
         raise HTTPException(status_code=404, detail="No saved study plan found.")
@@ -165,7 +328,9 @@ def get_study_reminder_settings(plan_id: str) -> StudyReminderSettings:
 def update_study_reminder_settings(
     plan_id: str,
     payload: StudyReminderSettingsUpdate,
+    session: SessionIdentity = Depends(require_session),
 ) -> StudyReminderSettings:
+    _require_student_plan_owner(plan_id, session)
     settings = get_study_plan_store().upsert_reminder_settings(plan_id, payload)
     if settings is None:
         raise HTTPException(status_code=404, detail="No saved study plan found.")
@@ -173,11 +338,12 @@ def update_study_reminder_settings(
 
 
 @router.post("/study-plans/{plan_id}/reschedule", response_model=SavedStudyPlan)
-def reschedule_study_plan(plan_id: str) -> SavedStudyPlan:
+def reschedule_study_plan(
+    plan_id: str,
+    session: SessionIdentity = Depends(require_session),
+) -> SavedStudyPlan:
     store = get_study_plan_store()
-    saved_plan = store.by_id(plan_id)
-    if saved_plan is None:
-        raise HTTPException(status_code=404, detail="No saved study plan found.")
+    saved_plan = _require_student_plan_owner(plan_id, session)
 
     progress = store.progress(plan_id)
     completed_keys = set(progress.completed_session_keys if progress is not None else [])
@@ -192,10 +358,10 @@ def reschedule_study_plan(plan_id: str) -> SavedStudyPlan:
 def complete_study_session(
     plan_id: str,
     payload: StudySessionCompletionRequest,
+    session: SessionIdentity = Depends(require_session),
 ) -> StudySessionCompletion:
     store = get_study_plan_store()
-    if store.by_id(plan_id) is None:
-        raise HTTPException(status_code=404, detail="No saved study plan found.")
+    _require_student_plan_owner(plan_id, session)
 
     return store.complete_session(plan_id, payload)
 
@@ -204,13 +370,22 @@ def complete_study_session(
     "/study-plans/{plan_id}/session-completions/{session_key}",
     response_model=DeleteResponse,
 )
-def delete_study_session_completion(plan_id: str, session_key: str) -> DeleteResponse:
+def delete_study_session_completion(
+    plan_id: str,
+    session_key: str,
+    session: SessionIdentity = Depends(require_session),
+) -> DeleteResponse:
+    _require_student_plan_owner(plan_id, session)
     deleted = get_study_plan_store().delete_completion(plan_id, session_key)
     return DeleteResponse(deleted=deleted)
 
 
 @router.post("/progress/check-ins", response_model=CheckInResponse)
-def create_check_in(payload: CheckInRequest) -> CheckInResponse:
+def create_check_in(
+    payload: CheckInRequest,
+    session: SessionIdentity = Depends(require_session),
+) -> CheckInResponse:
+    _require_own_student(session, payload.student_id)
     return get_study_plan_store().create_check_in(payload)
 
 
@@ -218,9 +393,15 @@ def create_check_in(payload: CheckInRequest) -> CheckInResponse:
     "/parents/{parent_id}/students/{student_id}/summary",
     response_model=ParentProgressSummary,
 )
-def get_parent_progress(parent_id: str, student_id: str) -> ParentProgressSummary:
+def get_parent_progress(
+    parent_id: str,
+    student_id: str,
+    session: SessionIdentity = Depends(require_session),
+) -> ParentProgressSummary:
     if not parent_id.strip() or not student_id.strip():
         raise HTTPException(status_code=400, detail="Parent and student ids are required.")
+    _require_own_parent(session, parent_id)
+    _require_student_visible_to_parent(session, student_id)
 
     summary = get_study_plan_store().parent_progress_summary(parent_id, student_id)
     if summary is None:

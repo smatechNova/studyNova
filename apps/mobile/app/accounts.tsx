@@ -99,8 +99,11 @@ export default function AccountsScreen() {
         relationship: form.relationship.trim()
       });
       const link = await linkParentStudent(parent.id, student.id);
-      const updatedFamily = await getParentFamily(parent.id);
-      setParentFamily(updatedFamily);
+      setParentFamily((current) => ({
+        parent,
+        students: current?.parent?.id === parent.id ? upsertById(current.students, student) : [student],
+        links: current?.parent?.id === parent.id ? upsertById(current.links, link) : [link]
+      }));
       setMessage("Profiles are linked. Existing records are reused when the details match.");
     } catch {
       setMessage("Could not save the account setup. Check the API and confirm any existing account access code.");
@@ -458,6 +461,15 @@ function isValidAccessCode(value: string) {
 
 function getParamValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function upsertById<T extends { id: string }>(items: T[], item: T) {
+  const existingIndex = items.findIndex((current) => current.id === item.id);
+  if (existingIndex === -1) {
+    return [...items, item];
+  }
+
+  return items.map((current) => (current.id === item.id ? item : current));
 }
 
 function createStyles(colors: AppColors) {

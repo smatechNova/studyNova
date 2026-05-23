@@ -174,6 +174,7 @@ class AuthSession(BaseModel):
     student: StudentAccount | None = None
     parent: ParentAccount | None = None
     students: list[StudentAccount] = Field(default_factory=list)
+    session_token: str = ""
 
 
 class StudySessionCompletionRequest(BaseModel):

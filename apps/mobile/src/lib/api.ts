@@ -19,6 +19,7 @@ import type {
   StudySessionCompletionRequest,
   WeeklyStudyDigest
 } from "@/types";
+import { getStoredAuthSession } from "@/lib/session";
 
 const API_URL = getApiUrl();
 
@@ -56,8 +57,22 @@ async function createApiError(response: Response, fallback: string) {
   return new Error(detail ? `${fallback}: ${detail}` : `${fallback} (${response.status})`);
 }
 
+async function apiFetch(url: string, options: RequestInit = {}) {
+  const session = await getStoredAuthSession();
+  const headers = new Headers(options.headers);
+
+  if (session?.session_token) {
+    headers.set("Authorization", `Bearer ${session.session_token}`);
+  }
+
+  return fetch(url, {
+    ...options,
+    headers
+  });
+}
+
 export async function createStudentAccount(payload: StudentAccountInput): Promise<StudentAccount> {
-  const response = await fetch(`${API_URL}/api/v1/accounts/students`, {
+  const response = await apiFetch(`${API_URL}/api/v1/accounts/students`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -73,7 +88,7 @@ export async function createStudentAccount(payload: StudentAccountInput): Promis
 }
 
 export async function createParentAccount(payload: ParentAccountInput): Promise<ParentAccount> {
-  const response = await fetch(`${API_URL}/api/v1/accounts/parents`, {
+  const response = await apiFetch(`${API_URL}/api/v1/accounts/parents`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -89,7 +104,7 @@ export async function createParentAccount(payload: ParentAccountInput): Promise<
 }
 
 export async function linkParentStudent(parentId: string, studentId: string): Promise<ParentStudentLink> {
-  const response = await fetch(`${API_URL}/api/v1/accounts/links`, {
+  const response = await apiFetch(`${API_URL}/api/v1/accounts/links`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -108,7 +123,7 @@ export async function linkParentStudent(parentId: string, studentId: string): Pr
 }
 
 export async function signInAccount(payload: AccountSignInInput): Promise<AuthSession> {
-  const response = await fetch(`${API_URL}/api/v1/accounts/sign-in`, {
+  const response = await apiFetch(`${API_URL}/api/v1/accounts/sign-in`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -124,7 +139,7 @@ export async function signInAccount(payload: AccountSignInInput): Promise<AuthSe
 }
 
 export async function firebaseSignInAccount(payload: FirebaseSignInInput): Promise<AuthSession> {
-  const response = await fetch(`${API_URL}/api/v1/accounts/firebase-sign-in`, {
+  const response = await apiFetch(`${API_URL}/api/v1/accounts/firebase-sign-in`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -140,7 +155,7 @@ export async function firebaseSignInAccount(payload: FirebaseSignInInput): Promi
 }
 
 export async function getLatestFamilyAccount(): Promise<FamilyAccount> {
-  const response = await fetch(`${API_URL}/api/v1/accounts/family/latest`);
+  const response = await apiFetch(`${API_URL}/api/v1/accounts/family/latest`);
 
   if (!response.ok) {
     throw await createApiError(response, "Family account request failed");
@@ -150,7 +165,7 @@ export async function getLatestFamilyAccount(): Promise<FamilyAccount> {
 }
 
 export async function getStudentFamily(studentId: string): Promise<FamilyAccount> {
-  const response = await fetch(`${API_URL}/api/v1/accounts/students/${studentId}/family`);
+  const response = await apiFetch(`${API_URL}/api/v1/accounts/students/${studentId}/family`);
 
   if (!response.ok) {
     throw await createApiError(response, "Student family account request failed");
@@ -160,7 +175,7 @@ export async function getStudentFamily(studentId: string): Promise<FamilyAccount
 }
 
 export async function getLatestParentFamily(): Promise<ParentFamilyAccount> {
-  const response = await fetch(`${API_URL}/api/v1/accounts/parents/latest/family`);
+  const response = await apiFetch(`${API_URL}/api/v1/accounts/parents/latest/family`);
 
   if (!response.ok) {
     throw await createApiError(response, "Parent family account request failed");
@@ -170,7 +185,7 @@ export async function getLatestParentFamily(): Promise<ParentFamilyAccount> {
 }
 
 export async function getParentFamily(parentId: string): Promise<ParentFamilyAccount> {
-  const response = await fetch(`${API_URL}/api/v1/accounts/parents/${parentId}/family`);
+  const response = await apiFetch(`${API_URL}/api/v1/accounts/parents/${parentId}/family`);
 
   if (!response.ok) {
     throw await createApiError(response, "Parent family account request failed");
@@ -180,7 +195,7 @@ export async function getParentFamily(parentId: string): Promise<ParentFamilyAcc
 }
 
 export async function generateStudyPlan(payload: StudyPlanRequest): Promise<StudyPlanResponse> {
-  const response = await fetch(`${API_URL}/api/v1/study-plans/generate`, {
+  const response = await apiFetch(`${API_URL}/api/v1/study-plans/generate`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -200,7 +215,7 @@ export async function saveStudyPlan(
   studentId?: string,
   setupPayload?: StudyPlanRequest
 ): Promise<SavedStudyPlan> {
-  const response = await fetch(`${API_URL}/api/v1/study-plans/save`, {
+  const response = await apiFetch(`${API_URL}/api/v1/study-plans/save`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -234,7 +249,7 @@ export async function getStudyPlanHistory(options?: {
     params.set("limit", `${options.limit}`);
   }
   const query = params.toString() ? `?${params.toString()}` : "";
-  const response = await fetch(`${API_URL}/api/v1/study-plans/history${query}`);
+  const response = await apiFetch(`${API_URL}/api/v1/study-plans/history${query}`);
 
   if (!response.ok) {
     throw await createApiError(response, "Study plan history request failed");
@@ -251,7 +266,7 @@ export async function getLatestStudyPlan(options?: { studentName?: string; stude
     params.set("student_name", options.studentName);
   }
   const query = params.toString() ? `?${params.toString()}` : "";
-  const response = await fetch(`${API_URL}/api/v1/study-plans/latest${query}`);
+  const response = await apiFetch(`${API_URL}/api/v1/study-plans/latest${query}`);
 
   if (!response.ok) {
     throw await createApiError(response, "Latest study plan request failed");
@@ -261,7 +276,7 @@ export async function getLatestStudyPlan(options?: { studentName?: string; stude
 }
 
 export async function getStudyPlanProgress(planId: string): Promise<StudyPlanProgress> {
-  const response = await fetch(`${API_URL}/api/v1/study-plans/${planId}/progress`);
+  const response = await apiFetch(`${API_URL}/api/v1/study-plans/${planId}/progress`);
 
   if (!response.ok) {
     throw await createApiError(response, "Study plan progress request failed");
@@ -271,7 +286,7 @@ export async function getStudyPlanProgress(planId: string): Promise<StudyPlanPro
 }
 
 export async function getWeeklyStudyDigest(planId: string): Promise<WeeklyStudyDigest> {
-  const response = await fetch(`${API_URL}/api/v1/study-plans/${planId}/weekly-digest`);
+  const response = await apiFetch(`${API_URL}/api/v1/study-plans/${planId}/weekly-digest`);
 
   if (!response.ok) {
     throw await createApiError(response, "Weekly study digest request failed");
@@ -281,7 +296,7 @@ export async function getWeeklyStudyDigest(planId: string): Promise<WeeklyStudyD
 }
 
 export async function getStudyReminderSettings(planId: string): Promise<StudyReminderSettings> {
-  const response = await fetch(`${API_URL}/api/v1/study-plans/${planId}/reminders`);
+  const response = await apiFetch(`${API_URL}/api/v1/study-plans/${planId}/reminders`);
 
   if (!response.ok) {
     throw await createApiError(response, "Study reminder settings request failed");
@@ -294,7 +309,7 @@ export async function updateStudyReminderSettings(
   planId: string,
   payload: StudyReminderSettingsUpdate
 ): Promise<StudyReminderSettings> {
-  const response = await fetch(`${API_URL}/api/v1/study-plans/${planId}/reminders`, {
+  const response = await apiFetch(`${API_URL}/api/v1/study-plans/${planId}/reminders`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json"
@@ -310,7 +325,7 @@ export async function updateStudyReminderSettings(
 }
 
 export async function rebalanceStudyPlan(planId: string): Promise<SavedStudyPlan> {
-  const response = await fetch(`${API_URL}/api/v1/study-plans/${planId}/reschedule`, {
+  const response = await apiFetch(`${API_URL}/api/v1/study-plans/${planId}/reschedule`, {
     method: "POST"
   });
 
@@ -325,7 +340,7 @@ export async function completeStudySession(
   planId: string,
   payload: StudySessionCompletionRequest
 ): Promise<StudySessionCompletion> {
-  const response = await fetch(`${API_URL}/api/v1/study-plans/${planId}/session-completions`, {
+  const response = await apiFetch(`${API_URL}/api/v1/study-plans/${planId}/session-completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -341,7 +356,7 @@ export async function completeStudySession(
 }
 
 export async function deleteStudySessionCompletion(planId: string, sessionKey: string): Promise<void> {
-  const response = await fetch(
+  const response = await apiFetch(
     `${API_URL}/api/v1/study-plans/${planId}/session-completions/${encodeURIComponent(sessionKey)}`,
     {
       method: "DELETE"

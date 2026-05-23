@@ -151,6 +151,7 @@ export type AuthSession = {
   student: StudentAccount | null;
   parent: ParentAccount | null;
   students: StudentAccount[];
+  session_token: string;
 };
 
 export type StudySessionCompletionRequest = {
