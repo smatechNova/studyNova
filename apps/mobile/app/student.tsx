@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
-import { Link, useLocalSearchParams } from "expo-router";
+import { Link, router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import {
   ActivityIndicator,
@@ -33,7 +33,7 @@ import {
   updateStudyReminderSettings
 } from "@/lib/api";
 import { scheduleStudyReminders } from "@/lib/reminders";
-import { getStoredAuthSession } from "@/lib/session";
+import { clearStoredAuthSession, getStoredAuthSession } from "@/lib/session";
 import type {
   ParentInviteCode,
   PlanSession,
@@ -259,8 +259,13 @@ export default function StudentScreen() {
             parentContact: current.parentContact || studentFamily.parent?.contact || ""
           }));
         }
-      } catch {
+      } catch (error) {
         if (isMounted) {
+          if (isSessionExpiredError(error)) {
+            setSessionStudentId(undefined);
+            setAuthMessage("Your sign-in session expired. Please sign in again.");
+            return;
+          }
           setLatestMessage("Sign in with a valid student account.");
         }
       }
@@ -276,8 +281,13 @@ export default function StudentScreen() {
             setLatestMessage("Your latest saved plan contains an old app message. Please generate a fresh plan.");
           }
         }
-      } catch {
+      } catch (error) {
         if (isMounted) {
+          if (isSessionExpiredError(error)) {
+            setSessionStudentId(undefined);
+            setAuthMessage("Your sign-in session expired. Please sign in again.");
+            return;
+          }
           setLatestMessage("No saved plan yet.");
         }
       }
@@ -288,8 +298,13 @@ export default function StudentScreen() {
         if (isMounted) {
           setPlanHistory(history.filter((saved) => isStudyPlanUsable(saved.plan)));
         }
-      } catch {
+      } catch (error) {
         if (isMounted) {
+          if (isSessionExpiredError(error)) {
+            setSessionStudentId(undefined);
+            setAuthMessage("Your sign-in session expired. Please sign in again.");
+            return;
+          }
           setPlanHistory([]);
         }
       } finally {
@@ -395,8 +410,13 @@ export default function StudentScreen() {
       const invite = await createParentInviteCode(activeStudentId);
       setParentInvite(invite);
       setParentInviteMessage("Share this code with the parent or guardian. It can only be used once.");
-    } catch {
-      setParentInviteMessage("Could not create a parent invite code. Confirm the student is signed in.");
+    } catch (error) {
+      if (isSessionExpiredError(error)) {
+        setSessionStudentId(undefined);
+        setAuthMessage("Your sign-in session expired. Please sign in again.");
+      } else {
+        setParentInviteMessage("Could not create a parent invite code. Confirm the student is signed in.");
+      }
     } finally {
       setIsParentInviteLoading(false);
     }
@@ -685,6 +705,11 @@ export default function StudentScreen() {
     }));
   }
 
+  async function switchAccount() {
+    await clearStoredAuthSession();
+    router.replace("/auth?role=student");
+  }
+
   if (isSessionLoading) {
     return (
       <Screen>
@@ -753,9 +778,15 @@ export default function StudentScreen() {
             <Text style={styles.kicker}>Guided setup</Text>
             <Text style={styles.title}>Student plan</Text>
           </View>
-          <Pressable style={styles.iconButton} accessibilityRole="button">
-            <MaterialCommunityIcons name="bell-outline" size={22} color={colors.text} />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable style={styles.iconButton} accessibilityRole="button">
+              <MaterialCommunityIcons name="bell-outline" size={22} color={colors.text} />
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => void switchAccount()} style={styles.accountButton}>
+              <MaterialCommunityIcons name="account-switch-outline" size={18} color={colors.brand} />
+              <Text style={styles.accountButtonText}>Switch</Text>
+            </Pressable>
+          </View>
         </View>
 
         {latestPlan ? (
@@ -2922,6 +2953,10 @@ function formatInviteExpiry(value: string) {
   });
 }
 
+function isSessionExpiredError(error: unknown) {
+  return error instanceof Error && error.message.includes("sign-in session expired");
+}
+
 function formatHours(minutes: number) {
   const hours = minutes / 60;
   const formatted = Number.isInteger(hours) ? `${hours}` : hours.toFixed(1);
@@ -3257,11 +3292,32 @@ function createStyles(colors: AppColors) {
     gap: spacing.sm,
     padding: spacing.lg
   },
+  accountButton: {
+    alignItems: "center",
+    backgroundColor: colors.brandSoft,
+    borderRadius: 8,
+    flexDirection: "row",
+    gap: spacing.xs,
+    minHeight: 44,
+    paddingHorizontal: spacing.sm
+  },
+  accountButtonText: {
+    color: colors.brand,
+    fontSize: 13,
+    fontWeight: "900"
+  },
   header: {
     alignItems: "center",
     flexDirection: "row",
     gap: spacing.md,
     justifyContent: "space-between"
+  },
+  headerActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    justifyContent: "flex-end"
   },
   headerCopy: {
     flex: 1,

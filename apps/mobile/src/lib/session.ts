@@ -23,15 +23,23 @@ export async function saveAuthSession(session: AuthSession) {
 export async function getStoredAuthSession() {
   if (canUseWebStorage()) {
     const stored = window.localStorage.getItem(SESSION_KEY);
-    return parseSession(stored);
+    const session = parseSession(stored);
+    if (stored && !session) {
+      window.localStorage.removeItem(SESSION_KEY);
+    }
+    return session;
   }
 
   if (await SecureStore.isAvailableAsync()) {
     const stored = await SecureStore.getItemAsync(SESSION_KEY);
-    return parseSession(stored);
+    const session = parseSession(stored);
+    if (stored && !session) {
+      await SecureStore.deleteItemAsync(SESSION_KEY);
+    }
+    return session;
   }
 
-  return memorySession;
+  return isUsableAuthSession(memorySession) ? memorySession : null;
 }
 
 export async function clearStoredAuthSession() {
@@ -57,8 +65,30 @@ function parseSession(value: string | null) {
   }
 
   try {
-    return JSON.parse(value) as AuthSession;
+    const parsed = JSON.parse(value) as unknown;
+    return isUsableAuthSession(parsed) ? parsed : null;
   } catch {
     return null;
   }
+}
+
+function isUsableAuthSession(value: unknown): value is AuthSession {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const session = value as Partial<AuthSession>;
+  if (session.role !== "student" && session.role !== "parent") {
+    return false;
+  }
+
+  if (!session.session_token || typeof session.session_token !== "string") {
+    return false;
+  }
+
+  if (session.role === "student") {
+    return Boolean(session.student?.id);
+  }
+
+  return Boolean(session.parent?.id);
 }

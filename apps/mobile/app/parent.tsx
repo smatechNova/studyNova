@@ -1,5 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Link, useLocalSearchParams } from "expo-router";
+import { Link, router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -15,7 +15,7 @@ import {
   getWeeklyStudyDigest,
   redeemParentInviteCode
 } from "@/lib/api";
-import { getStoredAuthSession } from "@/lib/session";
+import { clearStoredAuthSession, getStoredAuthSession } from "@/lib/session";
 import type { ParentFamilyAccount, PlanSession, SavedStudyPlan, StudyPlanProgress, WeeklyStudyDigest } from "@/types";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
@@ -170,7 +170,12 @@ export default function ParentScreen() {
         setSavedPlan(currentPlan);
         setProgress(currentProgress);
         setWeeklyDigest(currentDigest);
-      } catch {
+      } catch (error) {
+        if (isSessionExpiredError(error)) {
+          setSessionParentId(undefined);
+          setAuthMessage("Your sign-in session expired. Please sign in again.");
+          return;
+        }
         setSavedPlan(null);
         setPlanHistory([]);
         setProgress(null);
@@ -179,7 +184,12 @@ export default function ParentScreen() {
       } finally {
         setIsHistoryLoading(false);
       }
-    } catch {
+    } catch (error) {
+      if (isSessionExpiredError(error)) {
+        setSessionParentId(undefined);
+        setAuthMessage("Your sign-in session expired. Please sign in again.");
+        return;
+      }
       setParentFamily(null);
       setSavedPlan(null);
       setPlanHistory([]);
@@ -216,8 +226,13 @@ export default function ParentScreen() {
         setSelectedStudentId(linkedStudent.id);
         void loadParentView(linkedStudent.id);
       }
-    } catch {
-      setInviteMessage("That code is invalid, expired, or already used.");
+    } catch (error) {
+      if (isSessionExpiredError(error)) {
+        setSessionParentId(undefined);
+        setAuthMessage("Your sign-in session expired. Please sign in again.");
+      } else {
+        setInviteMessage("That code is invalid, expired, or already used.");
+      }
     } finally {
       setIsInviteRedeeming(false);
     }
@@ -242,6 +257,11 @@ export default function ParentScreen() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  async function switchAccount() {
+    await clearStoredAuthSession();
+    router.replace("/auth?role=parent");
   }
 
   if (isSessionLoading) {
@@ -296,14 +316,20 @@ export default function ParentScreen() {
               <Text style={styles.helper}>{savedPlan.plan.metadata.class_level || "Class not set"}</Text>
             ) : null}
           </View>
-          <Pressable accessibilityRole="button" onPress={() => void loadParentView()} style={styles.badge}>
-            {isLoading ? (
-              <ActivityIndicator color={colors.success} />
-            ) : (
-              <MaterialCommunityIcons name="refresh" size={18} color={colors.success} />
-            )}
-            <Text style={styles.badgeText}>Refresh</Text>
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable accessibilityRole="button" onPress={() => void loadParentView()} style={styles.badge}>
+              {isLoading ? (
+                <ActivityIndicator color={colors.success} />
+              ) : (
+                <MaterialCommunityIcons name="refresh" size={18} color={colors.success} />
+              )}
+              <Text style={styles.badgeText}>Refresh</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => void switchAccount()} style={styles.accountButton}>
+              <MaterialCommunityIcons name="account-switch-outline" size={18} color={colors.brand} />
+              <Text style={styles.accountButtonText}>Switch</Text>
+            </Pressable>
+          </View>
         </View>
 
         {message ? (
@@ -611,6 +637,10 @@ function getParamValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function isSessionExpiredError(error: unknown) {
+  return error instanceof Error && error.message.includes("sign-in session expired");
+}
+
 function isRebalancedPlan(savedPlan: SavedStudyPlan | null) {
   return savedPlan?.plan.metadata.recommendation.startsWith("Plan rebalanced after missed sessions.") ?? false;
 }
@@ -786,6 +816,20 @@ function createStyles(colors: AppColors) {
     backgroundColor: colors.warningSoft,
     borderColor: colors.warningBorder
   },
+  accountButton: {
+    alignItems: "center",
+    backgroundColor: colors.brandSoft,
+    borderRadius: 8,
+    flexDirection: "row",
+    gap: spacing.xs,
+    minHeight: 40,
+    paddingHorizontal: spacing.sm
+  },
+  accountButtonText: {
+    color: colors.brand,
+    fontSize: 12,
+    fontWeight: "900"
+  },
   badge: {
     alignItems: "center",
     backgroundColor: colors.successSoft,
@@ -844,6 +888,13 @@ function createStyles(colors: AppColors) {
   headerCopy: {
     flex: 1,
     gap: spacing.xs
+  },
+  headerActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    justifyContent: "flex-end"
   },
   historyCard: {
     alignItems: "center",

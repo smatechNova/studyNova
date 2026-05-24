@@ -20,7 +20,7 @@ import type {
   StudySessionCompletionRequest,
   WeeklyStudyDigest
 } from "@/types";
-import { getStoredAuthSession } from "@/lib/session";
+import { clearStoredAuthSession, getStoredAuthSession } from "@/lib/session";
 
 const API_URL = getApiUrl();
 
@@ -53,6 +53,11 @@ async function createApiError(response: Response, fallback: string) {
     }
   } catch {
     detail = "";
+  }
+
+  if (response.status === 401 && (detail === "Sign in required." || detail === "Invalid sign-in session.")) {
+    await clearStoredAuthSession();
+    return new Error("Your sign-in session expired. Please sign in again.");
   }
 
   return new Error(detail ? `${fallback}: ${detail}` : `${fallback} (${response.status})`);
