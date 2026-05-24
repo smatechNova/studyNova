@@ -15,7 +15,7 @@ import {
 
 import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
 import { Screen } from "@/components/Screen";
-import { firebaseSignInAccount, signInAccount } from "@/lib/api";
+import { createAccountRecoveryRequest, firebaseSignInAccount, signInAccount } from "@/lib/api";
 import {
   exchangeGoogleIdTokenForFirebaseIdToken,
   getFirebaseClientConfig,
@@ -57,6 +57,10 @@ export default function AuthScreen() {
   const [accessCode, setAccessCode] = useState("");
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [recoveryContact, setRecoveryContact] = useState("");
+  const [recoveryNote, setRecoveryNote] = useState("");
+  const [isRecoveryLoading, setIsRecoveryLoading] = useState(false);
   const firebaseConfig = getFirebaseClientConfig();
   const firebaseReady = isFirebaseClientConfigured();
   const [googleRequest, googleResponse, promptGoogleSignIn] = Google.useIdTokenAuthRequest({
@@ -97,6 +101,7 @@ export default function AuthScreen() {
       await routeSession(session);
     } catch {
       setMessage("No account matched that role, login ID, and access code. Check the details or create the account.");
+      setIsHelpOpen(true);
     } finally {
       setIsLoading(false);
     }
@@ -147,6 +152,36 @@ export default function AuthScreen() {
 
   function openGmailSignup() {
     void Linking.openURL("https://accounts.google.com/signup");
+  }
+
+  async function submitAccountHelpRequest() {
+    if (!isValidLoginId(loginId)) {
+      setMessage("Enter the login ID first, then send the account help request.");
+      return;
+    }
+
+    if (!isValidLoginId(recoveryContact)) {
+      setMessage("Enter a valid phone number or email where support can reach you.");
+      return;
+    }
+
+    setIsRecoveryLoading(true);
+    setMessage("");
+
+    try {
+      const receipt = await createAccountRecoveryRequest({
+        role,
+        login_id: loginId.trim(),
+        contact: recoveryContact.trim(),
+        note: recoveryNote.trim()
+      });
+      setMessage(receipt.message);
+      setRecoveryNote("");
+    } catch {
+      setMessage("Could not send the account help request. Check the API connection and try again.");
+    } finally {
+      setIsRecoveryLoading(false);
+    }
   }
 
   return (
@@ -265,6 +300,73 @@ export default function AuthScreen() {
           </View>
         ) : null}
 
+        <View style={styles.helpPanel}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              setIsHelpOpen((current) => !current);
+              setMessage("");
+            }}
+            style={styles.helpHeader}
+          >
+            <View style={styles.helpIcon}>
+              <MaterialCommunityIcons name="lifebuoy" size={20} color={colors.brand} />
+            </View>
+            <View style={styles.roleCopy}>
+              <Text style={styles.sectionTitle}>Need help signing in?</Text>
+              <Text style={styles.helper}>Send a safe recovery request without revealing whether the account exists.</Text>
+            </View>
+            <MaterialCommunityIcons
+              name={isHelpOpen ? "chevron-up" : "chevron-down"}
+              size={22}
+              color={colors.muted}
+            />
+          </Pressable>
+
+          {isHelpOpen ? (
+            <View style={styles.helpBody}>
+              <TextInput
+                autoCapitalize="none"
+                keyboardType="email-address"
+                onChangeText={(value) => {
+                  setMessage("");
+                  setRecoveryContact(value);
+                }}
+                placeholder="Your phone number or email"
+                placeholderTextColor={colors.muted}
+                style={styles.input}
+                value={recoveryContact}
+              />
+              <TextInput
+                multiline
+                onChangeText={(value) => {
+                  setMessage("");
+                  setRecoveryNote(value);
+                }}
+                placeholder="Optional note for support"
+                placeholderTextColor={colors.muted}
+                style={[styles.input, styles.noteInput]}
+                value={recoveryNote}
+              />
+              <Pressable
+                accessibilityRole="button"
+                disabled={isRecoveryLoading}
+                onPress={() => void submitAccountHelpRequest()}
+                style={[styles.secondaryButton, isRecoveryLoading ? styles.disabledButton : null]}
+              >
+                {isRecoveryLoading ? (
+                  <ActivityIndicator color={colors.brand} />
+                ) : (
+                  <>
+                    <MaterialCommunityIcons name="send-outline" size={18} color={colors.brand} />
+                    <Text style={styles.secondaryButtonText}>Send account help request</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+
         <View style={styles.actions}>
           <Pressable
             accessibilityRole="button"
@@ -361,6 +463,31 @@ function createStyles(colors: AppColors) {
     fontSize: 14,
     fontWeight: "800"
   },
+  helpBody: {
+    gap: spacing.sm,
+    paddingTop: spacing.sm
+  },
+  helpHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.sm
+  },
+  helpIcon: {
+    alignItems: "center",
+    backgroundColor: colors.brandSoft,
+    borderRadius: 8,
+    height: 42,
+    justifyContent: "center",
+    width: 42
+  },
+  helpPanel: {
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.md
+  },
   helper: {
     color: colors.muted,
     fontSize: 14,
@@ -421,6 +548,10 @@ function createStyles(colors: AppColors) {
     fontSize: 14,
     fontWeight: "700",
     lineHeight: 20
+  },
+  noteInput: {
+    minHeight: 88,
+    textAlignVertical: "top"
   },
   panel: {
     backgroundColor: colors.panel,

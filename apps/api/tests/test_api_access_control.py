@@ -234,3 +234,34 @@ def test_invite_code_can_only_be_redeemed_once(tmp_path, monkeypatch) -> None:
 
     assert first_response.status_code == 200
     assert second_response.status_code == 404
+
+
+def test_account_recovery_request_returns_generic_receipt(tmp_path, monkeypatch) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)
+    client = TestClient(app)
+    _student(store, "alliyah@example.com", "Alliyah Olaniyan")
+
+    existing_response = client.post(
+        "/api/v1/accounts/recovery-requests",
+        json={
+            "role": "student",
+            "login_id": "alliyah@example.com",
+            "contact": "parent@example.com",
+            "note": "Forgot access code",
+        },
+    )
+    missing_response = client.post(
+        "/api/v1/accounts/recovery-requests",
+        json={
+            "role": "student",
+            "login_id": "missing@example.com",
+            "contact": "parent@example.com",
+        },
+    )
+
+    assert existing_response.status_code == 200
+    assert missing_response.status_code == 200
+    assert existing_response.json()["status"] == "received"
+    assert missing_response.json()["status"] == "received"
+    assert "matched_account_id" not in existing_response.json()

@@ -148,6 +148,20 @@ export type AccountSignInInput = {
   access_code: string;
 };
 
+export type AccountRecoveryRequestInput = {
+  role: AuthRole;
+  login_id: string;
+  contact: string;
+  note: string;
+};
+
+export type AccountRecoveryRequestReceipt = {
+  id: string;
+  status: "received";
+  message: string;
+  created_at: string;
+};
+
 export type FirebaseSignInInput = {
   role: AuthRole;
   id_token: string;

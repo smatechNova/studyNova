@@ -1,4 +1,12 @@
-from app.schemas import AccountSignInRequest, ParentAccountCreate, ParentStudentLinkCreate, StudentAccountCreate
+import sqlite3
+
+from app.schemas import (
+    AccountRecoveryRequestCreate,
+    AccountSignInRequest,
+    ParentAccountCreate,
+    ParentStudentLinkCreate,
+    StudentAccountCreate,
+)
 from app.storage import StudyPlanStore
 
 
@@ -173,6 +181,54 @@ def test_study_plan_store_signs_in_by_role_and_login_id(tmp_path) -> None:
     assert parent_session.parent.id == parent.id
     assert [linked_student.id for linked_student in parent_session.students] == [student.id]
     assert rejected_session is None
+
+
+def test_study_plan_store_records_account_recovery_request_privately(tmp_path) -> None:
+    database_path = tmp_path / "studynova.sqlite3"
+    store = StudyPlanStore(str(database_path))
+    student = store.create_student_account(
+        StudentAccountCreate(
+            login_id="alliyah@example.com",
+            access_code="1234",
+            name="Alliyah Olaniyan",
+            class_level="SS2 Science",
+            age=15,
+            school_name="",
+        )
+    )
+
+    receipt = store.create_account_recovery_request(
+        AccountRecoveryRequestCreate(
+            role="student",
+            login_id="ALLIYAH@example.com",
+            contact="parent@example.com",
+            note="Forgot the access code.",
+        )
+    )
+    missing_receipt = store.create_account_recovery_request(
+        AccountRecoveryRequestCreate(
+            role="student",
+            login_id="missing@example.com",
+            contact="parent@example.com",
+        )
+    )
+
+    assert receipt.status == "received"
+    assert missing_receipt.status == "received"
+    assert "exposing account details" in receipt.message
+
+    with sqlite3.connect(database_path) as connection:
+        connection.row_factory = sqlite3.Row
+        rows = connection.execute(
+            """
+            select role, login_id, contact, note, matched_account_id
+            from account_recovery_requests
+            order by created_at asc
+            """
+        ).fetchall()
+
+    assert [row["matched_account_id"] for row in rows] == [student.id, None]
+    assert rows[0]["note"] == "Forgot the access code."
 
 
 def test_study_plan_store_binds_firebase_identity_by_role(tmp_path) -> None:

@@ -1,4 +1,6 @@
 import type {
+  AccountRecoveryRequestInput,
+  AccountRecoveryRequestReceipt,
   AccountSignInInput,
   AuthSession,
   FamilyAccount,
@@ -170,6 +172,24 @@ export async function signInAccount(payload: AccountSignInInput): Promise<AuthSe
   }
 
   return response.json() as Promise<AuthSession>;
+}
+
+export async function createAccountRecoveryRequest(
+  payload: AccountRecoveryRequestInput
+): Promise<AccountRecoveryRequestReceipt> {
+  const response = await apiFetch(`${API_URL}/api/v1/accounts/recovery-requests`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Account help request failed");
+  }
+
+  return response.json() as Promise<AccountRecoveryRequestReceipt>;
 }
 
 export async function firebaseSignInAccount(payload: FirebaseSignInInput): Promise<AuthSession> {

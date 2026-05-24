@@ -11,6 +11,8 @@ from uuid import uuid4
 
 from app.config import get_settings
 from app.schemas import (
+    AccountRecoveryRequestCreate,
+    AccountRecoveryRequestReceipt,
     AccountSignInRequest,
     AuthSession,
     CheckInRequest,
@@ -223,6 +225,41 @@ class StudyPlanStore:
 
         family = self.parent_family(parent.id)
         return AuthSession(role="parent", parent=parent, students=family.students)
+
+    def create_account_recovery_request(self, payload: AccountRecoveryRequestCreate) -> AccountRecoveryRequestReceipt:
+        matched_account_id = self._recovery_account_id(payload)
+        receipt = AccountRecoveryRequestReceipt(
+            id=str(uuid4()),
+            created_at=datetime.now(timezone.utc),
+            message="Request received. A school or StudyNova support admin can review it without exposing account details.",
+        )
+
+        with self._connect() as connection:
+            connection.execute(
+                """
+                insert into account_recovery_requests (
+                    id,
+                    role,
+                    login_id,
+                    contact,
+                    note,
+                    matched_account_id,
+                    created_at
+                )
+                values (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    receipt.id,
+                    payload.role,
+                    payload.login_id,
+                    payload.contact,
+                    payload.note,
+                    matched_account_id,
+                    receipt.created_at.isoformat(),
+                ),
+            )
+
+        return receipt
 
     def firebase_sign_in(self, role: str, auth_uid: str, login_id: str) -> AuthSession | None:
         if role == "student":
@@ -714,6 +751,14 @@ class StudyPlanStore:
     def _parent_access_code_matches(self, parent_id: str, access_code: str) -> bool:
         access_code_hash = self._parent_access_code_hash(parent_id)
         return bool(access_code_hash and _access_code_matches(access_code_hash, access_code))
+
+    def _recovery_account_id(self, payload: AccountRecoveryRequestCreate) -> str | None:
+        if payload.role == "student":
+            account = self.student_account_by_login_id(payload.login_id)
+            return account.id if account is not None else None
+
+        account = self.parent_account_by_contact(payload.login_id)
+        return account.id if account is not None else None
 
     def _student_access_code_hash(self, student_id: str) -> str:
         with self._connect() as connection:
@@ -1410,6 +1455,25 @@ class StudyPlanStore:
                 """
                 create index if not exists idx_parent_invite_codes_student_created
                 on parent_invite_codes (student_id, created_at desc)
+                """
+            )
+            connection.execute(
+                """
+                create table if not exists account_recovery_requests (
+                    id text primary key,
+                    role text not null,
+                    login_id text not null,
+                    contact text not null,
+                    note text not null,
+                    matched_account_id text,
+                    created_at text not null
+                )
+                """
+            )
+            connection.execute(
+                """
+                create index if not exists idx_account_recovery_requests_created
+                on account_recovery_requests (created_at desc)
                 """
             )
             connection.execute(

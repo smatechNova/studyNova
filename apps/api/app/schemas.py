@@ -175,6 +175,20 @@ class AccountSignInRequest(BaseModel):
     access_code: str = Field(min_length=4, max_length=6, pattern=r"^\d{4,6}$")
 
 
+class AccountRecoveryRequestCreate(BaseModel):
+    role: Literal["student", "parent"]
+    login_id: str = Field(min_length=5, max_length=120)
+    contact: str = Field(min_length=5, max_length=120)
+    note: str = Field(default="", max_length=240)
+
+
+class AccountRecoveryRequestReceipt(BaseModel):
+    id: str
+    status: Literal["received"] = "received"
+    message: str
+    created_at: datetime
+
+
 class FirebaseSignInRequest(BaseModel):
     role: Literal["student", "parent"]
     id_token: str = Field(min_length=20)

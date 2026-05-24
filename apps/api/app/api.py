@@ -8,6 +8,8 @@ from app.auth import FirebaseAuthUnavailable, InvalidFirebaseToken, verify_fireb
 from app.config import get_settings
 from app.domain.study_planner import build_rebalanced_study_plan, build_study_plan
 from app.schemas import (
+    AccountRecoveryRequestCreate,
+    AccountRecoveryRequestReceipt,
     AccountSignInRequest,
     AuthSession,
     CheckInRequest,
@@ -219,6 +221,11 @@ def sign_in_account(payload: AccountSignInRequest) -> AuthSession:
     if session is None:
         raise HTTPException(status_code=404, detail="No account matched that role, sign-in ID, and access code.")
     return _with_session_token(session)
+
+
+@router.post("/accounts/recovery-requests", response_model=AccountRecoveryRequestReceipt)
+def create_account_recovery_request(payload: AccountRecoveryRequestCreate) -> AccountRecoveryRequestReceipt:
+    return get_study_plan_store().create_account_recovery_request(payload)
 
 
 @router.post("/accounts/firebase-sign-in", response_model=AuthSession)
