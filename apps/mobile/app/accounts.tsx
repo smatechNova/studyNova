@@ -41,9 +41,11 @@ type AccountForm = {
 };
 
 type SetupResult = {
-  studentId: string;
+  studentId?: string;
   parentId: string;
 };
+
+type SetupMode = "studentParent" | "parentOnly";
 
 type AccountAction = "save" | "student" | "parent";
 
@@ -53,13 +55,16 @@ export default function AccountsScreen() {
   const params = useLocalSearchParams<{ parentId?: string }>();
   const parentId = getParamValue(params.parentId);
   const [form, setForm] = useState<AccountForm>(() => createDefaultAccountForm());
+  const [setupMode, setSetupMode] = useState<SetupMode>("studentParent");
   const [parentFamily, setParentFamily] = useState<ParentFamilyAccount | null>(null);
   const [message, setMessage] = useState("");
   const [activeAction, setActiveAction] = useState<AccountAction | null>(null);
   const [setupResult, setSetupResult] = useState<SetupResult | null>(null);
   const isLoading = activeAction !== null;
   const primaryActionLabel =
-    parentFamily?.parent && form.parentContact.trim() === parentFamily.parent.contact
+    setupMode === "parentOnly"
+      ? "Create parent monitoring account"
+      : parentFamily?.parent && form.parentContact.trim() === parentFamily.parent.contact
       ? "Link this student to parent"
       : "Create student and parent link";
 
@@ -85,7 +90,7 @@ export default function AccountsScreen() {
   }
 
   async function saveAccounts() {
-    const validation = getAccountValidationError(form);
+    const validation = getAccountValidationError(form, setupMode);
     if (validation) {
       setMessage(validation);
       return;
@@ -95,6 +100,23 @@ export default function AccountsScreen() {
     setMessage("");
 
     try {
+      if (setupMode === "parentOnly") {
+        const parent = await createParentAccount({
+          name: form.parentName.trim(),
+          contact: form.parentContact.trim(),
+          access_code: form.parentAccessCode.trim(),
+          relationship: form.relationship.trim()
+        });
+        setParentFamily((current) => ({
+          parent,
+          students: current?.parent?.id === parent.id ? current.students : [],
+          links: current?.parent?.id === parent.id ? current.links : []
+        }));
+        setSetupResult({ parentId: parent.id });
+        setMessage("Parent monitoring account is ready. Open the parent dashboard and link students with invite codes.");
+        return;
+      }
+
       const student = await createStudentAccount({
         login_id: form.studentLoginId.trim(),
         access_code: form.studentAccessCode.trim(),
@@ -135,6 +157,7 @@ export default function AccountsScreen() {
       return;
     }
 
+    setSetupMode("studentParent");
     setForm((current) => ({
       ...current,
       studentLoginId: "",
@@ -155,12 +178,23 @@ export default function AccountsScreen() {
     void Linking.openURL("https://accounts.google.com/signup");
   }
 
+  function chooseSetupMode(nextMode: SetupMode) {
+    setSetupMode(nextMode);
+    setMessage("");
+    setSetupResult(null);
+  }
+
   async function continueToDashboard(role: "student" | "parent") {
     const login_id = role === "student" ? form.studentLoginId.trim() : form.parentContact.trim();
     const access_code = role === "student" ? form.studentAccessCode.trim() : form.parentAccessCode.trim();
 
     if (!setupResult) {
       setMessage("Create or link the profiles first, then open the correct dashboard.");
+      return;
+    }
+
+    if (role === "student" && !setupResult.studentId) {
+      setMessage("This setup only created a parent account. Create or link a student before opening a student dashboard.");
       return;
     }
 
@@ -209,6 +243,39 @@ export default function AccountsScreen() {
           </View>
         </View>
 
+        <View style={styles.modeGrid}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => chooseSetupMode("studentParent")}
+            style={[styles.modeCard, setupMode === "studentParent" ? styles.modeCardSelected : null]}
+          >
+            <MaterialCommunityIcons
+              name="account-multiple-plus-outline"
+              size={24}
+              color={setupMode === "studentParent" ? colors.brand : colors.muted}
+            />
+            <View style={styles.modeCopy}>
+              <Text style={styles.modeTitle}>Student plus parent</Text>
+              <Text style={styles.helper}>Create one learner account and link it to parent monitoring.</Text>
+            </View>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => chooseSetupMode("parentOnly")}
+            style={[styles.modeCard, setupMode === "parentOnly" ? styles.modeCardSelected : null]}
+          >
+            <MaterialCommunityIcons
+              name="shield-account-outline"
+              size={24}
+              color={setupMode === "parentOnly" ? colors.brand : colors.muted}
+            />
+            <View style={styles.modeCopy}>
+              <Text style={styles.modeTitle}>Parent only</Text>
+              <Text style={styles.helper}>Create a parent account now, then add students later by invite code.</Text>
+            </View>
+          </Pressable>
+        </View>
+
         {parentFamily?.parent ? (
           <View style={styles.infoPanel}>
             <MaterialCommunityIcons name="link-variant" size={22} color={colors.success} />
@@ -235,58 +302,60 @@ export default function AccountsScreen() {
           </View>
         ) : null}
 
-        <View style={styles.panel}>
-          <View style={styles.sectionCopy}>
-            <Text style={styles.sectionTitle}>Student account</Text>
-            <Text style={styles.helper}>This profile belongs to one learner and feeds that learner's dashboard.</Text>
+        {setupMode === "studentParent" ? (
+          <View style={styles.panel}>
+            <View style={styles.sectionCopy}>
+              <Text style={styles.sectionTitle}>Student account</Text>
+              <Text style={styles.helper}>This profile belongs to one learner and feeds that learner's dashboard.</Text>
+            </View>
+            <FormField
+              autoCapitalize="none"
+              keyboardType="email-address"
+              label="Student login ID"
+              onChangeText={(value) => updateField("studentLoginId", value)}
+              placeholder="student@gmail.com or phone number"
+              value={form.studentLoginId}
+            />
+            <FormField
+              keyboardType="number-pad"
+              label="Student access code"
+              maxLength={6}
+              onChangeText={(value) => updateField("studentAccessCode", value.replace(/\D/g, ""))}
+              placeholder="4-6 digits"
+              secureTextEntry
+              value={form.studentAccessCode}
+            />
+            <Pressable accessibilityRole="link" onPress={openGmailSignup} style={styles.gmailLink}>
+              <MaterialCommunityIcons name="email-plus-outline" size={18} color={colors.brand} />
+              <Text style={styles.gmailLinkText}>Create Gmail for student</Text>
+            </Pressable>
+            <FormField
+              label="Student name"
+              onChangeText={(value) => updateField("studentName", value)}
+              placeholder="Alliyah Olaniyan"
+              value={form.studentName}
+            />
+            <FormField
+              label="Class"
+              onChangeText={(value) => updateField("classLevel", value)}
+              placeholder="SS2 Science"
+              value={form.classLevel}
+            />
+            <FormField
+              keyboardType="number-pad"
+              label="Age"
+              onChangeText={(value) => updateField("age", value)}
+              placeholder="15"
+              value={form.age}
+            />
+            <FormField
+              label="School name"
+              onChangeText={(value) => updateField("schoolName", value)}
+              placeholder="Optional"
+              value={form.schoolName}
+            />
           </View>
-          <FormField
-            autoCapitalize="none"
-            keyboardType="email-address"
-            label="Student login ID"
-            onChangeText={(value) => updateField("studentLoginId", value)}
-            placeholder="student@gmail.com or phone number"
-            value={form.studentLoginId}
-          />
-          <FormField
-            keyboardType="number-pad"
-            label="Student access code"
-            maxLength={6}
-            onChangeText={(value) => updateField("studentAccessCode", value.replace(/\D/g, ""))}
-            placeholder="4-6 digits"
-            secureTextEntry
-            value={form.studentAccessCode}
-          />
-          <Pressable accessibilityRole="link" onPress={openGmailSignup} style={styles.gmailLink}>
-            <MaterialCommunityIcons name="email-plus-outline" size={18} color={colors.brand} />
-            <Text style={styles.gmailLinkText}>Create Gmail for student</Text>
-          </Pressable>
-          <FormField
-            label="Student name"
-            onChangeText={(value) => updateField("studentName", value)}
-            placeholder="Alliyah Olaniyan"
-            value={form.studentName}
-          />
-          <FormField
-            label="Class"
-            onChangeText={(value) => updateField("classLevel", value)}
-            placeholder="SS2 Science"
-            value={form.classLevel}
-          />
-          <FormField
-            keyboardType="number-pad"
-            label="Age"
-            onChangeText={(value) => updateField("age", value)}
-            placeholder="15"
-            value={form.age}
-          />
-          <FormField
-            label="School name"
-            onChangeText={(value) => updateField("schoolName", value)}
-            placeholder="Optional"
-            value={form.schoolName}
-          />
-        </View>
+        ) : null}
 
         <View style={styles.panel}>
           <View style={styles.sectionCopy}>
@@ -343,21 +412,23 @@ export default function AccountsScreen() {
                 Student and parent dashboards stay separate. Open the dashboard for the person using this device now.
               </Text>
               <View style={styles.readyActions}>
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={isLoading}
-                  onPress={() => void continueToDashboard("student")}
-                  style={[styles.primaryButton, styles.readyButton, isLoading ? styles.disabledButton : null]}
-                >
-                  {activeAction === "student" ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <>
-                      <MaterialCommunityIcons name="notebook-edit-outline" size={18} color="#FFFFFF" />
-                      <Text style={styles.primaryButtonText}>Open student dashboard</Text>
-                    </>
-                  )}
-                </Pressable>
+                {setupResult.studentId ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={isLoading}
+                    onPress={() => void continueToDashboard("student")}
+                    style={[styles.primaryButton, styles.readyButton, isLoading ? styles.disabledButton : null]}
+                  >
+                    {activeAction === "student" ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <MaterialCommunityIcons name="notebook-edit-outline" size={18} color="#FFFFFF" />
+                        <Text style={styles.primaryButtonText}>Open student dashboard</Text>
+                      </>
+                    )}
+                  </Pressable>
+                ) : null}
                 <Pressable
                   accessibilityRole="button"
                   disabled={isLoading}
@@ -395,9 +466,11 @@ export default function AccountsScreen() {
             )}
           </Pressable>
 
-          <Link href="/auth?role=student" asChild>
+          <Link href={setupMode === "parentOnly" ? "/auth?role=parent" : "/auth?role=student"} asChild>
             <Pressable accessibilityRole="button" style={styles.secondaryButton}>
-              <Text style={styles.secondaryButtonText}>Sign in to student dashboard</Text>
+              <Text style={styles.secondaryButtonText}>
+                Sign in to {setupMode === "parentOnly" ? "parent" : "student"} dashboard
+              </Text>
               <MaterialCommunityIcons name="chevron-right" size={18} color={colors.brand} />
             </Pressable>
           </Link>
@@ -467,25 +540,27 @@ function createDefaultAccountForm(): AccountForm {
   };
 }
 
-function getAccountValidationError(form: AccountForm) {
-  if (!isValidLoginId(form.studentLoginId)) {
-    return "Enter a valid student login ID, such as Gmail or phone number.";
-  }
+function getAccountValidationError(form: AccountForm, setupMode: SetupMode) {
+  if (setupMode === "studentParent") {
+    if (!isValidLoginId(form.studentLoginId)) {
+      return "Enter a valid student login ID, such as Gmail or phone number.";
+    }
 
-  if (!isValidAccessCode(form.studentAccessCode)) {
-    return "Create a 4 to 6 digit access code for the student account.";
-  }
+    if (!isValidAccessCode(form.studentAccessCode)) {
+      return "Create a 4 to 6 digit access code for the student account.";
+    }
 
-  if (!isValidPersonName(form.studentName)) {
-    return "Enter the student's full name.";
-  }
+    if (!isValidPersonName(form.studentName)) {
+      return "Enter the student's full name.";
+    }
 
-  if (!isValidShortText(form.classLevel)) {
-    return "Enter the student's class.";
-  }
+    if (!isValidShortText(form.classLevel)) {
+      return "Enter the student's class.";
+    }
 
-  if (!isIntegerInRange(form.age, 3, 30)) {
-    return "Enter a valid student age between 3 and 30.";
+    if (!isIntegerInRange(form.age, 3, 30)) {
+      return "Enter a valid student age between 3 and 30.";
+    }
   }
 
   if (!isValidPersonName(form.parentName)) {
@@ -696,6 +771,36 @@ function createStyles(colors: AppColors) {
     fontSize: 14,
     fontWeight: "700",
     lineHeight: 20
+  },
+  modeCard: {
+    alignItems: "center",
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    minWidth: 240,
+    padding: spacing.md
+  },
+  modeCardSelected: {
+    backgroundColor: colors.brandSoft,
+    borderColor: colors.brand
+  },
+  modeCopy: {
+    flex: 1,
+    gap: spacing.xs
+  },
+  modeGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  modeTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: "900"
   },
   panel: {
     backgroundColor: colors.panel,
