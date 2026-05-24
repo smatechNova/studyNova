@@ -1,5 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Link, useLocalSearchParams } from "expo-router";
+import { Link, router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -19,8 +19,10 @@ import {
   createStudentAccount,
   getLatestParentFamily,
   getParentFamily,
-  linkParentStudent
+  linkParentStudent,
+  signInAccount
 } from "@/lib/api";
+import { saveAuthSession } from "@/lib/session";
 import type { ParentFamilyAccount } from "@/types";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
@@ -38,6 +40,13 @@ type AccountForm = {
   relationship: string;
 };
 
+type SetupResult = {
+  studentId: string;
+  parentId: string;
+};
+
+type AccountAction = "save" | "student" | "parent";
+
 export default function AccountsScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -46,7 +55,9 @@ export default function AccountsScreen() {
   const [form, setForm] = useState<AccountForm>(() => createDefaultAccountForm());
   const [parentFamily, setParentFamily] = useState<ParentFamilyAccount | null>(null);
   const [message, setMessage] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [activeAction, setActiveAction] = useState<AccountAction | null>(null);
+  const [setupResult, setSetupResult] = useState<SetupResult | null>(null);
+  const isLoading = activeAction !== null;
   const primaryActionLabel =
     parentFamily?.parent && form.parentContact.trim() === parentFamily.parent.contact
       ? "Link this student to parent"
@@ -80,7 +91,7 @@ export default function AccountsScreen() {
       return;
     }
 
-    setIsLoading(true);
+    setActiveAction("save");
     setMessage("");
 
     try {
@@ -104,16 +115,18 @@ export default function AccountsScreen() {
         students: current?.parent?.id === parent.id ? upsertById(current.students, student) : [student],
         links: current?.parent?.id === parent.id ? upsertById(current.links, link) : [link]
       }));
-      setMessage("Profiles are linked. Existing records are reused when the details match.");
+      setSetupResult({ studentId: student.id, parentId: parent.id });
+      setMessage("Profiles are linked. Choose which dashboard to open next.");
     } catch {
       setMessage("Could not save the account setup. Check the API and confirm any existing account access code.");
     } finally {
-      setIsLoading(false);
+      setActiveAction(null);
     }
   }
 
   function updateField(field: keyof AccountForm, value: string) {
     setMessage("");
+    setSetupResult(null);
     setForm((current) => ({ ...current, [field]: value }));
   }
 
@@ -134,11 +147,46 @@ export default function AccountsScreen() {
       parentContact: parentFamily.parent?.contact ?? current.parentContact,
       relationship: parentFamily.parent?.relationship ?? current.relationship
     }));
+    setSetupResult(null);
     setMessage("Parent monitoring details are ready. Enter one student's details and link that student.");
   }
 
   function openGmailSignup() {
     void Linking.openURL("https://accounts.google.com/signup");
+  }
+
+  async function continueToDashboard(role: "student" | "parent") {
+    const login_id = role === "student" ? form.studentLoginId.trim() : form.parentContact.trim();
+    const access_code = role === "student" ? form.studentAccessCode.trim() : form.parentAccessCode.trim();
+
+    if (!setupResult) {
+      setMessage("Create or link the profiles first, then open the correct dashboard.");
+      return;
+    }
+
+    setActiveAction(role);
+    setMessage("");
+
+    try {
+      const session = await signInAccount({ role, login_id, access_code });
+      await saveAuthSession(session);
+
+      if (role === "student" && session.student) {
+        router.replace(`/student?studentId=${encodeURIComponent(session.student.id)}`);
+        return;
+      }
+
+      if (role === "parent" && session.parent) {
+        router.replace(`/parent?parentId=${encodeURIComponent(session.parent.id)}`);
+        return;
+      }
+
+      setMessage("The account was found, but it does not match the dashboard selected.");
+    } catch {
+      setMessage("The profiles were linked, but automatic sign-in failed. Use the sign-in screen with the same details.");
+    } finally {
+      setActiveAction(null);
+    }
   }
 
   return (
@@ -284,6 +332,52 @@ export default function AccountsScreen() {
           </View>
         ) : null}
 
+        {setupResult ? (
+          <View style={styles.readyPanel}>
+            <View style={styles.readyIcon}>
+              <MaterialCommunityIcons name="shield-check-outline" size={24} color={colors.success} />
+            </View>
+            <View style={styles.readyCopy}>
+              <Text style={styles.sectionTitle}>Accounts are ready</Text>
+              <Text style={styles.helper}>
+                Student and parent dashboards stay separate. Open the dashboard for the person using this device now.
+              </Text>
+              <View style={styles.readyActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={isLoading}
+                  onPress={() => void continueToDashboard("student")}
+                  style={[styles.primaryButton, styles.readyButton, isLoading ? styles.disabledButton : null]}
+                >
+                  {activeAction === "student" ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <MaterialCommunityIcons name="notebook-edit-outline" size={18} color="#FFFFFF" />
+                      <Text style={styles.primaryButtonText}>Open student dashboard</Text>
+                    </>
+                  )}
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={isLoading}
+                  onPress={() => void continueToDashboard("parent")}
+                  style={[styles.secondaryButton, styles.readyButton, isLoading ? styles.disabledButton : null]}
+                >
+                  {activeAction === "parent" ? (
+                    <ActivityIndicator color={colors.brand} />
+                  ) : (
+                    <>
+                      <MaterialCommunityIcons name="shield-account-outline" size={18} color={colors.brand} />
+                      <Text style={styles.secondaryButtonText}>Open parent dashboard</Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        ) : null}
+
         <View style={styles.actions}>
           <Pressable
             accessibilityRole="button"
@@ -291,7 +385,7 @@ export default function AccountsScreen() {
             onPress={() => void saveAccounts()}
             style={[styles.primaryButton, isLoading ? styles.disabledButton : null]}
           >
-            {isLoading ? (
+            {activeAction === "save" ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
               <>
@@ -625,6 +719,38 @@ function createStyles(colors: AppColors) {
     color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "800"
+  },
+  readyActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  readyButton: {
+    flexGrow: 1
+  },
+  readyCopy: {
+    flex: 1,
+    gap: spacing.sm,
+    minWidth: 220
+  },
+  readyIcon: {
+    alignItems: "center",
+    backgroundColor: colors.successSoft,
+    borderRadius: 8,
+    height: 52,
+    justifyContent: "center",
+    width: 52
+  },
+  readyPanel: {
+    alignItems: "flex-start",
+    backgroundColor: colors.panel,
+    borderColor: colors.success,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    padding: spacing.lg
   },
   secondaryButton: {
     alignItems: "center",
