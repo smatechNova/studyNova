@@ -5,9 +5,10 @@
     "scheme": "studynova",
     "version": "0.1.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "android": {
       "package": "com.smatech.studynova",
+      "versionCode": 1,
       "permissions": [
         "POST_NOTIFICATIONS"
       ],
