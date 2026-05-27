@@ -8,7 +8,6 @@
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "com.smatech.studynova",
-      "versionCode": 1,
       "permissions": [
         "POST_NOTIFICATIONS"
       ],
@@ -21,6 +20,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "be3e9e19-91e1-47a3-8a87-d709df81cd59"
+      }
     }
   }
 }

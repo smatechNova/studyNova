@@ -7,7 +7,7 @@ This runbook gets StudyNova into Google Play testing before the full public laun
 - App name: StudyNova
 - Android package: `com.smatech.studynova`
 - Version name: `0.1.0`
-- Version code: starts at `1`, then EAS auto-increments for store builds
+- Version code: managed remotely by EAS and auto-incremented for store builds
 - Build artifact for Play Store: Android App Bundle (`.aab`)
 - Testing target: Google Play internal testing first, then closed testing
 
@@ -19,6 +19,7 @@ This runbook gets StudyNova into Google Play testing before the full public laun
 4. A Google Play app draft created with package name `com.smatech.studynova`.
 5. At least one tester email list or Google Group for Play testing.
 6. Privacy policy URL. Use `docs/privacy-policy-draft.md` as the starting text.
+7. Stable network access to Expo services, including `api.expo.dev` and `keystore.expo.dev`.
 
 ## Recommended Track Order
 
