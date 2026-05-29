@@ -172,6 +172,25 @@ export type AccountRecoveryRequestRecord = {
   created_at: string;
 };
 
+export type StorageHealth = {
+  provider: "sqlite";
+  database_path: string;
+  database_exists: boolean;
+  database_size_bytes: number;
+  backup_directory: string;
+  backup_directory_exists: boolean;
+  production_ready: boolean;
+  warnings: string[];
+};
+
+export type StorageBackupReceipt = {
+  provider: "sqlite";
+  filename: string;
+  backup_path: string;
+  size_bytes: number;
+  created_at: string;
+};
+
 export type FirebaseSignInInput = {
   role: AuthRole;
   id_token: string;

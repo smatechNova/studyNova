@@ -12,6 +12,8 @@ import type {
   ParentAccountInput,
   ParentStudentLink,
   SavedStudyPlan,
+  StorageBackupReceipt,
+  StorageHealth,
   StudentAccount,
   StudentAccountInput,
   StudyReminderSettings,
@@ -209,6 +211,35 @@ export async function getAccountRecoveryRequests(adminCode: string, limit = 50):
   }
 
   return response.json() as Promise<AccountRecoveryRequestRecord[]>;
+}
+
+export async function getStorageHealth(adminCode: string): Promise<StorageHealth> {
+  const response = await apiFetch(`${API_URL}/api/v1/admin/storage/health`, {
+    headers: {
+      "X-Admin-Code": adminCode
+    }
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Storage health request failed");
+  }
+
+  return response.json() as Promise<StorageHealth>;
+}
+
+export async function createStorageBackup(adminCode: string): Promise<StorageBackupReceipt> {
+  const response = await apiFetch(`${API_URL}/api/v1/admin/storage/backups`, {
+    method: "POST",
+    headers: {
+      "X-Admin-Code": adminCode
+    }
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Storage backup request failed");
+  }
+
+  return response.json() as Promise<StorageBackupReceipt>;
 }
 
 export async function firebaseSignInAccount(payload: FirebaseSignInInput): Promise<AuthSession> {

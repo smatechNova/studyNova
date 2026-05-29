@@ -28,6 +28,8 @@ from app.schemas import (
     ParentStudentLink,
     ParentStudentLinkCreate,
     SavedStudyPlan,
+    StorageBackupReceipt,
+    StorageHealth,
     StudentAccount,
     StudentAccountCreate,
     StudyReminderSettings,
@@ -286,6 +288,47 @@ class StudyPlanStore:
             )
             for row in rows
         ]
+
+    def storage_health(self, backup_directory: str, production: bool = False) -> StorageHealth:
+        backup_path = Path(backup_directory)
+        warnings: list[str] = []
+        database_exists = self.database_path.exists()
+        database_size = self.database_path.stat().st_size if database_exists else 0
+
+        if production:
+            if not self.database_path.is_absolute():
+                warnings.append("LOCAL_DATA_PATH should be an absolute path on a persistent disk in production.")
+            if "apps/api/.data" in self.database_path.as_posix():
+                warnings.append("Default development data path is not a safe production database location.")
+            if not backup_path.is_absolute():
+                warnings.append("BACKUP_DATA_PATH should be an absolute path on a persistent disk in production.")
+
+        return StorageHealth(
+            database_path=str(self.database_path),
+            database_exists=database_exists,
+            database_size_bytes=database_size,
+            backup_directory=str(backup_path),
+            backup_directory_exists=backup_path.exists(),
+            production_ready=not warnings,
+            warnings=warnings,
+        )
+
+    def create_backup(self, backup_directory: str) -> StorageBackupReceipt:
+        backup_path = Path(backup_directory)
+        backup_path.mkdir(parents=True, exist_ok=True)
+        created_at = datetime.now(timezone.utc)
+        filename = f"studynova-{created_at.strftime('%Y%m%dT%H%M%SZ')}.sqlite3"
+        destination_path = backup_path / filename
+
+        with self._connect() as source, sqlite3.connect(destination_path) as destination:
+            source.backup(destination)
+
+        return StorageBackupReceipt(
+            filename=filename,
+            backup_path=str(destination_path),
+            size_bytes=destination_path.stat().st_size,
+            created_at=created_at,
+        )
 
     def firebase_sign_in(self, role: str, auth_uid: str, login_id: str) -> AuthSession | None:
         if role == "student":

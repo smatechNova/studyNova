@@ -4,22 +4,25 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from
 
 import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
 import { Screen } from "@/components/Screen";
-import { getAccountRecoveryRequests } from "@/lib/api";
+import { createStorageBackup, getAccountRecoveryRequests, getStorageHealth } from "@/lib/api";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
-import type { AccountRecoveryRequestRecord } from "@/types";
+import type { AccountRecoveryRequestRecord, StorageBackupReceipt, StorageHealth } from "@/types";
 
 export default function SupportScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [adminCode, setAdminCode] = useState("");
   const [requests, setRequests] = useState<AccountRecoveryRequestRecord[]>([]);
+  const [storageHealth, setStorageHealth] = useState<StorageHealth | null>(null);
+  const [latestBackup, setLatestBackup] = useState<StorageBackupReceipt | null>(null);
   const [message, setMessage] = useState("Enter the admin code to review account help requests.");
   const [isLoading, setIsLoading] = useState(false);
+  const [isBackingUp, setIsBackingUp] = useState(false);
   const openRequests = requests.length;
   const matchedRequests = requests.filter((request) => request.matched_account).length;
 
-  async function loadRequests() {
+  async function loadAdminData() {
     if (!adminCode.trim()) {
       setMessage("Enter the admin code first.");
       return;
@@ -29,18 +32,45 @@ export default function SupportScreen() {
     setMessage("");
 
     try {
-      const nextRequests = await getAccountRecoveryRequests(adminCode.trim());
+      const [nextRequests, nextStorageHealth] = await Promise.all([
+        getAccountRecoveryRequests(adminCode.trim()),
+        getStorageHealth(adminCode.trim())
+      ]);
       setRequests(nextRequests);
+      setStorageHealth(nextStorageHealth);
       setMessage(
         nextRequests.length
-          ? "Latest account help requests loaded."
-          : "No account help requests have been submitted yet."
+          ? "Latest support and storage status loaded."
+          : "Storage status loaded. No account help requests have been submitted yet."
       );
     } catch {
       setRequests([]);
-      setMessage("Could not load requests. Check the admin code and API connection.");
+      setStorageHealth(null);
+      setMessage("Could not load admin data. Check the admin code and API connection.");
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function backUpStorage() {
+    if (!adminCode.trim()) {
+      setMessage("Enter the admin code first.");
+      return;
+    }
+
+    setIsBackingUp(true);
+    setMessage("");
+
+    try {
+      const backup = await createStorageBackup(adminCode.trim());
+      const nextStorageHealth = await getStorageHealth(adminCode.trim());
+      setLatestBackup(backup);
+      setStorageHealth(nextStorageHealth);
+      setMessage(`Backup created: ${backup.filename}`);
+    } catch {
+      setMessage("Could not create a backup. Check the admin code and API connection.");
+    } finally {
+      setIsBackingUp(false);
     }
   }
 
@@ -85,7 +115,7 @@ export default function SupportScreen() {
           <Pressable
             accessibilityRole="button"
             disabled={isLoading}
-            onPress={() => void loadRequests()}
+            onPress={() => void loadAdminData()}
             style={[styles.primaryButton, isLoading ? styles.disabledButton : null]}
           >
             {isLoading ? (
@@ -93,7 +123,7 @@ export default function SupportScreen() {
             ) : (
               <>
                 <MaterialCommunityIcons name="refresh" size={18} color="#FFFFFF" />
-                <Text style={styles.primaryButtonText}>Load requests</Text>
+                <Text style={styles.primaryButtonText}>Load admin view</Text>
               </>
             )}
           </Pressable>
@@ -110,12 +140,72 @@ export default function SupportScreen() {
             <Text style={styles.metric}>{matchedRequests}</Text>
             <Text style={styles.helper}>Likely matches</Text>
           </View>
+          <View style={styles.summaryCard}>
+            <MaterialCommunityIcons
+              name={storageHealth?.production_ready ? "database-check-outline" : "database-alert-outline"}
+              size={24}
+              color={storageHealth?.production_ready ? colors.success : colors.warning}
+            />
+            <Text style={styles.metric}>{storageHealth ? formatBytes(storageHealth.database_size_bytes) : "--"}</Text>
+            <Text style={styles.helper}>Database size</Text>
+          </View>
         </View>
 
         {message ? (
           <View style={styles.messagePanel}>
             <MaterialCommunityIcons name="information-outline" size={22} color={colors.brand} />
             <Text style={styles.messageText}>{message}</Text>
+          </View>
+        ) : null}
+
+        {storageHealth ? (
+          <View style={styles.panel}>
+            <View style={styles.requestHeader}>
+              <View style={styles.heroCopy}>
+                <Text style={styles.kicker}>Persistence</Text>
+                <Text style={styles.sectionTitle}>
+                  {storageHealth.production_ready ? "Storage looks ready" : "Storage needs attention"}
+                </Text>
+                <Text style={styles.helper}>
+                  SQLite database is active. Use a persistent disk path before public production.
+                </Text>
+              </View>
+              <View style={[styles.statusPill, storageHealth.production_ready ? styles.statusMatched : styles.statusUnknown]}>
+                <Text style={styles.statusText}>{storageHealth.production_ready ? "Ready" : "Review"}</Text>
+              </View>
+            </View>
+
+            <View style={styles.detailRow}>
+              <MaterialCommunityIcons name="database-outline" size={18} color={colors.muted} />
+              <Text style={styles.detailText}>{storageHealth.database_path}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <MaterialCommunityIcons name="archive-outline" size={18} color={colors.muted} />
+              <Text style={styles.detailText}>{storageHealth.backup_directory}</Text>
+            </View>
+            {storageHealth.warnings.map((warning) => (
+              <Text key={warning} style={styles.warningText}>{warning}</Text>
+            ))}
+            {latestBackup ? (
+              <Text style={styles.note}>
+                Latest backup: {latestBackup.filename} ({formatBytes(latestBackup.size_bytes)})
+              </Text>
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              disabled={isBackingUp}
+              onPress={() => void backUpStorage()}
+              style={[styles.secondaryButton, isBackingUp ? styles.disabledButton : null]}
+            >
+              {isBackingUp ? (
+                <ActivityIndicator color={colors.brand} />
+              ) : (
+                <>
+                  <MaterialCommunityIcons name="database-export-outline" size={18} color={colors.brand} />
+                  <Text style={styles.secondaryButtonText}>Create database backup</Text>
+                </>
+              )}
+            </Pressable>
           </View>
         ) : null}
 
@@ -146,6 +236,18 @@ export default function SupportScreen() {
       </ScrollView>
     </Screen>
   );
+}
+
+function formatBytes(value: number) {
+  if (value < 1024) {
+    return `${value} B`;
+  }
+
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function formatTimestamp(value: string) {
@@ -282,6 +384,22 @@ function createStyles(colors: AppColors) {
       fontSize: 14,
       fontWeight: "800"
     },
+    secondaryButton: {
+      alignItems: "center",
+      alignSelf: "flex-start",
+      backgroundColor: colors.brandSoft,
+      borderRadius: 8,
+      flexDirection: "row",
+      gap: spacing.xs,
+      justifyContent: "center",
+      minHeight: 46,
+      paddingHorizontal: spacing.md
+    },
+    secondaryButtonText: {
+      color: colors.brand,
+      fontSize: 14,
+      fontWeight: "800"
+    },
     requestCard: {
       backgroundColor: colors.panel,
       borderColor: colors.border,
@@ -344,6 +462,17 @@ function createStyles(colors: AppColors) {
       color: colors.text,
       fontSize: 26,
       fontWeight: "900"
+    },
+    warningText: {
+      backgroundColor: colors.warningSoft,
+      borderColor: colors.warningBorder,
+      borderRadius: 8,
+      borderWidth: 1,
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "700",
+      lineHeight: 20,
+      padding: spacing.md
     }
   });
 }

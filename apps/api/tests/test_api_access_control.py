@@ -337,3 +337,37 @@ def test_production_admin_access_requires_non_default_code(monkeypatch) -> None:
 
     assert response.status_code == 503
     assert response.json()["detail"] == "Admin support access is not configured."
+
+
+def test_admin_can_review_storage_health_and_create_backup(tmp_path, monkeypatch) -> None:
+    class TestSettings:
+        app_env = "development"
+        admin_access_code = "admin-test"
+        backup_data_path = str(tmp_path / "backups")
+        session_secret = "test-session-secret"
+        session_ttl_hours = 168
+
+        @property
+        def is_production(self) -> bool:
+            return False
+
+        @property
+        def uses_default_admin_access_code(self) -> bool:
+            return False
+
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    _student(store, "alliyah@example.com", "Alliyah Olaniyan")
+    monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)
+    monkeypatch.setattr(api_module, "get_settings", lambda: TestSettings())
+    client = TestClient(app)
+
+    blocked_response = client.get("/api/v1/admin/storage/health")
+    health_response = client.get("/api/v1/admin/storage/health", headers={"X-Admin-Code": "admin-test"})
+    backup_response = client.post("/api/v1/admin/storage/backups", headers={"X-Admin-Code": "admin-test"})
+
+    assert blocked_response.status_code == 403
+    assert health_response.status_code == 200
+    assert health_response.json()["provider"] == "sqlite"
+    assert health_response.json()["database_exists"] is True
+    assert backup_response.status_code == 200
+    assert backup_response.json()["filename"].startswith("studynova-")

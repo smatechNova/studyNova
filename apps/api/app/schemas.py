@@ -199,6 +199,25 @@ class AccountRecoveryRequestRecord(BaseModel):
     created_at: datetime
 
 
+class StorageHealth(BaseModel):
+    provider: Literal["sqlite"] = "sqlite"
+    database_path: str
+    database_exists: bool
+    database_size_bytes: int
+    backup_directory: str
+    backup_directory_exists: bool
+    production_ready: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
+class StorageBackupReceipt(BaseModel):
+    provider: Literal["sqlite"] = "sqlite"
+    filename: str
+    backup_path: str
+    size_bytes: int
+    created_at: datetime
+
+
 class FirebaseSignInRequest(BaseModel):
     role: Literal["student", "parent"]
     id_token: str = Field(min_length=20)

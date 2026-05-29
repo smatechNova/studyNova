@@ -236,6 +236,37 @@ def test_study_plan_store_records_account_recovery_request_privately(tmp_path) -
     assert recovery_requests[1].matched_account is True
 
 
+def test_study_plan_store_reports_health_and_creates_backup(tmp_path) -> None:
+    database_path = tmp_path / "studynova.sqlite3"
+    backup_path = tmp_path / "backups"
+    store = StudyPlanStore(str(database_path))
+    store.create_student_account(
+        StudentAccountCreate(
+            login_id="alliyah@example.com",
+            access_code="1234",
+            name="Alliyah Olaniyan",
+            class_level="SS2 Science",
+            age=15,
+            school_name="",
+        )
+    )
+
+    health = store.storage_health(str(backup_path), production=True)
+    backup = store.create_backup(str(backup_path))
+
+    assert health.database_exists is True
+    assert health.database_size_bytes > 0
+    assert health.production_ready is True
+    assert backup.filename.startswith("studynova-")
+    assert backup.size_bytes > 0
+
+    with sqlite3.connect(backup.backup_path) as connection:
+        row = connection.execute("select count(*) from student_accounts").fetchone()
+
+    assert row is not None
+    assert row[0] == 1
+
+
 def test_study_plan_store_binds_firebase_identity_by_role(tmp_path) -> None:
     store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
     student = store.create_student_account(

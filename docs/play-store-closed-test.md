@@ -21,6 +21,21 @@ This runbook gets StudyNova into Google Play testing before the full public laun
 6. Privacy policy URL. Use `docs/privacy-policy-draft.md` as the starting text.
 7. Stable network access to Expo services, including `api.expo.dev` and `keystore.expo.dev`.
 
+## Backend Persistence Setup
+
+For internal testing, the current API can run on SQLite if the deployment host provides a persistent disk.
+Set these environment variables on the backend host:
+
+```text
+APP_ENV=production
+LOCAL_DATA_PATH=/persistent/studynova/studynova.sqlite3
+BACKUP_DATA_PATH=/persistent/studynova/backups
+SESSION_SECRET=<long random secret>
+ADMIN_ACCESS_CODE=<private admin code>
+```
+
+Do not use the default development database path or default admin code for a public build. The support admin screen can load storage health and create a SQLite backup after the admin code is entered.
+
 ## Recommended Track Order
 
 1. Internal testing: upload first `.aab` and test install with 1 to 5 trusted people.

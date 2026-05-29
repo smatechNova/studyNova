@@ -28,6 +28,8 @@ from app.schemas import (
     ParentStudentLink,
     ParentStudentLinkCreate,
     SavedStudyPlan,
+    StorageBackupReceipt,
+    StorageHealth,
     StudentAccount,
     StudentAccountCreate,
     StudyReminderSettings,
@@ -271,6 +273,20 @@ def get_account_recovery_requests(
     _: None = Depends(require_admin),
 ) -> list[AccountRecoveryRequestRecord]:
     return get_study_plan_store().account_recovery_requests(limit=limit)
+
+
+@router.get("/admin/storage/health", response_model=StorageHealth)
+def get_admin_storage_health(_: None = Depends(require_admin)) -> StorageHealth:
+    settings = get_settings()
+    return get_study_plan_store().storage_health(
+        backup_directory=settings.backup_data_path,
+        production=settings.is_production,
+    )
+
+
+@router.post("/admin/storage/backups", response_model=StorageBackupReceipt)
+def create_admin_storage_backup(_: None = Depends(require_admin)) -> StorageBackupReceipt:
+    return get_study_plan_store().create_backup(get_settings().backup_data_path)
 
 
 @router.post("/accounts/firebase-sign-in", response_model=AuthSession)

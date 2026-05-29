@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_service_role_key: str = ""
     local_data_path: str = "apps/api/.data/studynova.sqlite3"
+    backup_data_path: str = "apps/api/.data/backups"
     session_secret: str = "studynova-local-session-secret"
     session_ttl_hours: int = 168
     admin_access_code: str = "studynova-admin-dev"
