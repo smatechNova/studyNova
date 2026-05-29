@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = ""
     local_data_path: str = "apps/api/.data/studynova.sqlite3"
     session_secret: str = "studynova-local-session-secret"
+    admin_access_code: str = "studynova-admin-dev"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

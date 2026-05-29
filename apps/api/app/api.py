@@ -9,6 +9,7 @@ from app.config import get_settings
 from app.domain.study_planner import build_rebalanced_study_plan, build_study_plan
 from app.schemas import (
     AccountRecoveryRequestCreate,
+    AccountRecoveryRequestRecord,
     AccountRecoveryRequestReceipt,
     AccountSignInRequest,
     AuthSession,
@@ -102,6 +103,12 @@ def _require_student_session(session: SessionIdentity) -> None:
 def _require_parent_session(session: SessionIdentity) -> None:
     if session.role != "parent":
         _deny_access()
+
+
+def require_admin(x_admin_code: str | None = Header(default=None, alias="X-Admin-Code")) -> None:
+    expected_code = get_settings().admin_access_code
+    if not x_admin_code or not hmac.compare_digest(x_admin_code, expected_code):
+        raise HTTPException(status_code=403, detail="Admin access required.")
 
 
 def _require_own_student(session: SessionIdentity, student_id: str) -> None:
@@ -226,6 +233,14 @@ def sign_in_account(payload: AccountSignInRequest) -> AuthSession:
 @router.post("/accounts/recovery-requests", response_model=AccountRecoveryRequestReceipt)
 def create_account_recovery_request(payload: AccountRecoveryRequestCreate) -> AccountRecoveryRequestReceipt:
     return get_study_plan_store().create_account_recovery_request(payload)
+
+
+@router.get("/admin/account-recovery-requests", response_model=list[AccountRecoveryRequestRecord])
+def get_account_recovery_requests(
+    limit: int = 50,
+    _: None = Depends(require_admin),
+) -> list[AccountRecoveryRequestRecord]:
+    return get_study_plan_store().account_recovery_requests(limit=limit)
 
 
 @router.post("/accounts/firebase-sign-in", response_model=AuthSession)

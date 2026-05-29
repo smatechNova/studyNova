@@ -230,6 +230,11 @@ def test_study_plan_store_records_account_recovery_request_privately(tmp_path) -
     assert [row["matched_account_id"] for row in rows] == [student.id, None]
     assert rows[0]["note"] == "Forgot the access code."
 
+    recovery_requests = store.account_recovery_requests()
+    assert len(recovery_requests) == 2
+    assert recovery_requests[0].matched_account is False
+    assert recovery_requests[1].matched_account is True
+
 
 def test_study_plan_store_binds_firebase_identity_by_role(tmp_path) -> None:
     store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))

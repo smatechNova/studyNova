@@ -265,3 +265,31 @@ def test_account_recovery_request_returns_generic_receipt(tmp_path, monkeypatch)
     assert existing_response.json()["status"] == "received"
     assert missing_response.json()["status"] == "received"
     assert "matched_account_id" not in existing_response.json()
+
+
+def test_admin_can_review_account_recovery_requests(tmp_path, monkeypatch) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)
+    client = TestClient(app)
+    _student(store, "alliyah@example.com", "Alliyah Olaniyan")
+    client.post(
+        "/api/v1/accounts/recovery-requests",
+        json={
+            "role": "student",
+            "login_id": "alliyah@example.com",
+            "contact": "parent@example.com",
+            "note": "Forgot access code",
+        },
+    )
+
+    blocked_response = client.get("/api/v1/admin/account-recovery-requests")
+    allowed_response = client.get(
+        "/api/v1/admin/account-recovery-requests",
+        headers={"X-Admin-Code": "studynova-admin-dev"},
+    )
+
+    assert blocked_response.status_code == 403
+    assert allowed_response.status_code == 200
+    assert allowed_response.json()[0]["role"] == "student"
+    assert allowed_response.json()[0]["matched_account"] is True
+    assert "matched_account_id" not in allowed_response.json()[0]

@@ -12,6 +12,7 @@ from uuid import uuid4
 from app.config import get_settings
 from app.schemas import (
     AccountRecoveryRequestCreate,
+    AccountRecoveryRequestRecord,
     AccountRecoveryRequestReceipt,
     AccountSignInRequest,
     AuthSession,
@@ -260,6 +261,31 @@ class StudyPlanStore:
             )
 
         return receipt
+
+    def account_recovery_requests(self, limit: int = 50) -> list[AccountRecoveryRequestRecord]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                select id, role, login_id, contact, note, matched_account_id, created_at
+                from account_recovery_requests
+                order by created_at desc
+                limit ?
+                """,
+                (max(1, min(limit, 100)),),
+            ).fetchall()
+
+        return [
+            AccountRecoveryRequestRecord(
+                id=row["id"],
+                role=row["role"],
+                login_id=row["login_id"],
+                contact=row["contact"],
+                note=row["note"],
+                matched_account=bool(row["matched_account_id"]),
+                created_at=row["created_at"],
+            )
+            for row in rows
+        ]
 
     def firebase_sign_in(self, role: str, auth_uid: str, login_id: str) -> AuthSession | None:
         if role == "student":

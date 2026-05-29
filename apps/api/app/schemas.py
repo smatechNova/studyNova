@@ -189,6 +189,16 @@ class AccountRecoveryRequestReceipt(BaseModel):
     created_at: datetime
 
 
+class AccountRecoveryRequestRecord(BaseModel):
+    id: str
+    role: Literal["student", "parent"]
+    login_id: str
+    contact: str
+    note: str = ""
+    matched_account: bool = False
+    created_at: datetime
+
+
 class FirebaseSignInRequest(BaseModel):
     role: Literal["student", "parent"]
     id_token: str = Field(min_length=20)

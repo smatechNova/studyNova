@@ -1,5 +1,6 @@
 import type {
   AccountRecoveryRequestInput,
+  AccountRecoveryRequestRecord,
   AccountRecoveryRequestReceipt,
   AccountSignInInput,
   AuthSession,
@@ -190,6 +191,21 @@ export async function createAccountRecoveryRequest(
   }
 
   return response.json() as Promise<AccountRecoveryRequestReceipt>;
+}
+
+export async function getAccountRecoveryRequests(adminCode: string, limit = 50): Promise<AccountRecoveryRequestRecord[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  const response = await apiFetch(`${API_URL}/api/v1/admin/account-recovery-requests?${params.toString()}`, {
+    headers: {
+      "X-Admin-Code": adminCode
+    }
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Account recovery list request failed");
+  }
+
+  return response.json() as Promise<AccountRecoveryRequestRecord[]>;
 }
 
 export async function firebaseSignInAccount(payload: FirebaseSignInInput): Promise<AuthSession> {

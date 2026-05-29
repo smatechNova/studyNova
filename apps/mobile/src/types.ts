@@ -162,6 +162,16 @@ export type AccountRecoveryRequestReceipt = {
   created_at: string;
 };
 
+export type AccountRecoveryRequestRecord = {
+  id: string;
+  role: AuthRole;
+  login_id: string;
+  contact: string;
+  note: string;
+  matched_account: boolean;
+  created_at: string;
+};
+
 export type FirebaseSignInInput = {
   role: AuthRole;
   id_token: string;
