@@ -58,7 +58,10 @@ async function createApiError(response: Response, fallback: string) {
     detail = "";
   }
 
-  if (response.status === 401 && (detail === "Sign in required." || detail === "Invalid sign-in session.")) {
+  if (
+    response.status === 401 &&
+    (detail === "Sign in required." || detail === "Invalid sign-in session." || detail === "Sign-in session expired.")
+  ) {
     await clearStoredAuthSession();
     return new Error("Your sign-in session expired. Please sign in again.");
   }

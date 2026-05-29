@@ -210,6 +210,7 @@ class AuthSession(BaseModel):
     parent: ParentAccount | None = None
     students: list[StudentAccount] = Field(default_factory=list)
     session_token: str = ""
+    session_expires_at: datetime | None = None
 
 
 class StudySessionCompletionRequest(BaseModel):

@@ -183,6 +183,7 @@ export type AuthSession = {
   parent: ParentAccount | null;
   students: StudentAccount[];
   session_token: string;
+  session_expires_at?: string | null;
 };
 
 export type StudySessionCompletionRequest = {

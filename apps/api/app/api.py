@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 
@@ -50,24 +51,41 @@ class SessionIdentity:
     account_id: str
 
 
-def _session_message(role: str, account_id: str) -> str:
-    return f"{role}:{account_id}"
+def _session_message(role: str, account_id: str, expires_at: int) -> str:
+    return f"{role}:{account_id}:{expires_at}"
 
 
-def _session_signature(role: str, account_id: str) -> str:
+def _session_signature(role: str, account_id: str, expires_at: int) -> str:
     secret = get_settings().session_secret.encode("utf-8")
-    return hmac.new(secret, _session_message(role, account_id).encode("utf-8"), hashlib.sha256).hexdigest()
+    return hmac.new(secret, _session_message(role, account_id, expires_at).encode("utf-8"), hashlib.sha256).hexdigest()
 
 
-def _session_token(role: str, account_id: str) -> str:
-    return f"{role}.{account_id}.{_session_signature(role, account_id)}"
+def _session_expires_at() -> datetime:
+    ttl_hours = max(1, get_settings().session_ttl_hours)
+    return datetime.now(UTC) + timedelta(hours=ttl_hours)
+
+
+def _session_token(role: str, account_id: str, expires_at: datetime) -> str:
+    expires_timestamp = int(expires_at.timestamp())
+    return f"{role}.{account_id}.{expires_timestamp}.{_session_signature(role, account_id, expires_timestamp)}"
 
 
 def _with_session_token(session: AuthSession) -> AuthSession:
+    expires_at = _session_expires_at()
     if session.role == "student" and session.student is not None:
-        return session.model_copy(update={"session_token": _session_token("student", session.student.id)})
+        return session.model_copy(
+            update={
+                "session_token": _session_token("student", session.student.id, expires_at),
+                "session_expires_at": expires_at,
+            }
+        )
     if session.role == "parent" and session.parent is not None:
-        return session.model_copy(update={"session_token": _session_token("parent", session.parent.id)})
+        return session.model_copy(
+            update={
+                "session_token": _session_token("parent", session.parent.id, expires_at),
+                "session_expires_at": expires_at,
+            }
+        )
     return session
 
 
@@ -77,14 +95,22 @@ def require_session(authorization: str | None = Header(default=None)) -> Session
 
     token = authorization.removeprefix("Bearer ").strip()
     parts = token.split(".")
-    if len(parts) != 3:
+    if len(parts) != 4:
         raise HTTPException(status_code=401, detail="Invalid sign-in session.")
 
-    role, account_id, signature = parts
+    role, account_id, expires_at_raw, signature = parts
     if role not in {"student", "parent"} or not account_id:
         raise HTTPException(status_code=401, detail="Invalid sign-in session.")
 
-    expected_signature = _session_signature(role, account_id)
+    try:
+        expires_at = int(expires_at_raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail="Invalid sign-in session.") from exc
+
+    if expires_at <= int(datetime.now(UTC).timestamp()):
+        raise HTTPException(status_code=401, detail="Sign-in session expired.")
+
+    expected_signature = _session_signature(role, account_id, expires_at)
     if not hmac.compare_digest(signature, expected_signature):
         raise HTTPException(status_code=401, detail="Invalid sign-in session.")
 
@@ -106,7 +132,11 @@ def _require_parent_session(session: SessionIdentity) -> None:
 
 
 def require_admin(x_admin_code: str | None = Header(default=None, alias="X-Admin-Code")) -> None:
-    expected_code = get_settings().admin_access_code
+    settings = get_settings()
+    expected_code = settings.admin_access_code.strip()
+    if not expected_code or (settings.is_production and settings.uses_default_admin_access_code):
+        raise HTTPException(status_code=503, detail="Admin support access is not configured.")
+
     if not x_admin_code or not hmac.compare_digest(x_admin_code, expected_code):
         raise HTTPException(status_code=403, detail="Admin access required.")
 

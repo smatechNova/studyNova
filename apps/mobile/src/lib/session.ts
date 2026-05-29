@@ -86,9 +86,22 @@ function isUsableAuthSession(value: unknown): value is AuthSession {
     return false;
   }
 
+  if (!isFutureTimestamp(session.session_expires_at)) {
+    return false;
+  }
+
   if (session.role === "student") {
     return Boolean(session.student?.id);
   }
 
   return Boolean(session.parent?.id);
+}
+
+function isFutureTimestamp(value: unknown) {
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && timestamp > Date.now();
 }

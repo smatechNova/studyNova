@@ -293,3 +293,47 @@ def test_admin_can_review_account_recovery_requests(tmp_path, monkeypatch) -> No
     assert allowed_response.json()[0]["role"] == "student"
     assert allowed_response.json()[0]["matched_account"] is True
     assert "matched_account_id" not in allowed_response.json()[0]
+
+
+def test_expired_session_token_is_rejected(tmp_path, monkeypatch) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)
+    client = TestClient(app)
+    student = _student(store, "alliyah@example.com", "Alliyah Olaniyan")
+    expired_at = 1
+    signature = api_module._session_signature("student", student.id, expired_at)
+
+    response = client.get(
+        f"/api/v1/accounts/students/{student.id}/family",
+        headers={"Authorization": f"Bearer student.{student.id}.{expired_at}.{signature}"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Sign-in session expired."
+
+
+def test_production_admin_access_requires_non_default_code(monkeypatch) -> None:
+    class ProductionSettings:
+        app_env = "production"
+        admin_access_code = "studynova-admin-dev"
+        session_secret = "test-session-secret"
+        session_ttl_hours = 168
+
+        @property
+        def is_production(self) -> bool:
+            return True
+
+        @property
+        def uses_default_admin_access_code(self) -> bool:
+            return True
+
+    monkeypatch.setattr(api_module, "get_settings", lambda: ProductionSettings())
+    client = TestClient(app)
+
+    response = client.get(
+        "/api/v1/admin/account-recovery-requests",
+        headers={"X-Admin-Code": "studynova-admin-dev"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Admin support access is not configured."
