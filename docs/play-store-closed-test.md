@@ -20,6 +20,7 @@ This runbook gets StudyNova into Google Play testing before the full public laun
 5. At least one tester email list or Google Group for Play testing.
 6. Privacy policy URL. Use `docs/privacy-policy-draft.md` as the starting text.
 7. Stable network access to Expo services, including `api.expo.dev` and `keystore.expo.dev`.
+8. Firebase/Google sign-in configured using `docs/firebase-google-sign-in.md`.
 
 See `infra/api-persistent-disk.md` for the fastest backend path for closed testing.
 
@@ -104,7 +105,7 @@ Use `docs/tester-feedback-template.md` to collect structured feedback.
 ## Known V1 Blockers Before Public Production
 
 - Backend must be deployed permanently.
-- Google sign-in must be configured with real Firebase credentials.
+- Google sign-in must be tested with real Firebase credentials on an Android build.
 - App icon, feature graphic, and screenshots must be final.
 - Privacy policy must be hosted on a public URL.
 - Real-world testing must confirm notifications and parent linking on Android phones.

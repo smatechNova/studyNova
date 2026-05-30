@@ -316,6 +316,9 @@ export default function AccountsScreen() {
               placeholder="student@gmail.com or phone number"
               value={form.studentLoginId}
             />
+            <Text style={styles.helper}>
+              For Google sign-in, use the same Gmail the student will select on this phone.
+            </Text>
             <FormField
               keyboardType="number-pad"
               label="Student access code"
@@ -377,6 +380,9 @@ export default function AccountsScreen() {
             placeholder="08012345678"
             value={form.parentContact}
           />
+          <Text style={styles.helper}>
+            For Google sign-in, use the same Gmail the parent will select on this phone.
+          </Text>
           <FormField
             keyboardType="number-pad"
             label="Parent access code"

@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 
-from app.auth import FirebaseAuthUnavailable, InvalidFirebaseToken, verify_firebase_id_token
+from app.auth import FirebaseAuthUnavailable, InvalidFirebaseToken, firebase_auth_readiness, verify_firebase_id_token
 from app.config import get_settings
 from app.domain.study_planner import build_rebalanced_study_plan, build_study_plan
 from app.schemas import (
@@ -18,6 +18,7 @@ from app.schemas import (
     CheckInResponse,
     DeleteResponse,
     FamilyAccount,
+    FirebaseAuthReadiness,
     FirebaseSignInRequest,
     ParentAccount,
     ParentAccountCreate,
@@ -287,6 +288,11 @@ def get_admin_storage_health(_: None = Depends(require_admin)) -> StorageHealth:
 @router.post("/admin/storage/backups", response_model=StorageBackupReceipt)
 def create_admin_storage_backup(_: None = Depends(require_admin)) -> StorageBackupReceipt:
     return get_study_plan_store().create_backup(get_settings().backup_data_path)
+
+
+@router.get("/admin/auth/firebase/readiness", response_model=FirebaseAuthReadiness)
+def get_admin_firebase_auth_readiness(_: None = Depends(require_admin)) -> FirebaseAuthReadiness:
+    return FirebaseAuthReadiness(**firebase_auth_readiness())
 
 
 @router.post("/accounts/firebase-sign-in", response_model=AuthSession)

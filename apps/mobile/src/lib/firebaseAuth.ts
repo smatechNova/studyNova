@@ -1,8 +1,16 @@
+import { Platform } from "react-native";
+
 type FirebaseClientConfig = {
   apiKey: string;
   googleWebClientId: string;
   googleAndroidClientId: string;
   googleIosClientId: string;
+};
+
+type FirebaseClientReadiness = {
+  configured: boolean;
+  missingKeys: string[];
+  warnings: string[];
 };
 
 type FirebaseIdpResponse = {
@@ -22,11 +30,43 @@ export function getFirebaseClientConfig(): FirebaseClientConfig {
 }
 
 export function isFirebaseClientConfigured() {
+  return getFirebaseClientReadiness().configured;
+}
+
+export function getFirebaseClientReadiness(): FirebaseClientReadiness {
   const config = getFirebaseClientConfig();
-  return Boolean(
-    config.apiKey &&
-      (config.googleWebClientId || config.googleAndroidClientId || config.googleIosClientId)
-  );
+  const missingKeys: string[] = [];
+  const warnings: string[] = [];
+
+  if (!config.apiKey) {
+    missingKeys.push("EXPO_PUBLIC_FIREBASE_API_KEY");
+  }
+
+  if (!config.googleWebClientId) {
+    missingKeys.push("EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID");
+  }
+
+  if (Platform.OS === "android" && !config.googleAndroidClientId) {
+    missingKeys.push("EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID");
+  }
+
+  if (Platform.OS === "ios" && !config.googleIosClientId) {
+    missingKeys.push("EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID");
+  }
+
+  if (Platform.OS === "web" && !config.googleWebClientId) {
+    warnings.push("Web sign-in needs the Google web client ID.");
+  }
+
+  if (Platform.OS !== "web" && !config.googleWebClientId) {
+    warnings.push("Firebase token exchange should use the Google web client ID from the same Firebase project.");
+  }
+
+  return {
+    configured: missingKeys.length === 0,
+    missingKeys,
+    warnings
+  };
 }
 
 export async function exchangeGoogleIdTokenForFirebaseIdToken(googleIdToken: string): Promise<string> {

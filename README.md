@@ -65,6 +65,8 @@ Optional Firebase Admin variable for `apps/api/.env`:
 FIREBASE_SERVICE_ACCOUNT_JSON=
 ```
 
+See `docs/firebase-google-sign-in.md` for the production Firebase/Google sign-in setup checklist.
+
 ## First MVP
 
 - Student dashboard

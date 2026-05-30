@@ -4,10 +4,15 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from
 
 import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
 import { Screen } from "@/components/Screen";
-import { createStorageBackup, getAccountRecoveryRequests, getStorageHealth } from "@/lib/api";
+import { createStorageBackup, getAccountRecoveryRequests, getFirebaseAuthReadiness, getStorageHealth } from "@/lib/api";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
-import type { AccountRecoveryRequestRecord, StorageBackupReceipt, StorageHealth } from "@/types";
+import type {
+  AccountRecoveryRequestRecord,
+  FirebaseAuthReadiness,
+  StorageBackupReceipt,
+  StorageHealth
+} from "@/types";
 
 export default function SupportScreen() {
   const { colors } = useTheme();
@@ -15,6 +20,7 @@ export default function SupportScreen() {
   const [adminCode, setAdminCode] = useState("");
   const [requests, setRequests] = useState<AccountRecoveryRequestRecord[]>([]);
   const [storageHealth, setStorageHealth] = useState<StorageHealth | null>(null);
+  const [firebaseReadiness, setFirebaseReadiness] = useState<FirebaseAuthReadiness | null>(null);
   const [latestBackup, setLatestBackup] = useState<StorageBackupReceipt | null>(null);
   const [message, setMessage] = useState("Enter the admin code to review account help requests.");
   const [isLoading, setIsLoading] = useState(false);
@@ -32,12 +38,14 @@ export default function SupportScreen() {
     setMessage("");
 
     try {
-      const [nextRequests, nextStorageHealth] = await Promise.all([
+      const [nextRequests, nextStorageHealth, nextFirebaseReadiness] = await Promise.all([
         getAccountRecoveryRequests(adminCode.trim()),
-        getStorageHealth(adminCode.trim())
+        getStorageHealth(adminCode.trim()),
+        getFirebaseAuthReadiness(adminCode.trim())
       ]);
       setRequests(nextRequests);
       setStorageHealth(nextStorageHealth);
+      setFirebaseReadiness(nextFirebaseReadiness);
       setMessage(
         nextRequests.length
           ? "Latest support and storage status loaded."
@@ -46,6 +54,7 @@ export default function SupportScreen() {
     } catch {
       setRequests([]);
       setStorageHealth(null);
+      setFirebaseReadiness(null);
       setMessage("Could not load admin data. Check the admin code and API connection.");
     } finally {
       setIsLoading(false);
@@ -149,6 +158,15 @@ export default function SupportScreen() {
             <Text style={styles.metric}>{storageHealth ? formatBytes(storageHealth.database_size_bytes) : "--"}</Text>
             <Text style={styles.helper}>Database size</Text>
           </View>
+          <View style={styles.summaryCard}>
+            <MaterialCommunityIcons
+              name={firebaseReadiness?.server_verification_ready ? "google" : "cloud-alert-outline"}
+              size={24}
+              color={firebaseReadiness?.server_verification_ready ? colors.success : colors.warning}
+            />
+            <Text style={styles.metric}>{firebaseReadiness?.server_verification_ready ? "Ready" : "--"}</Text>
+            <Text style={styles.helper}>Google sign-in</Text>
+          </View>
         </View>
 
         {message ? (
@@ -209,6 +227,33 @@ export default function SupportScreen() {
           </View>
         ) : null}
 
+        {firebaseReadiness ? (
+          <View style={styles.panel}>
+            <View style={styles.requestHeader}>
+              <View style={styles.heroCopy}>
+                <Text style={styles.kicker}>Authentication</Text>
+                <Text style={styles.sectionTitle}>
+                  {firebaseReadiness.server_verification_ready ? "Firebase verification ready" : "Firebase setup needed"}
+                </Text>
+                <Text style={styles.helper}>
+                  The API must verify Firebase ID tokens before Google sign-in can be trusted on real devices.
+                </Text>
+              </View>
+              <View style={[styles.statusPill, firebaseReadiness.server_verification_ready ? styles.statusMatched : styles.statusUnknown]}>
+                <Text style={styles.statusText}>{firebaseReadiness.server_verification_ready ? "Ready" : "Review"}</Text>
+              </View>
+            </View>
+            <View style={styles.readinessGrid}>
+              <ReadinessPill label="Admin SDK" ready={firebaseReadiness.admin_sdk_installed} />
+              <ReadinessPill label="Service account" ready={firebaseReadiness.service_account_configured} />
+              <ReadinessPill label="Project ID" ready={firebaseReadiness.project_id_configured} />
+            </View>
+            {firebaseReadiness.warnings.map((warning) => (
+              <Text key={warning} style={styles.warningText}>{warning}</Text>
+            ))}
+          </View>
+        ) : null}
+
         <View style={styles.list}>
           {requests.map((request) => (
             <View key={request.id} style={styles.requestCard}>
@@ -235,6 +280,17 @@ export default function SupportScreen() {
         </View>
       </ScrollView>
     </Screen>
+  );
+}
+
+function ReadinessPill({ label, ready }: { label: string; ready: boolean }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  return (
+    <View style={[styles.statusPill, ready ? styles.statusMatched : styles.statusUnknown]}>
+      <Text style={styles.statusText}>{label}: {ready ? "Yes" : "No"}</Text>
+    </View>
   );
 }
 
@@ -418,6 +474,11 @@ function createStyles(colors: AppColors) {
       color: colors.text,
       fontSize: 18,
       fontWeight: "900"
+    },
+    readinessGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.sm
     },
     sectionTitle: {
       color: colors.text,

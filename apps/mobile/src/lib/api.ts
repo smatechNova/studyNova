@@ -5,6 +5,7 @@ import type {
   AccountSignInInput,
   AuthSession,
   FamilyAccount,
+  FirebaseAuthReadiness,
   FirebaseSignInInput,
   ParentAccount,
   ParentFamilyAccount,
@@ -240,6 +241,20 @@ export async function createStorageBackup(adminCode: string): Promise<StorageBac
   }
 
   return response.json() as Promise<StorageBackupReceipt>;
+}
+
+export async function getFirebaseAuthReadiness(adminCode: string): Promise<FirebaseAuthReadiness> {
+  const response = await apiFetch(`${API_URL}/api/v1/admin/auth/firebase/readiness`, {
+    headers: {
+      "X-Admin-Code": adminCode
+    }
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Firebase auth readiness request failed");
+  }
+
+  return response.json() as Promise<FirebaseAuthReadiness>;
 }
 
 export async function firebaseSignInAccount(payload: FirebaseSignInInput): Promise<AuthSession> {

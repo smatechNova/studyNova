@@ -218,6 +218,16 @@ class StorageBackupReceipt(BaseModel):
     created_at: datetime
 
 
+class FirebaseAuthReadiness(BaseModel):
+    provider: Literal["firebase"] = "firebase"
+    admin_sdk_installed: bool
+    service_account_configured: bool
+    google_application_credentials_configured: bool
+    project_id_configured: bool
+    server_verification_ready: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
 class FirebaseSignInRequest(BaseModel):
     role: Literal["student", "parent"]
     id_token: str = Field(min_length=20)

@@ -24,6 +24,38 @@ class FirebaseIdentity:
     phone_number: str | None = None
 
 
+def firebase_auth_readiness() -> dict[str, object]:
+    try:
+        import firebase_admin  # noqa: F401
+
+        admin_sdk_installed = True
+    except ImportError:
+        admin_sdk_installed = False
+
+    service_account_configured = bool(os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON", "").strip())
+    google_credentials_configured = bool(os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip())
+    project_id_configured = bool(os.getenv("GOOGLE_CLOUD_PROJECT", "").strip())
+    server_verification_ready = admin_sdk_installed and (
+        service_account_configured or google_credentials_configured or project_id_configured
+    )
+    warnings: list[str] = []
+
+    if not admin_sdk_installed:
+        warnings.append("firebase-admin is not installed on the API server.")
+    if admin_sdk_installed and not server_verification_ready:
+        warnings.append("Configure FIREBASE_SERVICE_ACCOUNT_JSON or Google application credentials before production.")
+
+    return {
+        "provider": "firebase",
+        "admin_sdk_installed": admin_sdk_installed,
+        "service_account_configured": service_account_configured,
+        "google_application_credentials_configured": google_credentials_configured,
+        "project_id_configured": project_id_configured,
+        "server_verification_ready": server_verification_ready,
+        "warnings": warnings,
+    }
+
+
 def verify_firebase_id_token(id_token: str) -> FirebaseIdentity:
     try:
         import firebase_admin

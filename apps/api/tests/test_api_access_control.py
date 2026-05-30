@@ -371,3 +371,46 @@ def test_admin_can_review_storage_health_and_create_backup(tmp_path, monkeypatch
     assert health_response.json()["database_exists"] is True
     assert backup_response.status_code == 200
     assert backup_response.json()["filename"].startswith("studynova-")
+
+
+def test_admin_can_review_firebase_auth_readiness(monkeypatch) -> None:
+    class TestSettings:
+        app_env = "development"
+        admin_access_code = "admin-test"
+        session_secret = "test-session-secret"
+        session_ttl_hours = 168
+
+        @property
+        def is_production(self) -> bool:
+            return False
+
+        @property
+        def uses_default_admin_access_code(self) -> bool:
+            return False
+
+    monkeypatch.setattr(api_module, "get_settings", lambda: TestSettings())
+    monkeypatch.setattr(
+        api_module,
+        "firebase_auth_readiness",
+        lambda: {
+            "provider": "firebase",
+            "admin_sdk_installed": True,
+            "service_account_configured": True,
+            "google_application_credentials_configured": False,
+            "project_id_configured": False,
+            "server_verification_ready": True,
+            "warnings": [],
+        },
+    )
+    client = TestClient(app)
+
+    blocked_response = client.get("/api/v1/admin/auth/firebase/readiness")
+    allowed_response = client.get(
+        "/api/v1/admin/auth/firebase/readiness",
+        headers={"X-Admin-Code": "admin-test"},
+    )
+
+    assert blocked_response.status_code == 403
+    assert allowed_response.status_code == 200
+    assert allowed_response.json()["provider"] == "firebase"
+    assert allowed_response.json()["server_verification_ready"] is True

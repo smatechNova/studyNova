@@ -18,6 +18,7 @@ import { Screen } from "@/components/Screen";
 import { createAccountRecoveryRequest, firebaseSignInAccount, signInAccount } from "@/lib/api";
 import {
   exchangeGoogleIdTokenForFirebaseIdToken,
+  getFirebaseClientReadiness,
   getFirebaseClientConfig,
   isFirebaseClientConfigured
 } from "@/lib/firebaseAuth";
@@ -62,6 +63,7 @@ export default function AuthScreen() {
   const [recoveryNote, setRecoveryNote] = useState("");
   const [isRecoveryLoading, setIsRecoveryLoading] = useState(false);
   const firebaseConfig = getFirebaseClientConfig();
+  const firebaseReadiness = getFirebaseClientReadiness();
   const firebaseReady = isFirebaseClientConfigured();
   const [googleRequest, googleResponse, promptGoogleSignIn] = Google.useIdTokenAuthRequest({
     androidClientId: firebaseConfig.googleAndroidClientId,
@@ -109,7 +111,11 @@ export default function AuthScreen() {
 
   async function signInWithGoogle() {
     if (!firebaseReady) {
-      setMessage("Google sign-in needs Firebase keys in the app environment first.");
+      setMessage(
+        firebaseReadiness.missingKeys.length
+          ? `Google sign-in needs: ${firebaseReadiness.missingKeys.join(", ")}.`
+          : "Google sign-in needs Firebase keys in the app environment first."
+      );
       return;
     }
 
@@ -248,8 +254,12 @@ export default function AuthScreen() {
         </Pressable>
         {!firebaseReady ? (
           <Text style={styles.helper}>
-            Google sign-in will activate after Firebase keys are added. The login ID option below still works now.
+            Google sign-in will activate after Firebase and Google client IDs are added. The login ID option below
+            still works now.
           </Text>
+        ) : null}
+        {firebaseReady && firebaseReadiness.warnings.length ? (
+          <Text style={styles.helper}>{firebaseReadiness.warnings[0]}</Text>
         ) : null}
 
         <View style={styles.panel}>

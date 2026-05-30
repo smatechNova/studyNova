@@ -191,6 +191,16 @@ export type StorageBackupReceipt = {
   created_at: string;
 };
 
+export type FirebaseAuthReadiness = {
+  provider: "firebase";
+  admin_sdk_installed: boolean;
+  service_account_configured: boolean;
+  google_application_credentials_configured: boolean;
+  project_id_configured: boolean;
+  server_verification_ready: boolean;
+  warnings: string[];
+};
+
 export type FirebaseSignInInput = {
   role: AuthRole;
   id_token: string;
