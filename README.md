@@ -66,6 +66,7 @@ FIREBASE_SERVICE_ACCOUNT_JSON=
 ```
 
 See `docs/firebase-google-sign-in.md` for the production Firebase/Google sign-in setup checklist.
+See `docs/notification-readiness.md` for Android reminder permissions and closed-test notification checks.
 
 ## First MVP
 

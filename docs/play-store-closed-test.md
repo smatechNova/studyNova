@@ -21,6 +21,7 @@ This runbook gets StudyNova into Google Play testing before the full public laun
 6. Privacy policy URL. Use `docs/privacy-policy-draft.md` as the starting text.
 7. Stable network access to Expo services, including `api.expo.dev` and `keystore.expo.dev`.
 8. Firebase/Google sign-in configured using `docs/firebase-google-sign-in.md`.
+9. Notification readiness checked using `docs/notification-readiness.md`.
 
 See `infra/api-persistent-disk.md` for the fastest backend path for closed testing.
 
@@ -97,7 +98,9 @@ Ask testers to confirm:
 - A student can generate a plan.
 - A student can mark a study session as done with recall proof.
 - A parent can link a student and see progress.
-- Reminders and missed-session messages make sense.
+- Reminders request Android permission clearly.
+- The Send test notification button produces a visible phone notification.
+- Missed-session messages make sense and feel encouraging.
 - The UI is readable in light and dark mode.
 
 Use `docs/tester-feedback-template.md` to collect structured feedback.

@@ -32,7 +32,12 @@ import {
   saveStudyPlan,
   updateStudyReminderSettings
 } from "@/lib/api";
-import { scheduleStudyReminders } from "@/lib/reminders";
+import {
+  getStudyReminderReadiness,
+  scheduleStudyReminders,
+  sendTestStudyNotification,
+  type NotificationReadiness
+} from "@/lib/reminders";
 import { clearStoredAuthSession, getStoredAuthSession } from "@/lib/session";
 import type {
   ParentInviteCode,
@@ -1291,6 +1296,7 @@ function GeneratedPlanView({
   const [progress, setProgress] = useState<StudyPlanProgress | null>(null);
   const [weeklyDigest, setWeeklyDigest] = useState<WeeklyStudyDigest | null>(null);
   const [reminderSettings, setReminderSettings] = useState<StudyReminderSettings | null>(null);
+  const [notificationReadiness, setNotificationReadiness] = useState<NotificationReadiness | null>(null);
   const [progressMessage, setProgressMessage] = useState("");
   const [reminderMessage, setReminderMessage] = useState("");
   const [activeCompletionKey, setActiveCompletionKey] = useState("");
@@ -1298,6 +1304,7 @@ function GeneratedPlanView({
   const [completionConfidence, setCompletionConfidence] = useState(3);
   const [isProgressLoading, setIsProgressLoading] = useState(false);
   const [isReminderSaving, setIsReminderSaving] = useState(false);
+  const [isNotificationTesting, setIsNotificationTesting] = useState(false);
   const [isSavingCompletion, setIsSavingCompletion] = useState(false);
   const [isRebalancing, setIsRebalancing] = useState(false);
   const averageDailyMinutes =
@@ -1331,11 +1338,13 @@ function GeneratedPlanView({
       setProgress(null);
       setWeeklyDigest(null);
       setReminderSettings(null);
+      setNotificationReadiness(null);
       return;
     }
 
     void refreshProgress(planId);
     void refreshReminderSettings(planId);
+    void refreshNotificationReadiness(planId);
   }, [planId]);
 
   async function refreshProgress(nextPlanId = planId) {
@@ -1373,6 +1382,15 @@ function GeneratedPlanView({
     }
   }
 
+  async function refreshNotificationReadiness(nextPlanId = planId) {
+    try {
+      const readiness = await getStudyReminderReadiness(nextPlanId);
+      setNotificationReadiness(readiness);
+    } catch {
+      setNotificationReadiness(null);
+    }
+  }
+
   async function saveReminderSettings(nextSettings: StudyReminderSettings) {
     if (!planId || !savedPlan) {
       setReminderMessage("Save the generated plan before setting reminders.");
@@ -1392,6 +1410,7 @@ function GeneratedPlanView({
       setReminderSettings(updatedSettings);
       const result = await scheduleStudyReminders(savedPlan, updatedSettings);
       setReminderMessage(result.message);
+      await refreshNotificationReadiness(planId);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "";
       setReminderMessage(detail || "Could not save reminder settings.");
@@ -1417,6 +1436,21 @@ function GeneratedPlanView({
       ...reminderSettings,
       missed_session_alerts_enabled: !reminderSettings.missed_session_alerts_enabled
     });
+  }
+
+  async function sendReminderTest() {
+    setIsNotificationTesting(true);
+    setReminderMessage("");
+
+    try {
+      const result = await sendTestStudyNotification(planId);
+      setReminderMessage(result.message);
+      await refreshNotificationReadiness(planId);
+    } catch {
+      setReminderMessage("Could not send the test notification on this device.");
+    } finally {
+      setIsNotificationTesting(false);
+    }
   }
 
   function openCompletion(sessionKeyValue: string, savedCompletion?: StudySessionCompletion) {
@@ -1648,8 +1682,40 @@ function GeneratedPlanView({
                   </Text>
                 </View>
               </Pressable>
+              <View style={styles.notificationGrid}>
+                <ReviewItem
+                  label="Permission"
+                  value={notificationReadiness?.granted ? "Allowed" : "Needs approval"}
+                />
+                <ReviewItem
+                  label="Scheduled"
+                  value={`${notificationReadiness?.scheduledStudyReminderCount ?? 0}`}
+                />
+                <ReviewItem
+                  label="Channel"
+                  value={notificationReadiness?.channelReady ? "Ready" : Platform.OS === "web" ? "Phone only" : "Checking"}
+                />
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                disabled={isReminderSaving || isNotificationTesting}
+                onPress={() => void sendReminderTest()}
+                style={[styles.secondaryButton, isNotificationTesting ? styles.disabledButton : null]}
+              >
+                {isNotificationTesting ? (
+                  <ActivityIndicator color={colors.brand} />
+                ) : (
+                  <>
+                    <MaterialCommunityIcons name="bell-ring-outline" size={18} color={colors.brand} />
+                    <Text style={styles.secondaryButtonText}>Send test notification</Text>
+                  </>
+                )}
+              </Pressable>
               {!reminderMessage ? (
-                <Text style={styles.helper}>Tap a time to activate reminders on this phone.</Text>
+                <Text style={styles.helper}>
+                  Tap a time to activate reminders on this phone. Test notifications are best checked in a development
+                  or closed-test build.
+                </Text>
               ) : null}
             </>
           ) : (
@@ -3606,6 +3672,9 @@ function createStyles(colors: AppColors) {
   reminderGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  notificationGrid: {
     gap: spacing.sm
   },
   reminderToggle: {

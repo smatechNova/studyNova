@@ -32,7 +32,9 @@ Date tested:
 ## Reminders And Missed Sessions
 
 1. Did reminders ask for permission clearly?
-2. Did missed-session or catch-up messages make sense?
+2. Did the test notification appear on your phone?
+3. Did the app show reminders as allowed and scheduled?
+4. Did missed-session or catch-up messages make sense?
 
 ## Issues
 
