@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: studynova-api
+    runtime: docker
+    rootDir: apps/api
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    plan: starter
+    disk:
+      name: studynova-data
+      mountPath: /var/data/studynova
+      sizeGB: 1
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LOCAL_DATA_PATH
+        value: /var/data/studynova/studynova.sqlite3
+      - key: BACKUP_DATA_PATH
+        value: /var/data/studynova/backups
+      - key: SESSION_TTL_HOURS
+        value: "168"
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: ALLOWED_ORIGIN_REGEX
+        value: ""
+      - key: SESSION_SECRET
+        sync: false
+      - key: ADMIN_ACCESS_CODE
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false

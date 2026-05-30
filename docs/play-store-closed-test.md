@@ -21,6 +21,8 @@ This runbook gets StudyNova into Google Play testing before the full public laun
 6. Privacy policy URL. Use `docs/privacy-policy-draft.md` as the starting text.
 7. Stable network access to Expo services, including `api.expo.dev` and `keystore.expo.dev`.
 
+See `infra/api-persistent-disk.md` for the fastest backend path for closed testing.
+
 ## Backend Persistence Setup
 
 For internal testing, the current API can run on SQLite if the deployment host provides a persistent disk.
