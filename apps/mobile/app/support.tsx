@@ -4,11 +4,18 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from
 
 import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
 import { Screen } from "@/components/Screen";
-import { createStorageBackup, getAccountRecoveryRequests, getFirebaseAuthReadiness, getStorageHealth } from "@/lib/api";
+import {
+  createStorageBackup,
+  getAccountRecoveryRequests,
+  getDeploymentReadiness,
+  getFirebaseAuthReadiness,
+  getStorageHealth
+} from "@/lib/api";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
 import type {
   AccountRecoveryRequestRecord,
+  DeploymentReadiness,
   FirebaseAuthReadiness,
   StorageBackupReceipt,
   StorageHealth
@@ -21,6 +28,7 @@ export default function SupportScreen() {
   const [requests, setRequests] = useState<AccountRecoveryRequestRecord[]>([]);
   const [storageHealth, setStorageHealth] = useState<StorageHealth | null>(null);
   const [firebaseReadiness, setFirebaseReadiness] = useState<FirebaseAuthReadiness | null>(null);
+  const [deploymentReadiness, setDeploymentReadiness] = useState<DeploymentReadiness | null>(null);
   const [latestBackup, setLatestBackup] = useState<StorageBackupReceipt | null>(null);
   const [message, setMessage] = useState("Enter the admin code to review account help requests.");
   const [isLoading, setIsLoading] = useState(false);
@@ -38,23 +46,26 @@ export default function SupportScreen() {
     setMessage("");
 
     try {
-      const [nextRequests, nextStorageHealth, nextFirebaseReadiness] = await Promise.all([
+      const [nextRequests, nextStorageHealth, nextFirebaseReadiness, nextDeploymentReadiness] = await Promise.all([
         getAccountRecoveryRequests(adminCode.trim()),
         getStorageHealth(adminCode.trim()),
-        getFirebaseAuthReadiness(adminCode.trim())
+        getFirebaseAuthReadiness(adminCode.trim()),
+        getDeploymentReadiness(adminCode.trim())
       ]);
       setRequests(nextRequests);
       setStorageHealth(nextStorageHealth);
       setFirebaseReadiness(nextFirebaseReadiness);
+      setDeploymentReadiness(nextDeploymentReadiness);
       setMessage(
         nextRequests.length
-          ? "Latest support and storage status loaded."
-          : "Storage status loaded. No account help requests have been submitted yet."
+          ? "Latest support and deployment status loaded."
+          : "Deployment status loaded. No account help requests have been submitted yet."
       );
     } catch {
       setRequests([]);
       setStorageHealth(null);
       setFirebaseReadiness(null);
+      setDeploymentReadiness(null);
       setMessage("Could not load admin data. Check the admin code and API connection.");
     } finally {
       setIsLoading(false);
@@ -167,12 +178,55 @@ export default function SupportScreen() {
             <Text style={styles.metric}>{firebaseReadiness?.server_verification_ready ? "Ready" : "--"}</Text>
             <Text style={styles.helper}>Google sign-in</Text>
           </View>
+          <View style={styles.summaryCard}>
+            <MaterialCommunityIcons
+              name={deploymentReadiness?.ready ? "rocket-launch-outline" : "rocket-launch"}
+              size={24}
+              color={deploymentReadiness?.ready ? colors.success : colors.warning}
+            />
+            <Text style={styles.metric}>{deploymentReadiness ? (deploymentReadiness.ready ? "Ready" : "Review") : "--"}</Text>
+            <Text style={styles.helper}>Deployment</Text>
+          </View>
         </View>
 
         {message ? (
           <View style={styles.messagePanel}>
             <MaterialCommunityIcons name="information-outline" size={22} color={colors.brand} />
             <Text style={styles.messageText}>{message}</Text>
+          </View>
+        ) : null}
+
+        {deploymentReadiness ? (
+          <View style={styles.panel}>
+            <View style={styles.requestHeader}>
+              <View style={styles.heroCopy}>
+                <Text style={styles.kicker}>Deployment</Text>
+                <Text style={styles.sectionTitle}>
+                  {deploymentReadiness.ready ? "Backend is closed-test ready" : "Backend needs review"}
+                </Text>
+                <Text style={styles.helper}>
+                  Use this before creating a Play Store build. The mobile app should point to the same HTTPS API URL.
+                </Text>
+              </View>
+              <View style={[styles.statusPill, deploymentReadiness.ready ? styles.statusMatched : styles.statusUnknown]}>
+                <Text style={styles.statusText}>{deploymentReadiness.ready ? "Ready" : "Review"}</Text>
+              </View>
+            </View>
+            <View style={styles.detailRow}>
+              <MaterialCommunityIcons name="earth" size={18} color={colors.muted} />
+              <Text style={styles.detailText}>{deploymentReadiness.public_api_base_url || "No public API URL set"}</Text>
+            </View>
+            <View style={styles.readinessGrid}>
+              {deploymentReadiness.checks.map((check) => (
+                <View
+                  key={check.name}
+                  style={[styles.deploymentCheck, check.status === "pass" ? styles.statusMatched : styles.statusUnknown]}
+                >
+                  <Text style={styles.statusText}>{check.name}: {check.status}</Text>
+                  <Text style={styles.helper}>{check.message}</Text>
+                </View>
+              ))}
+            </View>
           </View>
         ) : null}
 
@@ -333,6 +387,14 @@ function createStyles(colors: AppColors) {
       color: colors.muted,
       flex: 1,
       fontSize: 14
+    },
+    deploymentCheck: {
+      borderRadius: 8,
+      borderWidth: 1,
+      flex: 1,
+      gap: spacing.xs,
+      minWidth: 220,
+      padding: spacing.md
     },
     disabledButton: {
       opacity: 0.55

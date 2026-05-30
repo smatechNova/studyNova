@@ -2,6 +2,7 @@ import hashlib
 import hmac
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 
@@ -17,6 +18,8 @@ from app.schemas import (
     CheckInRequest,
     CheckInResponse,
     DeleteResponse,
+    DeploymentCheck,
+    DeploymentReadiness,
     FamilyAccount,
     FirebaseAuthReadiness,
     FirebaseSignInRequest,
@@ -142,6 +145,115 @@ def require_admin(x_admin_code: str | None = Header(default=None, alias="X-Admin
 
     if not x_admin_code or not hmac.compare_digest(x_admin_code, expected_code):
         raise HTTPException(status_code=403, detail="Admin access required.")
+
+
+def _deployment_check(name: str, status: Literal["pass", "warning", "fail"], message: str) -> DeploymentCheck:
+    return DeploymentCheck(name=name, status=status, message=message)
+
+
+def _build_deployment_readiness() -> DeploymentReadiness:
+    settings = get_settings()
+    checks: list[DeploymentCheck] = []
+
+    checks.append(
+        _deployment_check(
+            "Environment",
+            "pass" if settings.is_production else "fail",
+            "APP_ENV is production."
+            if settings.is_production
+            else "Set APP_ENV=production before Play Store testing.",
+        )
+    )
+
+    public_api_base_url = settings.public_api_base_url.strip().rstrip("/")
+    checks.append(
+        _deployment_check(
+            "Public API URL",
+            "pass" if public_api_base_url.startswith("https://") else "fail",
+            "Stable HTTPS API URL is configured."
+            if public_api_base_url.startswith("https://")
+            else "Set PUBLIC_API_BASE_URL to the deployed HTTPS API host.",
+        )
+    )
+
+    storage_health = get_study_plan_store().storage_health(settings.backup_data_path, production=True)
+    checks.append(
+        _deployment_check(
+            "Persistent storage",
+            "pass" if storage_health.production_ready else "fail",
+            "SQLite data and backup paths look production-ready."
+            if storage_health.production_ready
+            else "Move LOCAL_DATA_PATH and BACKUP_DATA_PATH to absolute persistent disk paths.",
+        )
+    )
+
+    checks.append(
+        _deployment_check(
+            "Database file",
+            "pass" if storage_health.database_exists else "warning",
+            "Database file exists and schema is initialized."
+            if storage_health.database_exists
+            else "Database file has not been created yet. Start the API once, then recheck.",
+        )
+    )
+
+    strong_session_secret = not settings.uses_default_session_secret and len(settings.session_secret.strip()) >= 32
+    checks.append(
+        _deployment_check(
+            "Session secret",
+            "pass" if strong_session_secret else "fail",
+            "SESSION_SECRET is non-default and long enough."
+            if strong_session_secret
+            else "Set SESSION_SECRET to a private random value with at least 32 characters.",
+        )
+    )
+
+    strong_admin_code = not settings.uses_default_admin_access_code and len(settings.admin_access_code.strip()) >= 8
+    checks.append(
+        _deployment_check(
+            "Admin access code",
+            "pass" if strong_admin_code else "fail",
+            "ADMIN_ACCESS_CODE is non-default."
+            if strong_admin_code
+            else "Set ADMIN_ACCESS_CODE to a private value with at least 8 characters.",
+        )
+    )
+
+    allowed_origins = settings.cors_origins
+    cors_uses_default_dev = any("localhost" in origin for origin in allowed_origins) or (
+        "app.github.dev" in settings.allowed_origin_regex
+    )
+    cors_uses_wildcard = "*" in allowed_origins or settings.allowed_origin_regex.strip() == ".*"
+    cors_locked = not cors_uses_default_dev and not cors_uses_wildcard
+    checks.append(
+        _deployment_check(
+            "CORS policy",
+            "pass" if cors_locked else "fail",
+            "CORS does not include localhost, Codespaces, or wildcard development access."
+            if cors_locked
+            else "Clear localhost/Codespaces CORS settings before production testing.",
+        )
+    )
+
+    firebase_status = firebase_auth_readiness()
+    firebase_ready = bool(firebase_status["server_verification_ready"])
+    checks.append(
+        _deployment_check(
+            "Firebase verification",
+            "pass" if firebase_ready else "warning",
+            "Firebase ID token verification is configured."
+            if firebase_ready
+            else "Google sign-in will need Firebase service credentials before production rollout.",
+        )
+    )
+
+    return DeploymentReadiness(
+        environment=settings.app_env,
+        production=settings.is_production,
+        public_api_base_url=public_api_base_url,
+        ready=all(check.status == "pass" for check in checks),
+        checks=checks,
+    )
 
 
 def _require_own_student(session: SessionIdentity, student_id: str) -> None:
@@ -293,6 +405,11 @@ def create_admin_storage_backup(_: None = Depends(require_admin)) -> StorageBack
 @router.get("/admin/auth/firebase/readiness", response_model=FirebaseAuthReadiness)
 def get_admin_firebase_auth_readiness(_: None = Depends(require_admin)) -> FirebaseAuthReadiness:
     return FirebaseAuthReadiness(**firebase_auth_readiness())
+
+
+@router.get("/admin/deployment/readiness", response_model=DeploymentReadiness)
+def get_admin_deployment_readiness(_: None = Depends(require_admin)) -> DeploymentReadiness:
+    return _build_deployment_readiness()
 
 
 @router.post("/accounts/firebase-sign-in", response_model=AuthSession)

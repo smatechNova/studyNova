@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     session_secret: str = "studynova-local-session-secret"
     session_ttl_hours: int = 168
     admin_access_code: str = "studynova-admin-dev"
+    public_api_base_url: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -28,6 +29,10 @@ class Settings(BaseSettings):
     @property
     def uses_default_admin_access_code(self) -> bool:
         return self.admin_access_code.strip() == "studynova-admin-dev"
+
+    @property
+    def uses_default_session_secret(self) -> bool:
+        return self.session_secret.strip() == "studynova-local-session-secret"
 
 
 @lru_cache

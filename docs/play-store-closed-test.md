@@ -22,6 +22,7 @@ This runbook gets StudyNova into Google Play testing before the full public laun
 7. Stable network access to Expo services, including `api.expo.dev` and `keystore.expo.dev`.
 8. Firebase/Google sign-in configured using `docs/firebase-google-sign-in.md`.
 9. Notification readiness checked using `docs/notification-readiness.md`.
+10. Backend deployment readiness checked using `infra/api-production-readiness.md`.
 
 See `infra/api-persistent-disk.md` for the fastest backend path for closed testing.
 
@@ -36,9 +37,20 @@ LOCAL_DATA_PATH=/persistent/studynova/studynova.sqlite3
 BACKUP_DATA_PATH=/persistent/studynova/backups
 SESSION_SECRET=<long random secret>
 ADMIN_ACCESS_CODE=<private admin code>
+SESSION_TTL_HOURS=168
+PUBLIC_API_BASE_URL=https://your-api-host
+ALLOWED_ORIGINS=<production mobile web/admin origin if used>
+ALLOWED_ORIGIN_REGEX=
+FIREBASE_SERVICE_ACCOUNT_JSON=<optional Firebase Admin JSON>
 ```
 
 Do not use the default development database path or default admin code for a public build. The support admin screen can load storage health and create a SQLite backup after the admin code is entered.
+
+Before building the Android test release, open the support screen with the production admin code and confirm deployment readiness is marked ready. You can also call:
+
+```powershell
+curl.exe -H "X-Admin-Code: <admin-code>" https://your-api-host/api/v1/admin/deployment/readiness
+```
 
 ## Recommended Track Order
 

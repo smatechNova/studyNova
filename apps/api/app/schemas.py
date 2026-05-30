@@ -228,6 +228,20 @@ class FirebaseAuthReadiness(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class DeploymentCheck(BaseModel):
+    name: str
+    status: Literal["pass", "warning", "fail"]
+    message: str
+
+
+class DeploymentReadiness(BaseModel):
+    environment: str
+    production: bool
+    public_api_base_url: str = ""
+    ready: bool
+    checks: list[DeploymentCheck] = Field(default_factory=list)
+
+
 class FirebaseSignInRequest(BaseModel):
     role: Literal["student", "parent"]
     id_token: str = Field(min_length=20)

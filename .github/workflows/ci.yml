@@ -16,6 +16,7 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r apps/api/requirements-dev.txt
       - run: python -m pytest apps/api/tests
+      - run: docker build -t studynova-api apps/api
 
   mobile:
     runs-on: ubuntu-latest
@@ -27,4 +28,3 @@ jobs:
           cache: npm
       - run: npm install
       - run: npm --workspace @studynova/mobile run typecheck
-

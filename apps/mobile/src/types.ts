@@ -201,6 +201,20 @@ export type FirebaseAuthReadiness = {
   warnings: string[];
 };
 
+export type DeploymentCheck = {
+  name: string;
+  status: "pass" | "warning" | "fail";
+  message: string;
+};
+
+export type DeploymentReadiness = {
+  environment: string;
+  production: boolean;
+  public_api_base_url: string;
+  ready: boolean;
+  checks: DeploymentCheck[];
+};
+
 export type FirebaseSignInInput = {
   role: AuthRole;
   id_token: string;

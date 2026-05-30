@@ -4,6 +4,7 @@ import type {
   AccountRecoveryRequestReceipt,
   AccountSignInInput,
   AuthSession,
+  DeploymentReadiness,
   FamilyAccount,
   FirebaseAuthReadiness,
   FirebaseSignInInput,
@@ -255,6 +256,20 @@ export async function getFirebaseAuthReadiness(adminCode: string): Promise<Fireb
   }
 
   return response.json() as Promise<FirebaseAuthReadiness>;
+}
+
+export async function getDeploymentReadiness(adminCode: string): Promise<DeploymentReadiness> {
+  const response = await apiFetch(`${API_URL}/api/v1/admin/deployment/readiness`, {
+    headers: {
+      "X-Admin-Code": adminCode
+    }
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Deployment readiness request failed");
+  }
+
+  return response.json() as Promise<DeploymentReadiness>;
 }
 
 export async function firebaseSignInAccount(payload: FirebaseSignInInput): Promise<AuthSession> {

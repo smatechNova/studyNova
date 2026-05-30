@@ -21,6 +21,7 @@ BACKUP_DATA_PATH=/var/data/studynova/backups
 SESSION_SECRET=<long random secret>
 ADMIN_ACCESS_CODE=<private admin code>
 SESSION_TTL_HOURS=168
+PUBLIC_API_BASE_URL=https://your-api-host
 ALLOWED_ORIGINS=<production mobile web/admin origin if used>
 ALLOWED_ORIGIN_REGEX=
 FIREBASE_SERVICE_ACCOUNT_JSON=<optional Firebase Admin JSON>
@@ -40,10 +41,12 @@ After deployment:
 
 1. Open `https://your-api-host/health`.
 2. Confirm the response is `{"status":"ok","environment":"production"}`.
-3. Set `EXPO_PUBLIC_API_URL` in the mobile app build environment to the API host.
-4. Open `/support` in the app, enter the admin code, and load the admin view.
-5. Confirm storage health shows a production-ready database path.
-6. Create a database backup from the support screen.
+3. Open `/api/v1/admin/deployment/readiness` with the `X-Admin-Code` header.
+4. Confirm `ready` is `true`.
+5. Set `EXPO_PUBLIC_API_URL` in the mobile app build environment to the same API host.
+6. Open `/support` in the app, enter the admin code, and load the admin view.
+7. Confirm deployment readiness and storage health show production-ready status.
+8. Create a database backup from the support screen.
 
 ## Docker Build
 
@@ -58,6 +61,7 @@ docker run --rm -p 8000:8000 \
   -e BACKUP_DATA_PATH=/var/data/studynova/backups \
   -e SESSION_SECRET=replace-me \
   -e ADMIN_ACCESS_CODE=replace-me \
+  -e PUBLIC_API_BASE_URL=http://localhost:8000 \
   -v studynova-data:/var/data/studynova \
   studynova-api
 ```

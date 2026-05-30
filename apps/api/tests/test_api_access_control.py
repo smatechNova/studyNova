@@ -414,3 +414,113 @@ def test_admin_can_review_firebase_auth_readiness(monkeypatch) -> None:
     assert allowed_response.status_code == 200
     assert allowed_response.json()["provider"] == "firebase"
     assert allowed_response.json()["server_verification_ready"] is True
+
+
+def test_admin_can_review_deployment_readiness(tmp_path, monkeypatch) -> None:
+    class TestSettings:
+        app_env = "production"
+        admin_access_code = "admin-test-code"
+        allowed_origins = ""
+        allowed_origin_regex = ""
+        backup_data_path = str(tmp_path / "backups")
+        public_api_base_url = "https://api.studynova.example.com"
+        session_secret = "a-long-private-session-secret-for-tests"
+        session_ttl_hours = 168
+
+        @property
+        def cors_origins(self) -> list[str]:
+            return []
+
+        @property
+        def is_production(self) -> bool:
+            return True
+
+        @property
+        def uses_default_admin_access_code(self) -> bool:
+            return False
+
+        @property
+        def uses_default_session_secret(self) -> bool:
+            return False
+
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)
+    monkeypatch.setattr(api_module, "get_settings", lambda: TestSettings())
+    monkeypatch.setattr(
+        api_module,
+        "firebase_auth_readiness",
+        lambda: {
+            "provider": "firebase",
+            "admin_sdk_installed": True,
+            "service_account_configured": True,
+            "google_application_credentials_configured": False,
+            "project_id_configured": False,
+            "server_verification_ready": True,
+            "warnings": [],
+        },
+    )
+    client = TestClient(app)
+
+    response = client.get("/api/v1/admin/deployment/readiness", headers={"X-Admin-Code": "admin-test-code"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ready"] is True
+    assert payload["public_api_base_url"] == "https://api.studynova.example.com"
+    assert all(check["status"] == "pass" for check in payload["checks"])
+
+
+def test_deployment_readiness_flags_unsafe_production_defaults(tmp_path, monkeypatch) -> None:
+    class TestSettings:
+        app_env = "production"
+        admin_access_code = "admin-test-code"
+        allowed_origins = "http://localhost:8081"
+        allowed_origin_regex = r"https://.*\.app\.github\.dev"
+        backup_data_path = str(tmp_path / "backups")
+        public_api_base_url = "http://api.example.com"
+        session_secret = "studynova-local-session-secret"
+        session_ttl_hours = 168
+
+        @property
+        def cors_origins(self) -> list[str]:
+            return ["http://localhost:8081"]
+
+        @property
+        def is_production(self) -> bool:
+            return True
+
+        @property
+        def uses_default_admin_access_code(self) -> bool:
+            return False
+
+        @property
+        def uses_default_session_secret(self) -> bool:
+            return True
+
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)
+    monkeypatch.setattr(api_module, "get_settings", lambda: TestSettings())
+    monkeypatch.setattr(
+        api_module,
+        "firebase_auth_readiness",
+        lambda: {
+            "provider": "firebase",
+            "admin_sdk_installed": True,
+            "service_account_configured": False,
+            "google_application_credentials_configured": False,
+            "project_id_configured": False,
+            "server_verification_ready": False,
+            "warnings": ["Configure Firebase."],
+        },
+    )
+    client = TestClient(app)
+
+    response = client.get("/api/v1/admin/deployment/readiness", headers={"X-Admin-Code": "admin-test-code"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    failed_checks = {check["name"] for check in payload["checks"] if check["status"] == "fail"}
+    warning_checks = {check["name"] for check in payload["checks"] if check["status"] == "warning"}
+    assert payload["ready"] is False
+    assert {"Public API URL", "Session secret", "CORS policy"}.issubset(failed_checks)
+    assert "Firebase verification" in warning_checks
