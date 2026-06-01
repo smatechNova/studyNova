@@ -21,6 +21,10 @@ The Android app config includes:
   "android": {
     "permissions": ["POST_NOTIFICATIONS"]
   },
+  "notification": {
+    "icon": "./assets/notification-icon.png",
+    "color": "#2563EB"
+  },
   "plugins": ["expo-notifications"]
 }
 ```
@@ -65,4 +69,3 @@ Tell testers:
 - Notifications stay on the phone for now; this is not yet server push messaging.
 - Missed-session nudges are intended to encourage catch-up, not punish the student.
 - They should report whether reminder wording feels calm and helpful.
-

@@ -5,18 +5,20 @@ This runbook gets StudyNova into Google Play testing before the full public laun
 ## Current Release Target
 
 - App name: StudyNova
-- Android package: `com.smatech.studynova`
+- Android package: `com.studynova.app`
 - Version name: `0.1.0`
 - Version code: managed remotely by EAS and auto-incremented for store builds
 - Build artifact for Play Store: Android App Bundle (`.aab`)
 - Testing target: Google Play internal testing first, then closed testing
+
+The Android package name becomes permanent after the first Play Console upload. Confirm this identity before uploading the first `.aab`.
 
 ## What Must Exist Before The Build
 
 1. A real backend URL, not `localhost`, Codespaces, or Expo tunnel.
 2. Expo account access on the machine running the build.
 3. Google Play Console developer account.
-4. A Google Play app draft created with package name `com.smatech.studynova`.
+4. A Google Play app draft created with package name `com.studynova.app`.
 5. At least one tester email list or Google Group for Play testing.
 6. Privacy policy URL. Use `docs/privacy-policy-draft.md` as the starting text.
 7. Stable network access to Expo services, including `api.expo.dev` and `keystore.expo.dev`.
@@ -26,6 +28,7 @@ This runbook gets StudyNova into Google Play testing before the full public laun
 
 See `infra/api-persistent-disk.md` for the fastest backend path for closed testing.
 See `infra/render-closed-test-deployment.md` for the hosted Render execution path.
+See `docs/mobile-release-readiness.md` for the mobile app identity, assets, and guarded build commands.
 
 ## Backend Persistence Setup
 
@@ -74,21 +77,30 @@ Run these from `apps/mobile`.
 ```powershell
 npm install
 npm run typecheck
-eas login
+npm run release:check
+npx eas-cli@latest login
 npx eas-cli@latest env:create production --name EXPO_PUBLIC_API_URL --value https://your-api-host --visibility plaintext --force
-eas build --platform android --profile closed-test
+npx eas-cli@latest build --platform android --profile closed-test
 ```
 
 After the EAS build completes, download the `.aab` from the EAS dashboard and upload it manually in Play Console, or use EAS Submit after Play Console service account access is configured:
 
 ```powershell
-eas submit --platform android --profile closed-test
+npx eas-cli@latest submit --platform android --profile closed-test
 ```
 
 For an installable APK that is not uploaded to Play Store:
 
 ```powershell
-eas build --platform android --profile preview
+npx eas-cli@latest build --platform android --profile preview
+```
+
+From the repository root, the same guarded commands are:
+
+```powershell
+npm run mobile:release-check
+npm run mobile:build:closed-test
+npm run mobile:submit:closed-test
 ```
 
 ## Play Console Steps
@@ -132,4 +144,4 @@ Use `docs/tester-feedback-template.md` to collect structured feedback.
 - App icon, feature graphic, and screenshots must be final.
 - Privacy policy must be hosted on a public URL.
 - Real-world testing must confirm notifications and parent linking on Android phones.
-- Admin/support view is still needed for account recovery requests.
+- Admin/support workflow must be tested for account recovery requests and backup export.

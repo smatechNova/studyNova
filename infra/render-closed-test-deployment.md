@@ -81,6 +81,7 @@ Official Expo references:
 From `apps/mobile`:
 
 ```powershell
+npm run release:check
 npx eas-cli@latest build --platform android --profile closed-test
 ```
 

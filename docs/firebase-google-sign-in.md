@@ -14,7 +14,7 @@ Expo AuthSession is the Expo browser-based OAuth flow used by the mobile app: ht
 1. Create a Firebase project for StudyNova.
 2. Enable Authentication > Sign-in method > Google.
 3. Add an Android app:
-   - Package name: `com.smatech.studynova`
+   - Package name: `com.studynova.app`
    - App nickname: `StudyNova Android`
 4. Add release SHA fingerprints for the signing key used by the Play Store/EAS build.
    Firebase notes that Android Google sign-in needs app SHA fingerprints in project settings: https://firebase.google.com/docs/auth/android/google-signin

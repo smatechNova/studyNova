@@ -8,6 +8,10 @@
     "start:codespace": "EXPO_UNSTABLE_HEADLESS=1 REACT_DEBUGGER=echo expo start",
     "android": "expo start --android",
     "web": "expo start --web",
+    "release:check": "node ../../scripts/mobile-release-check.mjs",
+    "build:preview": "npm run release:check && npx eas-cli@latest build --platform android --profile preview",
+    "build:closed-test": "npm run release:check && npx eas-cli@latest build --platform android --profile closed-test",
+    "submit:closed-test": "npx eas-cli@latest submit --platform android --profile closed-test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
