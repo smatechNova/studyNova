@@ -37,6 +37,8 @@ The root `render.yaml` is a ready blueprint for a Docker web service with a pers
 /var/data/studynova
 ```
 
+Follow `infra/render-closed-test-deployment.md` for the step-by-step hosted setup.
+
 After deployment:
 
 1. Open `https://your-api-host/health`.
@@ -47,6 +49,12 @@ After deployment:
 6. Open `/support` in the app, enter the admin code, and load the admin view.
 7. Confirm deployment readiness and storage health show production-ready status.
 8. Create a database backup from the support screen.
+
+You can automate steps 1 to 5 from the repository root:
+
+```bash
+npm run closed-test:api-env -- https://your-api-host <admin-code>
+```
 
 ## Docker Build
 

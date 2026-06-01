@@ -6,6 +6,8 @@ This is the preflight checklist before pointing a Play Store build at a stable S
 
 Use the persistent-disk bridge in `infra/api-persistent-disk.md` for the first Play Store internal or closed test. It keeps the current SQLite backend but moves the database and backups onto a persistent disk.
 
+For the actual hosted execution path, follow `infra/render-closed-test-deployment.md`.
+
 Use Cloud Run after the PostgreSQL/Supabase migration, or only with an external database. Cloud Run's container contract says services receive a `PORT` environment variable and should listen on `0.0.0.0`, and its filesystem is not a durable database location.
 
 Official Cloud Run references:
@@ -19,6 +21,12 @@ The backend now exposes an admin-only readiness endpoint:
 
 ```bash
 curl -H "X-Admin-Code: <admin-code>" https://your-api-host/api/v1/admin/deployment/readiness
+```
+
+Or run the repository smoke test:
+
+```bash
+npm run api:smoke -- https://your-api-host <admin-code>
 ```
 
 The endpoint verifies:
@@ -58,6 +66,12 @@ EXPO_PUBLIC_API_URL=https://your-api-host
 ```
 
 The mobile API URL must match the backend `PUBLIC_API_BASE_URL`.
+
+For local closed-test preparation, run:
+
+```bash
+npm run closed-test:api-env -- https://your-api-host <admin-code>
+```
 
 ## Smoke Test Before EAS Build
 

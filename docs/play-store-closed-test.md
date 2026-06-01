@@ -25,6 +25,7 @@ This runbook gets StudyNova into Google Play testing before the full public laun
 10. Backend deployment readiness checked using `infra/api-production-readiness.md`.
 
 See `infra/api-persistent-disk.md` for the fastest backend path for closed testing.
+See `infra/render-closed-test-deployment.md` for the hosted Render execution path.
 
 ## Backend Persistence Setup
 
@@ -52,6 +53,12 @@ Before building the Android test release, open the support screen with the produ
 curl.exe -H "X-Admin-Code: <admin-code>" https://your-api-host/api/v1/admin/deployment/readiness
 ```
 
+Or run the repository smoke test and write the local mobile env file:
+
+```powershell
+npm run closed-test:api-env -- https://your-api-host <admin-code>
+```
+
 ## Recommended Track Order
 
 1. Internal testing: upload first `.aab` and test install with 1 to 5 trusted people.
@@ -68,6 +75,7 @@ Run these from `apps/mobile`.
 npm install
 npm run typecheck
 eas login
+npx eas-cli@latest env:create production --name EXPO_PUBLIC_API_URL --value https://your-api-host --visibility plaintext --force
 eas build --platform android --profile closed-test
 ```
 
