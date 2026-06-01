@@ -6,17 +6,20 @@ import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
 import { Screen } from "@/components/Screen";
 import {
   createStorageBackup,
+  getAccountDeletionRequests,
   getAccountRecoveryRequests,
   getDeploymentReadiness,
   getFirebaseAuthReadiness,
   getStorageBackupDownloadUrl,
   getStorageBackups,
   getStorageHealth,
+  reviewAccountDeletionRequest,
   reviewAccountRecoveryRequest
 } from "@/lib/api";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
 import type {
+  AccountDeletionRequestRecord,
   AccountRecoveryRequestRecord,
   DeploymentReadiness,
   FirebaseAuthReadiness,
@@ -29,6 +32,7 @@ export default function SupportScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [adminCode, setAdminCode] = useState("");
   const [requests, setRequests] = useState<AccountRecoveryRequestRecord[]>([]);
+  const [deletionRequests, setDeletionRequests] = useState<AccountDeletionRequestRecord[]>([]);
   const [storageHealth, setStorageHealth] = useState<StorageHealth | null>(null);
   const [firebaseReadiness, setFirebaseReadiness] = useState<FirebaseAuthReadiness | null>(null);
   const [deploymentReadiness, setDeploymentReadiness] = useState<DeploymentReadiness | null>(null);
@@ -38,7 +42,9 @@ export default function SupportScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [activeReviewId, setActiveReviewId] = useState("");
+  const [activeDeletionReviewId, setActiveDeletionReviewId] = useState("");
   const openRequests = requests.filter((request) => request.status === "open").length;
+  const pendingDeletionRequests = deletionRequests.filter((request) => request.status !== "completed").length;
   const matchedRequests = requests.filter((request) => request.matched_account).length;
 
   async function loadAdminData() {
@@ -53,29 +59,33 @@ export default function SupportScreen() {
     try {
       const [
         nextRequests,
+        nextDeletionRequests,
         nextStorageHealth,
         nextFirebaseReadiness,
         nextDeploymentReadiness,
         nextBackups
       ] = await Promise.all([
         getAccountRecoveryRequests(adminCode.trim()),
+        getAccountDeletionRequests(adminCode.trim()),
         getStorageHealth(adminCode.trim()),
         getFirebaseAuthReadiness(adminCode.trim()),
         getDeploymentReadiness(adminCode.trim()),
         getStorageBackups(adminCode.trim())
       ]);
       setRequests(nextRequests);
+      setDeletionRequests(nextDeletionRequests);
       setStorageHealth(nextStorageHealth);
       setFirebaseReadiness(nextFirebaseReadiness);
       setDeploymentReadiness(nextDeploymentReadiness);
       setBackups(nextBackups);
       setMessage(
-        nextRequests.length
+        nextRequests.length || nextDeletionRequests.length
           ? "Latest support and deployment status loaded."
           : "Deployment status loaded. No account help requests have been submitted yet."
       );
     } catch {
       setRequests([]);
+      setDeletionRequests([]);
       setStorageHealth(null);
       setFirebaseReadiness(null);
       setDeploymentReadiness(null);
@@ -133,6 +143,34 @@ export default function SupportScreen() {
       setMessage("Could not update the recovery request. Check the admin code and API connection.");
     } finally {
       setActiveReviewId("");
+    }
+  }
+
+  async function markDeletionRequest(requestId: string, status: "reviewed" | "completed") {
+    if (!adminCode.trim()) {
+      setMessage("Enter the admin code first.");
+      return;
+    }
+
+    setActiveDeletionReviewId(`${requestId}:${status}`);
+    setMessage("");
+
+    try {
+      const reviewedRequest = await reviewAccountDeletionRequest(adminCode.trim(), requestId, {
+        status,
+        admin_note:
+          status === "completed"
+            ? "Completed after support confirmed deletion requirements."
+            : "Reviewed from StudyNova support admin."
+      });
+      setDeletionRequests((currentRequests) =>
+        currentRequests.map((request) => (request.id === reviewedRequest.id ? reviewedRequest : request))
+      );
+      setMessage(status === "completed" ? "Deletion request marked completed." : "Deletion request marked reviewed.");
+    } catch {
+      setMessage("Could not update the deletion request. Check the admin code and API connection.");
+    } finally {
+      setActiveDeletionReviewId("");
     }
   }
 
@@ -201,6 +239,11 @@ export default function SupportScreen() {
             <MaterialCommunityIcons name="account-check-outline" size={24} color={colors.success} />
             <Text style={styles.metric}>{matchedRequests}</Text>
             <Text style={styles.helper}>Likely matches</Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <MaterialCommunityIcons name="account-remove-outline" size={24} color={colors.warning} />
+            <Text style={styles.metric}>{pendingDeletionRequests}</Text>
+            <Text style={styles.helper}>Deletion requests</Text>
           </View>
           <View style={styles.summaryCard}>
             <MaterialCommunityIcons
@@ -376,6 +419,103 @@ export default function SupportScreen() {
           </View>
         ) : null}
 
+        {deletionRequests.length ? (
+          <View style={styles.panel}>
+            <View style={styles.requestHeader}>
+              <View style={styles.heroCopy}>
+                <Text style={styles.kicker}>Privacy requests</Text>
+                <Text style={styles.sectionTitle}>Account deletion queue</Text>
+                <Text style={styles.helper}>
+                  Review requests before completing them so linked parent and student data is handled carefully.
+                </Text>
+              </View>
+              <View style={[styles.statusPill, pendingDeletionRequests ? styles.statusUnknown : styles.statusMatched]}>
+                <Text style={styles.statusText}>{pendingDeletionRequests ? "Open" : "Clear"}</Text>
+              </View>
+            </View>
+            <View style={styles.list}>
+              {deletionRequests.map((request) => (
+                <View key={request.id} style={styles.requestCard}>
+                  <View style={styles.requestHeader}>
+                    <View>
+                      <Text style={styles.kicker}>{request.role}</Text>
+                      <Text style={styles.requestTitle}>{request.account_label}</Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.statusPill,
+                        request.status === "completed" ? styles.statusMatched : styles.statusUnknown
+                      ]}
+                    >
+                      <Text style={styles.statusText}>{request.status}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <MaterialCommunityIcons name="login-variant" size={18} color={colors.muted} />
+                    <Text style={styles.detailText}>{request.login_id}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <MaterialCommunityIcons name="phone-outline" size={18} color={colors.muted} />
+                    <Text style={styles.detailText}>{request.contact}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <MaterialCommunityIcons name="clock-outline" size={18} color={colors.muted} />
+                    <Text style={styles.detailText}>{formatTimestamp(request.created_at)}</Text>
+                  </View>
+                  {request.reason ? <Text style={styles.note}>{request.reason}</Text> : null}
+                  {request.admin_note ? <Text style={styles.note}>Admin note: {request.admin_note}</Text> : null}
+                  {request.reviewed_at ? (
+                    <Text style={styles.helper}>Reviewed {formatTimestamp(request.reviewed_at)}</Text>
+                  ) : null}
+                  {request.completed_at ? (
+                    <Text style={styles.helper}>Completed {formatTimestamp(request.completed_at)}</Text>
+                  ) : null}
+                  {request.status !== "completed" ? (
+                    <View style={styles.actionRow}>
+                      <Pressable
+                        accessibilityRole="button"
+                        disabled={activeDeletionReviewId === `${request.id}:reviewed`}
+                        onPress={() => void markDeletionRequest(request.id, "reviewed")}
+                        style={[
+                          styles.secondaryButton,
+                          activeDeletionReviewId === `${request.id}:reviewed` ? styles.disabledButton : null
+                        ]}
+                      >
+                        {activeDeletionReviewId === `${request.id}:reviewed` ? (
+                          <ActivityIndicator color={colors.brand} />
+                        ) : (
+                          <>
+                            <MaterialCommunityIcons name="file-check-outline" size={18} color={colors.brand} />
+                            <Text style={styles.secondaryButtonText}>Mark reviewed</Text>
+                          </>
+                        )}
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        disabled={activeDeletionReviewId === `${request.id}:completed`}
+                        onPress={() => void markDeletionRequest(request.id, "completed")}
+                        style={[
+                          styles.warningButton,
+                          activeDeletionReviewId === `${request.id}:completed` ? styles.disabledButton : null
+                        ]}
+                      >
+                        {activeDeletionReviewId === `${request.id}:completed` ? (
+                          <ActivityIndicator color={colors.warningDark} />
+                        ) : (
+                          <>
+                            <MaterialCommunityIcons name="check-decagram-outline" size={18} color={colors.warningDark} />
+                            <Text style={styles.warningButtonText}>Mark completed</Text>
+                          </>
+                        )}
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
         <View style={styles.list}>
           {requests.map((request) => (
             <View key={request.id} style={styles.requestCard}>
@@ -481,6 +621,11 @@ function createStyles(colors: AppColors) {
       padding: spacing.md
     },
     backupList: {
+      gap: spacing.sm
+    },
+    actionRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
       gap: spacing.sm
     },
     codeText: {
@@ -707,6 +852,24 @@ function createStyles(colors: AppColors) {
       fontWeight: "700",
       lineHeight: 20,
       padding: spacing.md
+    },
+    warningButton: {
+      alignItems: "center",
+      alignSelf: "flex-start",
+      backgroundColor: colors.warningSoft,
+      borderColor: colors.warningBorder,
+      borderRadius: 8,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.xs,
+      justifyContent: "center",
+      minHeight: 46,
+      paddingHorizontal: spacing.md
+    },
+    warningButtonText: {
+      color: colors.warningDark,
+      fontSize: 14,
+      fontWeight: "800"
     }
   });
 }

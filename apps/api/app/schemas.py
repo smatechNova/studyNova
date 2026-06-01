@@ -206,6 +206,39 @@ class AccountRecoveryRequestRecord(BaseModel):
     created_at: datetime
 
 
+class AccountDeletionRequestCreate(BaseModel):
+    contact: str = Field(min_length=5, max_length=120)
+    reason: str = Field(default="", max_length=360)
+    confirmation: Literal["DELETE"]
+
+
+class AccountDeletionRequestReceipt(BaseModel):
+    id: str
+    status: Literal["pending"] = "pending"
+    message: str
+    created_at: datetime
+
+
+class AccountDeletionReviewRequest(BaseModel):
+    status: Literal["reviewed", "completed"]
+    admin_note: str = Field(default="", max_length=240)
+
+
+class AccountDeletionRequestRecord(BaseModel):
+    id: str
+    role: Literal["student", "parent"]
+    account_id: str
+    account_label: str
+    login_id: str
+    contact: str
+    reason: str = ""
+    status: Literal["pending", "reviewed", "completed"] = "pending"
+    reviewed_at: datetime | None = None
+    completed_at: datetime | None = None
+    admin_note: str = ""
+    created_at: datetime
+
+
 class StorageHealth(BaseModel):
     provider: Literal["sqlite"] = "sqlite"
     database_path: str

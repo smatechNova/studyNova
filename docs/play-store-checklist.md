@@ -48,4 +48,5 @@ npx eas-cli@latest build --platform android --profile production
 - The app handles student data, so privacy copy must be clear.
 - Parent monitoring must require student-parent linking, not open public lookup.
 - Do not collect unnecessary sensitive data.
-- Keep account deletion and support instructions ready before public release.
+- Keep the in-app account deletion request flow enabled for students and parents.
+- Host the privacy policy and account deletion request page before public release.

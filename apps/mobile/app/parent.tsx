@@ -8,6 +8,7 @@ import { ProgressBar } from "@/components/ProgressBar";
 import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
 import {
+  createAccountDeletionRequest,
   getLatestStudyPlan,
   getParentFamily,
   getStudyPlanHistory,
@@ -54,6 +55,12 @@ export default function ParentScreen() {
   const [inviteCode, setInviteCode] = useState("");
   const [inviteMessage, setInviteMessage] = useState("");
   const [isInviteRedeeming, setIsInviteRedeeming] = useState(false);
+  const [isDeletionOpen, setIsDeletionOpen] = useState(false);
+  const [deletionContact, setDeletionContact] = useState("");
+  const [deletionReason, setDeletionReason] = useState("");
+  const [deletionConfirmation, setDeletionConfirmation] = useState("");
+  const [deletionMessage, setDeletionMessage] = useState("");
+  const [isDeletionLoading, setIsDeletionLoading] = useState(false);
   const activeParentId = sessionParentId;
 
   const latestCompletion = progress?.completions.at(-1);
@@ -144,6 +151,7 @@ export default function ParentScreen() {
     try {
       const latestFamily = await getParentFamily(activeParentId);
       setParentFamily(latestFamily);
+      setDeletionContact((current) => current || latestFamily.parent?.contact || "");
 
       if (!latestFamily.parent || !latestFamily.students.length) {
         setSavedPlan(null);
@@ -264,6 +272,41 @@ export default function ParentScreen() {
     router.replace("/auth?role=parent");
   }
 
+  async function submitDeletionRequest() {
+    if (!deletionContact.trim()) {
+      setDeletionMessage("Enter an email or phone number support can use for this request.");
+      return;
+    }
+
+    if (deletionConfirmation.trim() !== "DELETE") {
+      setDeletionMessage("Type DELETE to confirm the deletion request.");
+      return;
+    }
+
+    setIsDeletionLoading(true);
+    setDeletionMessage("");
+
+    try {
+      const receipt = await createAccountDeletionRequest({
+        contact: deletionContact.trim(),
+        reason: deletionReason.trim(),
+        confirmation: "DELETE"
+      });
+      setDeletionReason("");
+      setDeletionConfirmation("");
+      setDeletionMessage(receipt.message);
+    } catch (requestError) {
+      if (isSessionExpiredError(requestError)) {
+        setSessionParentId(undefined);
+        setAuthMessage("Your sign-in session expired. Please sign in again.");
+        return;
+      }
+      setDeletionMessage("Could not send the deletion request. Check the API connection and try again.");
+    } finally {
+      setIsDeletionLoading(false);
+    }
+  }
+
   if (isSessionLoading) {
     return (
       <Screen>
@@ -353,6 +396,89 @@ export default function ParentScreen() {
               {selectedStudent?.name ?? "This student"} has {progress.missed_sessions_count} missed study{" "}
               {progress.missed_sessions_count === 1 ? "session" : "sessions"} to recover.
             </Text>
+          </View>
+        ) : null}
+
+        {parentFamily?.parent ? (
+          <View style={styles.panel}>
+            <View style={styles.panelHeader}>
+              <View style={styles.headerCopy}>
+                <Text style={styles.kicker}>Privacy</Text>
+                <Text style={styles.sectionTitle}>Account deletion</Text>
+                <Text style={styles.helper}>
+                  Request deletion of this parent account. Linked student accounts remain separate and are reviewed
+                  before support completes the request.
+                </Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  setIsDeletionOpen((current) => !current);
+                  setDeletionMessage("");
+                }}
+                style={styles.linkButton}
+              >
+                <MaterialCommunityIcons
+                  name={isDeletionOpen ? "chevron-up" : "trash-can-outline"}
+                  size={18}
+                  color={colors.brand}
+                />
+                <Text style={styles.linkButtonText}>{isDeletionOpen ? "Close" : "Request"}</Text>
+              </Pressable>
+            </View>
+            {isDeletionOpen ? (
+              <View style={styles.deletionForm}>
+                <TextInput
+                  autoCapitalize="none"
+                  onChangeText={(value) => {
+                    setDeletionMessage("");
+                    setDeletionContact(value);
+                  }}
+                  placeholder="Contact email or phone"
+                  placeholderTextColor={colors.muted}
+                  style={styles.fullInput}
+                  value={deletionContact}
+                />
+                <TextInput
+                  multiline
+                  onChangeText={(value) => {
+                    setDeletionMessage("");
+                    setDeletionReason(value);
+                  }}
+                  placeholder="Optional reason"
+                  placeholderTextColor={colors.muted}
+                  style={[styles.fullInput, styles.noteInput]}
+                  value={deletionReason}
+                />
+                <TextInput
+                  autoCapitalize="characters"
+                  onChangeText={(value) => {
+                    setDeletionMessage("");
+                    setDeletionConfirmation(value);
+                  }}
+                  placeholder="Type DELETE to confirm"
+                  placeholderTextColor={colors.muted}
+                  style={styles.fullInput}
+                  value={deletionConfirmation}
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={isDeletionLoading}
+                  onPress={() => void submitDeletionRequest()}
+                  style={[styles.dangerButton, isDeletionLoading ? styles.disabledButton : null]}
+                >
+                  {isDeletionLoading ? (
+                    <ActivityIndicator color={colors.warningDark} />
+                  ) : (
+                    <>
+                      <MaterialCommunityIcons name="shield-alert-outline" size={18} color={colors.warningDark} />
+                      <Text style={styles.dangerButtonText}>Send deletion request</Text>
+                    </>
+                  )}
+                </Pressable>
+                {deletionMessage ? <Text style={styles.helper}>{deletionMessage}</Text> : null}
+              </View>
+            ) : null}
           </View>
         ) : null}
 
@@ -876,6 +1002,26 @@ function createStyles(colors: AppColors) {
     gap: spacing.md,
     padding: spacing.md
   },
+  dangerButton: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.warningSoft,
+    borderColor: colors.warningBorder,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    minHeight: 44,
+    paddingHorizontal: spacing.sm
+  },
+  dangerButtonText: {
+    color: colors.warningDark,
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  deletionForm: {
+    gap: spacing.sm
+  },
   disabledButton: {
     opacity: 0.55
   },
@@ -955,6 +1101,18 @@ function createStyles(colors: AppColors) {
     minWidth: 180,
     paddingHorizontal: spacing.md
   },
+  fullInput: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    color: colors.text,
+    fontSize: 16,
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    width: "100%"
+  },
   inviteInputRow: {
     alignItems: "center",
     flexDirection: "row",
@@ -985,6 +1143,10 @@ function createStyles(colors: AppColors) {
     color: colors.brand,
     fontSize: 24,
     fontWeight: "800"
+  },
+  noteInput: {
+    minHeight: 96,
+    textAlignVertical: "top"
   },
   overdueText: {
     color: colors.warningDark

@@ -1,4 +1,8 @@
 import type {
+  AccountDeletionRequestInput,
+  AccountDeletionRequestReceipt,
+  AccountDeletionRequestRecord,
+  AccountDeletionReviewInput,
   AccountRecoveryRequestInput,
   AccountRecoveryRequestRecord,
   AccountRecoveryRequestReceipt,
@@ -201,6 +205,24 @@ export async function createAccountRecoveryRequest(
   return response.json() as Promise<AccountRecoveryRequestReceipt>;
 }
 
+export async function createAccountDeletionRequest(
+  payload: AccountDeletionRequestInput
+): Promise<AccountDeletionRequestReceipt> {
+  const response = await apiFetch(`${API_URL}/api/v1/accounts/deletion-requests`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Account deletion request failed");
+  }
+
+  return response.json() as Promise<AccountDeletionRequestReceipt>;
+}
+
 export async function getAccountRecoveryRequests(adminCode: string, limit = 50): Promise<AccountRecoveryRequestRecord[]> {
   const params = new URLSearchParams({ limit: String(limit) });
   const response = await apiFetch(`${API_URL}/api/v1/admin/account-recovery-requests?${params.toString()}`, {
@@ -235,6 +257,42 @@ export async function reviewAccountRecoveryRequest(
   }
 
   return response.json() as Promise<AccountRecoveryRequestRecord>;
+}
+
+export async function getAccountDeletionRequests(adminCode: string, limit = 50): Promise<AccountDeletionRequestRecord[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  const response = await apiFetch(`${API_URL}/api/v1/admin/account-deletion-requests?${params.toString()}`, {
+    headers: {
+      "X-Admin-Code": adminCode
+    }
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Account deletion list request failed");
+  }
+
+  return response.json() as Promise<AccountDeletionRequestRecord[]>;
+}
+
+export async function reviewAccountDeletionRequest(
+  adminCode: string,
+  requestId: string,
+  payload: AccountDeletionReviewInput
+): Promise<AccountDeletionRequestRecord> {
+  const response = await apiFetch(`${API_URL}/api/v1/admin/account-deletion-requests/${requestId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Code": adminCode
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Account deletion review request failed");
+  }
+
+  return response.json() as Promise<AccountDeletionRequestRecord>;
 }
 
 export async function getStorageHealth(adminCode: string): Promise<StorageHealth> {

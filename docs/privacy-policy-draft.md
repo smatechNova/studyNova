@@ -1,6 +1,6 @@
 # StudyNova Privacy Policy Draft
 
-Last updated: May 27, 2026
+Last updated: June 1, 2026
 
 This draft must be reviewed before public launch. It is written for the StudyNova closed-test build and should be hosted on a public webpage before Play Store submission.
 
@@ -50,7 +50,11 @@ StudyNova may be used by students. Schools, parents, or guardians should supervi
 
 ## User Choices
 
-Users may request help with account access through the sign-in help form. Before public launch, StudyNova should provide a formal contact channel for data deletion and correction requests.
+Users may request help with account access through the sign-in help form. Signed-in students and parents can also open their dashboard privacy section and submit an account deletion request by confirming `DELETE`.
+
+Account deletion requests are reviewed before completion so StudyNova can verify the request, protect linked parent-student records, and handle school or guardian support needs carefully. During the closed-test stage, completion is handled by support/admin review rather than instant automatic deletion.
+
+Before Play Store submission, StudyNova should host a public account deletion request page using `docs/account-deletion-request.md` as the starting text. This gives users a web path to request deletion even if they cannot access the app.
 
 ## Contact
 

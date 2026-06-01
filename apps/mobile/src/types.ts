@@ -179,6 +179,39 @@ export type AccountRecoveryReviewInput = {
   admin_note: string;
 };
 
+export type AccountDeletionRequestInput = {
+  contact: string;
+  reason: string;
+  confirmation: "DELETE";
+};
+
+export type AccountDeletionRequestReceipt = {
+  id: string;
+  status: "pending";
+  message: string;
+  created_at: string;
+};
+
+export type AccountDeletionRequestRecord = {
+  id: string;
+  role: AuthRole;
+  account_id: string;
+  account_label: string;
+  login_id: string;
+  contact: string;
+  reason: string;
+  status: "pending" | "reviewed" | "completed";
+  reviewed_at?: string | null;
+  completed_at?: string | null;
+  admin_note: string;
+  created_at: string;
+};
+
+export type AccountDeletionReviewInput = {
+  status: "reviewed" | "completed";
+  admin_note: string;
+};
+
 export type StorageHealth = {
   provider: "sqlite";
   database_path: string;

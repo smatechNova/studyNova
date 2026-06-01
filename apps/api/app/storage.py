@@ -11,6 +11,10 @@ from uuid import uuid4
 
 from app.config import get_settings
 from app.schemas import (
+    AccountDeletionRequestCreate,
+    AccountDeletionRequestReceipt,
+    AccountDeletionRequestRecord,
+    AccountDeletionReviewRequest,
     AccountRecoveryRequestCreate,
     AccountRecoveryRequestRecord,
     AccountRecoveryRequestReceipt,
@@ -329,6 +333,155 @@ class StudyPlanStore:
             ).fetchone()
 
         return self._account_recovery_request_from_row(row) if row is not None else None
+
+    def create_account_deletion_request(
+        self,
+        role: str,
+        account_id: str,
+        payload: AccountDeletionRequestCreate,
+    ) -> AccountDeletionRequestReceipt | None:
+        if role == "student":
+            account = self.student_account_by_id(account_id)
+            if account is None:
+                return None
+            account_label = account.name
+            login_id = account.login_id
+        else:
+            account = self.parent_account_by_id(account_id)
+            if account is None:
+                return None
+            account_label = account.name
+            login_id = account.contact
+
+        with self._connect() as connection:
+            existing = connection.execute(
+                """
+                select id, created_at
+                from account_deletion_requests
+                where role = ? and account_id = ? and status in ('pending', 'reviewed')
+                order by created_at desc
+                limit 1
+                """,
+                (role, account_id),
+            ).fetchone()
+            if existing is not None:
+                return AccountDeletionRequestReceipt(
+                    id=existing["id"],
+                    created_at=existing["created_at"],
+                    message="A deletion request is already active for this account. Support will review it.",
+                )
+
+            receipt = AccountDeletionRequestReceipt(
+                id=str(uuid4()),
+                created_at=datetime.now(timezone.utc),
+                message="Deletion request received. StudyNova support will review linked data before completing it.",
+            )
+            connection.execute(
+                """
+                insert into account_deletion_requests (
+                    id,
+                    role,
+                    account_id,
+                    account_label,
+                    login_id,
+                    contact,
+                    reason,
+                    status,
+                    created_at
+                )
+                values (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+                """,
+                (
+                    receipt.id,
+                    role,
+                    account_id,
+                    account_label,
+                    login_id,
+                    payload.contact,
+                    payload.reason,
+                    receipt.created_at.isoformat(),
+                ),
+            )
+
+        return receipt
+
+    def account_deletion_requests(self, limit: int = 50) -> list[AccountDeletionRequestRecord]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                select
+                    id,
+                    role,
+                    account_id,
+                    account_label,
+                    login_id,
+                    contact,
+                    reason,
+                    status,
+                    reviewed_at,
+                    completed_at,
+                    admin_note,
+                    created_at
+                from account_deletion_requests
+                order by
+                    case status
+                        when 'pending' then 0
+                        when 'reviewed' then 1
+                        else 2
+                    end,
+                    created_at desc
+                limit ?
+                """,
+                (max(1, min(limit, 100)),),
+            ).fetchall()
+
+        return [self._account_deletion_request_from_row(row) for row in rows]
+
+    def review_account_deletion_request(
+        self,
+        request_id: str,
+        payload: AccountDeletionReviewRequest,
+    ) -> AccountDeletionRequestRecord | None:
+        reviewed_at = datetime.now(timezone.utc).isoformat()
+        completed_at = reviewed_at if payload.status == "completed" else None
+
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                update account_deletion_requests
+                set status = ?,
+                    reviewed_at = coalesce(reviewed_at, ?),
+                    completed_at = ?,
+                    admin_note = ?
+                where id = ?
+                """,
+                (payload.status, reviewed_at, completed_at, payload.admin_note, request_id),
+            )
+            if cursor.rowcount == 0:
+                return None
+
+            row = connection.execute(
+                """
+                select
+                    id,
+                    role,
+                    account_id,
+                    account_label,
+                    login_id,
+                    contact,
+                    reason,
+                    status,
+                    reviewed_at,
+                    completed_at,
+                    admin_note,
+                    created_at
+                from account_deletion_requests
+                where id = ?
+                """,
+                (request_id,),
+            ).fetchone()
+
+        return self._account_deletion_request_from_row(row) if row is not None else None
 
     def storage_health(self, backup_directory: str, production: bool = False) -> StorageHealth:
         backup_path = Path(backup_directory)
@@ -888,6 +1041,22 @@ class StudyPlanStore:
             matched_account=bool(row["matched_account_id"]),
             status=row["status"],
             reviewed_at=row["reviewed_at"],
+            admin_note=row["admin_note"],
+            created_at=row["created_at"],
+        )
+
+    def _account_deletion_request_from_row(self, row: sqlite3.Row) -> AccountDeletionRequestRecord:
+        return AccountDeletionRequestRecord(
+            id=row["id"],
+            role=row["role"],
+            account_id=row["account_id"],
+            account_label=row["account_label"],
+            login_id=row["login_id"],
+            contact=row["contact"],
+            reason=row["reason"],
+            status=row["status"],
+            reviewed_at=row["reviewed_at"],
+            completed_at=row["completed_at"],
             admin_note=row["admin_note"],
             created_at=row["created_at"],
         )
@@ -1640,6 +1809,36 @@ class StudyPlanStore:
                 """
                 create index if not exists idx_account_recovery_requests_status_created
                 on account_recovery_requests (status, created_at desc)
+                """
+            )
+            connection.execute(
+                """
+                create table if not exists account_deletion_requests (
+                    id text primary key,
+                    role text not null,
+                    account_id text not null,
+                    account_label text not null,
+                    login_id text not null,
+                    contact text not null,
+                    reason text not null,
+                    status text not null default 'pending',
+                    reviewed_at text,
+                    completed_at text,
+                    admin_note text not null default '',
+                    created_at text not null
+                )
+                """
+            )
+            connection.execute(
+                """
+                create index if not exists idx_account_deletion_requests_account_status
+                on account_deletion_requests (role, account_id, status)
+                """
+            )
+            connection.execute(
+                """
+                create index if not exists idx_account_deletion_requests_status_created
+                on account_deletion_requests (status, created_at desc)
                 """
             )
             connection.execute(

@@ -40,6 +40,11 @@ npm run mobile:release-check
 
 This validates the app config, EAS profiles, required Android assets, notification setup, and Play Store docs references.
 
+Before submitting to Play Store, host both policy documents publicly:
+
+- `docs/privacy-policy-draft.md`
+- `docs/account-deletion-request.md`
+
 ## Closed-Test Build
 
 After the hosted API is ready and `EXPO_PUBLIC_API_URL` is set in the production EAS environment:

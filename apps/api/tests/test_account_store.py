@@ -1,6 +1,8 @@
 import sqlite3
 
 from app.schemas import (
+    AccountDeletionRequestCreate,
+    AccountDeletionReviewRequest,
     AccountRecoveryRequestCreate,
     AccountRecoveryReviewRequest,
     AccountSignInRequest,
@@ -249,6 +251,77 @@ def test_study_plan_store_records_account_recovery_request_privately(tmp_path) -
     assert reviewed_request.status == "reviewed"
     assert reviewed_request.admin_note == "Called parent and confirmed the account."
     assert reviewed_request.reviewed_at is not None
+
+
+def test_study_plan_store_records_account_deletion_request_without_deleting_links(tmp_path) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    student = store.create_student_account(
+        StudentAccountCreate(
+            login_id="alliyah@example.com",
+            access_code="1234",
+            name="Alliyah Olaniyan",
+            class_level="SS2 Science",
+            age=15,
+            school_name="",
+        )
+    )
+    parent = store.create_parent_account(
+        ParentAccountCreate(
+            name="Mrs Olaniyan",
+            contact="parent@example.com",
+            access_code="4321",
+            relationship="Mother",
+        )
+    )
+    link = store.link_parent_student(ParentStudentLinkCreate(parent_id=parent.id, student_id=student.id))
+
+    receipt = store.create_account_deletion_request(
+        "student",
+        student.id,
+        AccountDeletionRequestCreate(
+            contact="parent@example.com",
+            reason="No longer using the test account.",
+            confirmation="DELETE",
+        ),
+    )
+    duplicate_receipt = store.create_account_deletion_request(
+        "student",
+        student.id,
+        AccountDeletionRequestCreate(
+            contact="parent@example.com",
+            reason="Second request.",
+            confirmation="DELETE",
+        ),
+    )
+
+    assert link is not None
+    assert receipt is not None
+    assert duplicate_receipt is not None
+    assert duplicate_receipt.id == receipt.id
+    assert store.parent_family(parent.id).students[0].id == student.id
+
+    deletion_requests = store.account_deletion_requests()
+    assert len(deletion_requests) == 1
+    assert deletion_requests[0].role == "student"
+    assert deletion_requests[0].account_label == "Alliyah Olaniyan"
+    assert deletion_requests[0].login_id == "alliyah@example.com"
+    assert deletion_requests[0].status == "pending"
+
+    reviewed_request = store.review_account_deletion_request(
+        deletion_requests[0].id,
+        AccountDeletionReviewRequest(status="reviewed", admin_note="Verified parent contact."),
+    )
+    completed_request = store.review_account_deletion_request(
+        deletion_requests[0].id,
+        AccountDeletionReviewRequest(status="completed", admin_note="Completed after manual data removal."),
+    )
+
+    assert reviewed_request is not None
+    assert reviewed_request.status == "reviewed"
+    assert reviewed_request.completed_at is None
+    assert completed_request is not None
+    assert completed_request.status == "completed"
+    assert completed_request.completed_at is not None
 
 
 def test_study_plan_store_reports_health_and_creates_backup(tmp_path) -> None:

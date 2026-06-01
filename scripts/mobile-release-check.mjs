@@ -6,8 +6,10 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const mobileDir = join(root, "apps", "mobile");
 const appConfigPath = join(mobileDir, "app.json");
 const easConfigPath = join(mobileDir, "eas.json");
+const accountDeletionDocPath = join(root, "docs", "account-deletion-request.md");
 const closedTestDocPath = join(root, "docs", "play-store-closed-test.md");
 const playChecklistPath = join(root, "docs", "play-store-checklist.md");
+const privacyPolicyDocPath = join(root, "docs", "privacy-policy-draft.md");
 
 const failures = [];
 const warnings = [];
@@ -38,6 +40,10 @@ function requireFile(relativePath, label) {
   requireValue(existsSync(path), `${label} is missing at apps/mobile/${relativePath}`);
 }
 
+function requireRootFile(path, label) {
+  requireValue(existsSync(path), `${label} is missing at ${path.replace(`${root}\\`, "")}`);
+}
+
 const appJson = readJson(appConfigPath);
 const easJson = readJson(easConfigPath);
 const expo = appJson.expo ?? {};
@@ -45,7 +51,7 @@ const android = expo.android ?? {};
 const closedTestProfile = easJson.build?.["closed-test"] ?? {};
 const productionProfile = easJson.build?.production ?? {};
 const previewProfile = easJson.build?.preview ?? {};
-const docs = [closedTestDocPath, playChecklistPath]
+const docs = [accountDeletionDocPath, closedTestDocPath, playChecklistPath, privacyPolicyDocPath]
   .filter((path) => existsSync(path))
   .map((path) => readFileSync(path, "utf8"))
   .join("\n");
@@ -75,6 +81,8 @@ requireFile("assets/adaptive-icon.png", "Adaptive icon");
 requireFile("assets/splash-icon.png", "Splash icon");
 requireFile("assets/splash.png", "Full splash artwork");
 requireFile("assets/notification-icon.png", "Notification icon");
+requireRootFile(accountDeletionDocPath, "Account deletion request document");
+requireRootFile(privacyPolicyDocPath, "Privacy policy draft");
 
 requireValue(easJson.cli?.appVersionSource === "remote", "EAS appVersionSource should be remote.");
 requireValue(closedTestProfile.autoIncrement === true, "closed-test profile should auto-increment.");
@@ -87,6 +95,7 @@ requireValue(easJson.submit?.["closed-test"]?.android?.track === "alpha", "close
 requireValue(easJson.submit?.production?.android?.track === "production", "production submit profile should use the production track.");
 
 warnValue(docs.includes("com.studynova.app"), "Play Store docs should mention the current Android package.");
+warnValue(docs.includes("account deletion"), "Play Store docs should mention account deletion.");
 warnValue(docs.includes("npx eas-cli@latest"), "Play Store docs should prefer npx eas-cli@latest for machines without global EAS.");
 warnValue(docs.includes("mobile:release-check"), "Play Store docs should mention npm run mobile:release-check.");
 

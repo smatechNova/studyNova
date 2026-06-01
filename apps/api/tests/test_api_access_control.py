@@ -311,6 +311,66 @@ def test_admin_can_review_account_recovery_requests(tmp_path, monkeypatch) -> No
     assert review_response.json()["reviewed_at"] is not None
 
 
+def test_signed_in_account_can_request_deletion_and_admin_can_complete(tmp_path, monkeypatch) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)
+    client = TestClient(app)
+    student = _student(store, "alliyah@example.com", "Alliyah Olaniyan")
+    headers = _headers(client, "student", student.login_id)
+
+    blocked_create_response = client.post(
+        "/api/v1/accounts/deletion-requests",
+        json={"contact": "parent@example.com", "reason": "Please delete this account.", "confirmation": "DELETE"},
+    )
+    create_response = client.post(
+        "/api/v1/accounts/deletion-requests",
+        headers=headers,
+        json={"contact": "parent@example.com", "reason": "Please delete this account.", "confirmation": "DELETE"},
+    )
+    duplicate_response = client.post(
+        "/api/v1/accounts/deletion-requests",
+        headers=headers,
+        json={"contact": "parent@example.com", "reason": "Duplicate request.", "confirmation": "DELETE"},
+    )
+    blocked_list_response = client.get("/api/v1/admin/account-deletion-requests")
+    list_response = client.get(
+        "/api/v1/admin/account-deletion-requests",
+        headers={"X-Admin-Code": "studynova-admin-dev"},
+    )
+    deletion_request_id = list_response.json()[0]["id"]
+    blocked_review_response = client.patch(
+        f"/api/v1/admin/account-deletion-requests/{deletion_request_id}",
+        json={"status": "reviewed", "admin_note": "Checked ownership."},
+    )
+    review_response = client.patch(
+        f"/api/v1/admin/account-deletion-requests/{deletion_request_id}",
+        headers={"X-Admin-Code": "studynova-admin-dev"},
+        json={"status": "reviewed", "admin_note": "Checked ownership."},
+    )
+    complete_response = client.patch(
+        f"/api/v1/admin/account-deletion-requests/{deletion_request_id}",
+        headers={"X-Admin-Code": "studynova-admin-dev"},
+        json={"status": "completed", "admin_note": "Completed after manual data removal."},
+    )
+
+    assert blocked_create_response.status_code == 401
+    assert create_response.status_code == 200
+    assert create_response.json()["status"] == "pending"
+    assert duplicate_response.status_code == 200
+    assert duplicate_response.json()["id"] == create_response.json()["id"]
+    assert blocked_list_response.status_code == 403
+    assert list_response.status_code == 200
+    assert list_response.json()[0]["role"] == "student"
+    assert list_response.json()[0]["account_label"] == "Alliyah Olaniyan"
+    assert list_response.json()[0]["status"] == "pending"
+    assert blocked_review_response.status_code == 403
+    assert review_response.status_code == 200
+    assert review_response.json()["status"] == "reviewed"
+    assert complete_response.status_code == 200
+    assert complete_response.json()["status"] == "completed"
+    assert complete_response.json()["completed_at"] is not None
+
+
 def test_expired_session_token_is_rejected(tmp_path, monkeypatch) -> None:
     store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
     monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)

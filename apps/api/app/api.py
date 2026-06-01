@@ -13,6 +13,10 @@ from app.auth import FirebaseAuthUnavailable, InvalidFirebaseToken, firebase_aut
 from app.config import get_settings
 from app.domain.study_planner import build_rebalanced_study_plan, build_study_plan
 from app.schemas import (
+    AccountDeletionRequestCreate,
+    AccountDeletionRequestReceipt,
+    AccountDeletionRequestRecord,
+    AccountDeletionReviewRequest,
     AccountRecoveryRequestCreate,
     AccountRecoveryRequestRecord,
     AccountRecoveryRequestReceipt,
@@ -396,6 +400,17 @@ def create_account_recovery_request(payload: AccountRecoveryRequestCreate) -> Ac
     return get_study_plan_store().create_account_recovery_request(payload)
 
 
+@router.post("/accounts/deletion-requests", response_model=AccountDeletionRequestReceipt)
+def create_account_deletion_request(
+    payload: AccountDeletionRequestCreate,
+    session: SessionIdentity = Depends(require_session),
+) -> AccountDeletionRequestReceipt:
+    receipt = get_study_plan_store().create_account_deletion_request(session.role, session.account_id, payload)
+    if receipt is None:
+        raise HTTPException(status_code=404, detail="Signed-in account was not found.")
+    return receipt
+
+
 @router.get("/admin/account-recovery-requests", response_model=list[AccountRecoveryRequestRecord])
 def get_account_recovery_requests(
     limit: int = 50,
@@ -413,6 +428,26 @@ def review_account_recovery_request(
     request = get_study_plan_store().review_account_recovery_request(request_id, payload)
     if request is None:
         raise HTTPException(status_code=404, detail="Account recovery request was not found.")
+    return request
+
+
+@router.get("/admin/account-deletion-requests", response_model=list[AccountDeletionRequestRecord])
+def get_account_deletion_requests(
+    limit: int = 50,
+    _: None = Depends(require_admin),
+) -> list[AccountDeletionRequestRecord]:
+    return get_study_plan_store().account_deletion_requests(limit=limit)
+
+
+@router.patch("/admin/account-deletion-requests/{request_id}", response_model=AccountDeletionRequestRecord)
+def review_account_deletion_request(
+    request_id: str,
+    payload: AccountDeletionReviewRequest,
+    _: None = Depends(require_admin),
+) -> AccountDeletionRequestRecord:
+    request = get_study_plan_store().review_account_deletion_request(request_id, payload)
+    if request is None:
+        raise HTTPException(status_code=404, detail="Account deletion request was not found.")
     return request
 
 
