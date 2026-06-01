@@ -45,7 +45,7 @@ ALLOWED_ORIGIN_REGEX=
 FIREBASE_SERVICE_ACCOUNT_JSON=<optional Firebase Admin JSON>
 ```
 
-Do not use the default development database path or default admin code for a public build. The support admin screen can load storage health and create a SQLite backup after the admin code is entered.
+Do not use the default development database path or default admin code for a public build. The support admin screen can load storage health, list backup files, create a SQLite backup, and mark account recovery requests as reviewed after the admin code is entered.
 
 Before building the Android test release, open the support screen with the production admin code and confirm deployment readiness is marked ready. You can also call:
 

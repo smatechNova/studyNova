@@ -1,10 +1,13 @@
 import hashlib
 import hmac
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi.responses import FileResponse
 
 from app.auth import FirebaseAuthUnavailable, InvalidFirebaseToken, firebase_auth_readiness, verify_firebase_id_token
 from app.config import get_settings
@@ -13,6 +16,7 @@ from app.schemas import (
     AccountRecoveryRequestCreate,
     AccountRecoveryRequestRecord,
     AccountRecoveryRequestReceipt,
+    AccountRecoveryReviewRequest,
     AccountSignInRequest,
     AuthSession,
     CheckInRequest,
@@ -149,6 +153,18 @@ def require_admin(x_admin_code: str | None = Header(default=None, alias="X-Admin
 
 def _deployment_check(name: str, status: Literal["pass", "warning", "fail"], message: str) -> DeploymentCheck:
     return DeploymentCheck(name=name, status=status, message=message)
+
+
+def _safe_backup_path(filename: str) -> Path:
+    if not re.fullmatch(r"studynova-\d{8}T\d{6}Z\.sqlite3", filename):
+        raise HTTPException(status_code=404, detail="Backup file was not found.")
+
+    backup_directory = Path(get_settings().backup_data_path).resolve()
+    backup_path = (backup_directory / filename).resolve()
+    if backup_directory not in backup_path.parents or not backup_path.exists() or not backup_path.is_file():
+        raise HTTPException(status_code=404, detail="Backup file was not found.")
+
+    return backup_path
 
 
 def _build_deployment_readiness() -> DeploymentReadiness:
@@ -388,6 +404,18 @@ def get_account_recovery_requests(
     return get_study_plan_store().account_recovery_requests(limit=limit)
 
 
+@router.patch("/admin/account-recovery-requests/{request_id}", response_model=AccountRecoveryRequestRecord)
+def review_account_recovery_request(
+    request_id: str,
+    payload: AccountRecoveryReviewRequest,
+    _: None = Depends(require_admin),
+) -> AccountRecoveryRequestRecord:
+    request = get_study_plan_store().review_account_recovery_request(request_id, payload)
+    if request is None:
+        raise HTTPException(status_code=404, detail="Account recovery request was not found.")
+    return request
+
+
 @router.get("/admin/storage/health", response_model=StorageHealth)
 def get_admin_storage_health(_: None = Depends(require_admin)) -> StorageHealth:
     settings = get_settings()
@@ -400,6 +428,27 @@ def get_admin_storage_health(_: None = Depends(require_admin)) -> StorageHealth:
 @router.post("/admin/storage/backups", response_model=StorageBackupReceipt)
 def create_admin_storage_backup(_: None = Depends(require_admin)) -> StorageBackupReceipt:
     return get_study_plan_store().create_backup(get_settings().backup_data_path)
+
+
+@router.get("/admin/storage/backups", response_model=list[StorageBackupReceipt])
+def get_admin_storage_backups(
+    limit: int = 20,
+    _: None = Depends(require_admin),
+) -> list[StorageBackupReceipt]:
+    return get_study_plan_store().list_backups(get_settings().backup_data_path, limit=limit)
+
+
+@router.get("/admin/storage/backups/{filename}")
+def download_admin_storage_backup(
+    filename: str,
+    _: None = Depends(require_admin),
+) -> FileResponse:
+    backup_path = _safe_backup_path(filename)
+    return FileResponse(
+        backup_path,
+        filename=backup_path.name,
+        media_type="application/x-sqlite3",
+    )
 
 
 @router.get("/admin/auth/firebase/readiness", response_model=FirebaseAuthReadiness)

@@ -2,6 +2,7 @@ import sqlite3
 
 from app.schemas import (
     AccountRecoveryRequestCreate,
+    AccountRecoveryReviewRequest,
     AccountSignInRequest,
     ParentAccountCreate,
     ParentStudentLinkCreate,
@@ -221,7 +222,7 @@ def test_study_plan_store_records_account_recovery_request_privately(tmp_path) -
         connection.row_factory = sqlite3.Row
         rows = connection.execute(
             """
-            select role, login_id, contact, note, matched_account_id
+            select role, login_id, contact, note, matched_account_id, status, reviewed_at, admin_note
             from account_recovery_requests
             order by created_at asc
             """
@@ -229,11 +230,25 @@ def test_study_plan_store_records_account_recovery_request_privately(tmp_path) -
 
     assert [row["matched_account_id"] for row in rows] == [student.id, None]
     assert rows[0]["note"] == "Forgot the access code."
+    assert rows[0]["status"] == "open"
+    assert rows[0]["reviewed_at"] is None
+    assert rows[0]["admin_note"] == ""
 
     recovery_requests = store.account_recovery_requests()
     assert len(recovery_requests) == 2
     assert recovery_requests[0].matched_account is False
     assert recovery_requests[1].matched_account is True
+    assert recovery_requests[1].status == "open"
+
+    reviewed_request = store.review_account_recovery_request(
+        recovery_requests[1].id,
+        AccountRecoveryReviewRequest(admin_note="Called parent and confirmed the account."),
+    )
+
+    assert reviewed_request is not None
+    assert reviewed_request.status == "reviewed"
+    assert reviewed_request.admin_note == "Called parent and confirmed the account."
+    assert reviewed_request.reviewed_at is not None
 
 
 def test_study_plan_store_reports_health_and_creates_backup(tmp_path) -> None:
@@ -259,6 +274,7 @@ def test_study_plan_store_reports_health_and_creates_backup(tmp_path) -> None:
     assert health.production_ready is True
     assert backup.filename.startswith("studynova-")
     assert backup.size_bytes > 0
+    assert store.list_backups(str(backup_path))[0].filename == backup.filename
 
     with sqlite3.connect(backup.backup_path) as connection:
         row = connection.execute("select count(*) from student_accounts").fetchone()

@@ -2,6 +2,7 @@ import type {
   AccountRecoveryRequestInput,
   AccountRecoveryRequestRecord,
   AccountRecoveryRequestReceipt,
+  AccountRecoveryReviewInput,
   AccountSignInInput,
   AuthSession,
   DeploymentReadiness,
@@ -215,6 +216,27 @@ export async function getAccountRecoveryRequests(adminCode: string, limit = 50):
   return response.json() as Promise<AccountRecoveryRequestRecord[]>;
 }
 
+export async function reviewAccountRecoveryRequest(
+  adminCode: string,
+  requestId: string,
+  payload: AccountRecoveryReviewInput
+): Promise<AccountRecoveryRequestRecord> {
+  const response = await apiFetch(`${API_URL}/api/v1/admin/account-recovery-requests/${requestId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Code": adminCode
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Account recovery review request failed");
+  }
+
+  return response.json() as Promise<AccountRecoveryRequestRecord>;
+}
+
 export async function getStorageHealth(adminCode: string): Promise<StorageHealth> {
   const response = await apiFetch(`${API_URL}/api/v1/admin/storage/health`, {
     headers: {
@@ -242,6 +264,25 @@ export async function createStorageBackup(adminCode: string): Promise<StorageBac
   }
 
   return response.json() as Promise<StorageBackupReceipt>;
+}
+
+export async function getStorageBackups(adminCode: string, limit = 20): Promise<StorageBackupReceipt[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  const response = await apiFetch(`${API_URL}/api/v1/admin/storage/backups?${params.toString()}`, {
+    headers: {
+      "X-Admin-Code": adminCode
+    }
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Storage backup list request failed");
+  }
+
+  return response.json() as Promise<StorageBackupReceipt[]>;
+}
+
+export function getStorageBackupDownloadUrl(filename: string) {
+  return `${API_URL}/api/v1/admin/storage/backups/${encodeURIComponent(filename)}`;
 }
 
 export async function getFirebaseAuthReadiness(adminCode: string): Promise<FirebaseAuthReadiness> {

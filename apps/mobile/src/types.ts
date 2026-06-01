@@ -169,7 +169,14 @@ export type AccountRecoveryRequestRecord = {
   contact: string;
   note: string;
   matched_account: boolean;
+  status: "open" | "reviewed";
+  reviewed_at?: string | null;
+  admin_note: string;
   created_at: string;
+};
+
+export type AccountRecoveryReviewInput = {
+  admin_note: string;
 };
 
 export type StorageHealth = {

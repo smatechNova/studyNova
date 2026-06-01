@@ -14,6 +14,7 @@ from app.schemas import (
     AccountRecoveryRequestCreate,
     AccountRecoveryRequestRecord,
     AccountRecoveryRequestReceipt,
+    AccountRecoveryReviewRequest,
     AccountSignInRequest,
     AuthSession,
     CheckInRequest,
@@ -268,7 +269,17 @@ class StudyPlanStore:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                select id, role, login_id, contact, note, matched_account_id, created_at
+                select
+                    id,
+                    role,
+                    login_id,
+                    contact,
+                    note,
+                    matched_account_id,
+                    status,
+                    reviewed_at,
+                    admin_note,
+                    created_at
                 from account_recovery_requests
                 order by created_at desc
                 limit ?
@@ -276,18 +287,48 @@ class StudyPlanStore:
                 (max(1, min(limit, 100)),),
             ).fetchall()
 
-        return [
-            AccountRecoveryRequestRecord(
-                id=row["id"],
-                role=row["role"],
-                login_id=row["login_id"],
-                contact=row["contact"],
-                note=row["note"],
-                matched_account=bool(row["matched_account_id"]),
-                created_at=row["created_at"],
+        return [self._account_recovery_request_from_row(row) for row in rows]
+
+    def review_account_recovery_request(
+        self,
+        request_id: str,
+        payload: AccountRecoveryReviewRequest,
+    ) -> AccountRecoveryRequestRecord | None:
+        reviewed_at = datetime.now(timezone.utc).isoformat()
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                update account_recovery_requests
+                set status = 'reviewed',
+                    reviewed_at = ?,
+                    admin_note = ?
+                where id = ?
+                """,
+                (reviewed_at, payload.admin_note, request_id),
             )
-            for row in rows
-        ]
+            if cursor.rowcount == 0:
+                return None
+
+            row = connection.execute(
+                """
+                select
+                    id,
+                    role,
+                    login_id,
+                    contact,
+                    note,
+                    matched_account_id,
+                    status,
+                    reviewed_at,
+                    admin_note,
+                    created_at
+                from account_recovery_requests
+                where id = ?
+                """,
+                (request_id,),
+            ).fetchone()
+
+        return self._account_recovery_request_from_row(row) if row is not None else None
 
     def storage_health(self, backup_directory: str, production: bool = False) -> StorageHealth:
         backup_path = Path(backup_directory)
@@ -329,6 +370,30 @@ class StudyPlanStore:
             size_bytes=destination_path.stat().st_size,
             created_at=created_at,
         )
+
+    def list_backups(self, backup_directory: str, limit: int = 20) -> list[StorageBackupReceipt]:
+        backup_path = Path(backup_directory)
+        if not backup_path.exists():
+            return []
+
+        backup_files = sorted(
+            backup_path.glob("studynova-*.sqlite3"),
+            key=lambda item: item.stat().st_mtime,
+            reverse=True,
+        )
+        receipts: list[StorageBackupReceipt] = []
+        for path in backup_files[: max(1, min(limit, 100))]:
+            stat = path.stat()
+            receipts.append(
+                StorageBackupReceipt(
+                    filename=path.name,
+                    backup_path=str(path),
+                    size_bytes=stat.st_size,
+                    created_at=datetime.fromtimestamp(stat.st_mtime, timezone.utc),
+                )
+            )
+
+        return receipts
 
     def firebase_sign_in(self, role: str, auth_uid: str, login_id: str) -> AuthSession | None:
         if role == "student":
@@ -812,6 +877,20 @@ class StudyPlanStore:
             return
 
         self._bind_parent_access_code_hash(parent_id, access_code_hash)
+
+    def _account_recovery_request_from_row(self, row: sqlite3.Row) -> AccountRecoveryRequestRecord:
+        return AccountRecoveryRequestRecord(
+            id=row["id"],
+            role=row["role"],
+            login_id=row["login_id"],
+            contact=row["contact"],
+            note=row["note"],
+            matched_account=bool(row["matched_account_id"]),
+            status=row["status"],
+            reviewed_at=row["reviewed_at"],
+            admin_note=row["admin_note"],
+            created_at=row["created_at"],
+        )
 
     def _student_access_code_matches(self, student_id: str, access_code: str) -> bool:
         access_code_hash = self._student_access_code_hash(student_id)
@@ -1535,14 +1614,32 @@ class StudyPlanStore:
                     contact text not null,
                     note text not null,
                     matched_account_id text,
+                    status text not null default 'open',
+                    reviewed_at text,
+                    admin_note text not null default '',
                     created_at text not null
                 )
                 """
             )
+            account_recovery_columns = {
+                row["name"] for row in connection.execute("pragma table_info(account_recovery_requests)").fetchall()
+            }
+            if "status" not in account_recovery_columns:
+                connection.execute("alter table account_recovery_requests add column status text not null default 'open'")
+            if "reviewed_at" not in account_recovery_columns:
+                connection.execute("alter table account_recovery_requests add column reviewed_at text")
+            if "admin_note" not in account_recovery_columns:
+                connection.execute("alter table account_recovery_requests add column admin_note text not null default ''")
             connection.execute(
                 """
                 create index if not exists idx_account_recovery_requests_created
                 on account_recovery_requests (created_at desc)
+                """
+            )
+            connection.execute(
+                """
+                create index if not exists idx_account_recovery_requests_status_created
+                on account_recovery_requests (status, created_at desc)
                 """
             )
             connection.execute(

@@ -81,5 +81,7 @@ npm run closed-test:api-env -- https://your-api-host <admin-code>
 4. Open the StudyNova support screen.
 5. Confirm Deployment, Persistence, and Google sign-in status.
 6. Create one database backup.
-7. Generate a student plan from a real phone build.
-8. Link a parent account and confirm progress loads.
+7. Confirm the backup inventory shows the new backup and download it with the admin code.
+8. Review or clear any open account recovery requests.
+9. Generate a student plan from a real phone build.
+10. Link a parent account and confirm progress loads.

@@ -49,6 +49,7 @@ After deployment:
 6. Open `/support` in the app, enter the admin code, and load the admin view.
 7. Confirm deployment readiness and storage health show production-ready status.
 8. Create a database backup from the support screen.
+9. Confirm the backup appears in the support screen backup inventory.
 
 You can automate steps 1 to 5 from the repository root:
 
@@ -80,4 +81,15 @@ The container listens on `$PORT` when the platform provides it, otherwise it use
 
 The admin backup endpoint creates a consistent SQLite backup using the SQLite backup API. Backup files are stored under `BACKUP_DATA_PATH`.
 
+Admins can list and download backup files with:
+
+```bash
+curl -H "X-Admin-Code: <admin-code>" https://your-api-host/api/v1/admin/storage/backups
+curl -H "X-Admin-Code: <admin-code>" -o studynova.sqlite3 https://your-api-host/api/v1/admin/storage/backups/<filename>
+```
+
 Download or copy these backups from the hosting provider regularly during testing. Do not rely on one disk copy as the only recovery plan for production.
+
+## Support Recovery Notes
+
+The support screen now lets an admin mark account recovery requests as reviewed after contacting the student or parent. This keeps the request list focused on open support work without exposing matched account IDs to the app.

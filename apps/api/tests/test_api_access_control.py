@@ -283,16 +283,32 @@ def test_admin_can_review_account_recovery_requests(tmp_path, monkeypatch) -> No
     )
 
     blocked_response = client.get("/api/v1/admin/account-recovery-requests")
-    allowed_response = client.get(
+    list_response = client.get(
         "/api/v1/admin/account-recovery-requests",
         headers={"X-Admin-Code": "studynova-admin-dev"},
     )
+    recovery_request_id = list_response.json()[0]["id"]
+    review_blocked_response = client.patch(
+        f"/api/v1/admin/account-recovery-requests/{recovery_request_id}",
+        json={"admin_note": "Parent called support."},
+    )
+    review_response = client.patch(
+        f"/api/v1/admin/account-recovery-requests/{recovery_request_id}",
+        headers={"X-Admin-Code": "studynova-admin-dev"},
+        json={"admin_note": "Parent called support."},
+    )
 
     assert blocked_response.status_code == 403
-    assert allowed_response.status_code == 200
-    assert allowed_response.json()[0]["role"] == "student"
-    assert allowed_response.json()[0]["matched_account"] is True
-    assert "matched_account_id" not in allowed_response.json()[0]
+    assert list_response.status_code == 200
+    assert list_response.json()[0]["role"] == "student"
+    assert list_response.json()[0]["matched_account"] is True
+    assert list_response.json()[0]["status"] == "open"
+    assert "matched_account_id" not in list_response.json()[0]
+    assert review_blocked_response.status_code == 403
+    assert review_response.status_code == 200
+    assert review_response.json()["status"] == "reviewed"
+    assert review_response.json()["admin_note"] == "Parent called support."
+    assert review_response.json()["reviewed_at"] is not None
 
 
 def test_expired_session_token_is_rejected(tmp_path, monkeypatch) -> None:
@@ -364,13 +380,29 @@ def test_admin_can_review_storage_health_and_create_backup(tmp_path, monkeypatch
     blocked_response = client.get("/api/v1/admin/storage/health")
     health_response = client.get("/api/v1/admin/storage/health", headers={"X-Admin-Code": "admin-test"})
     backup_response = client.post("/api/v1/admin/storage/backups", headers={"X-Admin-Code": "admin-test"})
+    backup_filename = backup_response.json()["filename"]
+    backup_list_response = client.get("/api/v1/admin/storage/backups", headers={"X-Admin-Code": "admin-test"})
+    blocked_download_response = client.get(f"/api/v1/admin/storage/backups/{backup_filename}")
+    download_response = client.get(
+        f"/api/v1/admin/storage/backups/{backup_filename}",
+        headers={"X-Admin-Code": "admin-test"},
+    )
+    unsafe_download_response = client.get(
+        "/api/v1/admin/storage/backups/..%2Fsecret.sqlite3",
+        headers={"X-Admin-Code": "admin-test"},
+    )
 
     assert blocked_response.status_code == 403
     assert health_response.status_code == 200
     assert health_response.json()["provider"] == "sqlite"
     assert health_response.json()["database_exists"] is True
     assert backup_response.status_code == 200
-    assert backup_response.json()["filename"].startswith("studynova-")
+    assert backup_filename.startswith("studynova-")
+    assert backup_list_response.status_code == 200
+    assert backup_list_response.json()[0]["filename"] == backup_filename
+    assert blocked_download_response.status_code == 403
+    assert download_response.status_code == 200
+    assert unsafe_download_response.status_code == 404
 
 
 def test_admin_can_review_firebase_auth_readiness(monkeypatch) -> None:

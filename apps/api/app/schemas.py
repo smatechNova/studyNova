@@ -189,6 +189,10 @@ class AccountRecoveryRequestReceipt(BaseModel):
     created_at: datetime
 
 
+class AccountRecoveryReviewRequest(BaseModel):
+    admin_note: str = Field(default="", max_length=240)
+
+
 class AccountRecoveryRequestRecord(BaseModel):
     id: str
     role: Literal["student", "parent"]
@@ -196,6 +200,9 @@ class AccountRecoveryRequestRecord(BaseModel):
     contact: str
     note: str = ""
     matched_account: bool = False
+    status: Literal["open", "reviewed"] = "open"
+    reviewed_at: datetime | None = None
+    admin_note: str = ""
     created_at: datetime
 
 
