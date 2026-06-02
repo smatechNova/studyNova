@@ -1,6 +1,6 @@
 # StudyNova Privacy Policy Draft
 
-Last updated: June 1, 2026
+Last updated: June 2, 2026
 
 This draft must be reviewed before public launch. It is written for the StudyNova closed-test build and should be hosted on a public webpage before Play Store submission.
 
@@ -15,7 +15,7 @@ StudyNova may collect:
 - Student name, class, age, school name, login ID, subjects, topics, study resources, exam dates, reading pace, study notes, study progress, recall notes, and confidence scores.
 - Parent or guardian name, contact information, relationship to the student, linked student accounts, and progress-monitoring activity.
 - Account recovery help requests, including login ID, contact information, and optional support notes.
-- Device notification permission status and scheduled study reminder preferences.
+- Notification permission status checked locally by the app, and scheduled study reminder preferences that may be stored with the study plan.
 
 ## How We Use Information
 
@@ -36,9 +36,13 @@ Students and parents have separate accounts. A parent can only monitor a student
 
 StudyNova does not sell user data. During testing, app administrators may review account and study progress data to support users, fix issues, and improve the product.
 
+StudyNova may use service providers to operate the app, such as backend hosting and Firebase/Google sign-in. These providers process data on StudyNova's behalf for app functionality, account management, security, and support. If analytics, ads, crash reporting, remote push notifications, file uploads, or other third-party SDKs are added later, this policy and the Play Store Data safety form must be updated before release.
+
 ## Data Storage
 
 In development and testing, data may be stored in the StudyNova backend database. Before public launch, StudyNova should use production-grade hosting, access controls, backups, and retention rules.
+
+StudyNova does not currently collect location, payment data, device contacts, calendar events, photos, videos, audio recordings, user-uploaded files, health data, fitness data, SMS/MMS, or browsing history.
 
 ## Notifications
 

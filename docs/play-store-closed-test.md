@@ -26,6 +26,7 @@ The Android package name becomes permanent after the first Play Console upload. 
 9. Firebase/Google sign-in configured using `docs/firebase-google-sign-in.md`.
 10. Notification readiness checked using `docs/notification-readiness.md`.
 11. Backend deployment readiness checked using `infra/api-production-readiness.md`.
+12. Data safety draft reviewed using `docs/play-store-data-safety.md`.
 
 See `infra/api-persistent-disk.md` for the fastest backend path for closed testing.
 See `infra/render-closed-test-deployment.md` for the hosted Render execution path.
@@ -114,13 +115,14 @@ npm run mobile:submit:closed-test
    - Ads declaration
    - Target audience and content
    - Content rating
-3. Go to Testing > Internal testing or Testing > Closed testing.
-4. Add tester emails or a Google Group.
-5. Create release and upload the `.aab`.
-6. Add release notes:
+3. Use `docs/play-store-data-safety.md` while completing the Data safety form.
+4. Go to Testing > Internal testing or Testing > Closed testing.
+5. Add tester emails or a Google Group.
+6. Create release and upload the `.aab`.
+7. Add release notes:
    - "Initial StudyNova test build for student study planning, parent monitoring, reminders, and account-linking feedback."
-7. Publish the test release.
-8. Share the opt-in link with testers.
+8. Publish the test release.
+9. Share the opt-in link with testers.
 
 ## Tester Instructions
 

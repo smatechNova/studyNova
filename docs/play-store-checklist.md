@@ -27,6 +27,7 @@ Confirm the package name before the first Play upload. It cannot be changed for 
 - Privacy policy URL
 - App description
 - Contact email
+- Data safety answers
 
 ## Testing Path
 
@@ -46,6 +47,7 @@ npx eas-cli@latest build --platform android --profile production
 ## Policy Notes
 
 - The app handles student data, so privacy copy must be clear.
+- Data safety answers must match the app and privacy policy.
 - Parent monitoring must require student-parent linking, not open public lookup.
 - Do not collect unnecessary sensitive data.
 - Keep the in-app account deletion request flow enabled for students and parents.
