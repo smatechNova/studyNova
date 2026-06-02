@@ -369,6 +369,7 @@ def test_signed_in_account_can_request_deletion_and_admin_can_complete(tmp_path,
     assert complete_response.status_code == 200
     assert complete_response.json()["status"] == "completed"
     assert complete_response.json()["completed_at"] is not None
+    assert store.student_account_by_id(student.id) is None
 
 
 def test_expired_session_token_is_rejected(tmp_path, monkeypatch) -> None:

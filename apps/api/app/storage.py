@@ -446,6 +446,35 @@ class StudyPlanStore:
         completed_at = reviewed_at if payload.status == "completed" else None
 
         with self._connect() as connection:
+            request_row = connection.execute(
+                """
+                select
+                    id,
+                    role,
+                    account_id,
+                    account_label,
+                    login_id,
+                    contact,
+                    reason,
+                    status,
+                    reviewed_at,
+                    completed_at,
+                    admin_note,
+                    created_at
+                from account_deletion_requests
+                where id = ?
+                """,
+                (request_id,),
+            ).fetchone()
+            if request_row is None:
+                return None
+
+            if request_row["status"] == "completed":
+                return self._account_deletion_request_from_row(request_row)
+
+            if payload.status == "completed":
+                self._complete_account_deletion(connection, request_row)
+
             cursor = connection.execute(
                 """
                 update account_deletion_requests
@@ -482,6 +511,57 @@ class StudyPlanStore:
             ).fetchone()
 
         return self._account_deletion_request_from_row(row) if row is not None else None
+
+    def _complete_account_deletion(self, connection: sqlite3.Connection, request: sqlite3.Row) -> None:
+        if request["role"] == "student":
+            self._delete_student_account_data(connection, request["account_id"])
+            return
+
+        self._delete_parent_account_data(connection, request["account_id"])
+
+    def _delete_student_account_data(self, connection: sqlite3.Connection, student_id: str) -> None:
+        plan_selector = "select id from saved_study_plans where student_id = ?"
+        connection.execute(
+            f"delete from study_session_completions where plan_id in ({plan_selector})",
+            (student_id,),
+        )
+        connection.execute(
+            f"delete from study_reminder_settings where plan_id in ({plan_selector})",
+            (student_id,),
+        )
+        connection.execute("delete from saved_study_plans where student_id = ?", (student_id,))
+        connection.execute("delete from study_check_ins where student_id = ?", (student_id,))
+        connection.execute("delete from parent_student_links where student_id = ?", (student_id,))
+        connection.execute("delete from parent_invite_codes where student_id = ?", (student_id,))
+        connection.execute(
+            """
+            update account_recovery_requests
+            set matched_account_id = null
+            where role = 'student' and matched_account_id = ?
+            """,
+            (student_id,),
+        )
+        connection.execute("delete from student_accounts where id = ?", (student_id,))
+
+    def _delete_parent_account_data(self, connection: sqlite3.Connection, parent_id: str) -> None:
+        connection.execute("delete from parent_student_links where parent_id = ?", (parent_id,))
+        connection.execute(
+            """
+            update parent_invite_codes
+            set redeemed_by_parent_id = null
+            where redeemed_by_parent_id = ?
+            """,
+            (parent_id,),
+        )
+        connection.execute(
+            """
+            update account_recovery_requests
+            set matched_account_id = null
+            where role = 'parent' and matched_account_id = ?
+            """,
+            (parent_id,),
+        )
+        connection.execute("delete from parent_accounts where id = ?", (parent_id,))
 
     def storage_health(self, backup_directory: str, production: bool = False) -> StorageHealth:
         backup_path = Path(backup_directory)
