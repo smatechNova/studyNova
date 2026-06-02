@@ -27,6 +27,7 @@ The Android package name becomes permanent after the first Play Console upload. 
 10. Notification readiness checked using `docs/notification-readiness.md`.
 11. Backend deployment readiness checked using `infra/api-production-readiness.md`.
 12. Data safety draft reviewed using `docs/play-store-data-safety.md`.
+13. Store listing pack reviewed using `docs/play-store-listing-pack.md`.
 
 See `infra/api-persistent-disk.md` for the fastest backend path for closed testing.
 See `infra/render-closed-test-deployment.md` for the hosted Render execution path.
@@ -119,7 +120,7 @@ npm run mobile:submit:closed-test
 4. Go to Testing > Internal testing or Testing > Closed testing.
 5. Add tester emails or a Google Group.
 6. Create release and upload the `.aab`.
-7. Add release notes:
+7. Add release notes from `docs/play-store-listing-pack.md`.
    - "Initial StudyNova test build for student study planning, parent monitoring, reminders, and account-linking feedback."
 8. Publish the test release.
 9. Share the opt-in link with testers.
