@@ -11,6 +11,7 @@ from app.schemas import (
     CheckInRequest,
     ParentAccountCreate,
     ParentStudentLinkCreate,
+    PublicAccountDeletionRequestCreate,
     StudentAccountCreate,
     StudyPlanRequest,
     StudyReminderSettingsUpdate,
@@ -502,6 +503,74 @@ def test_study_plan_store_completes_parent_account_deletion_without_deleting_stu
     assert store.parent_account_by_id(parent.id) is None
     assert store.student_account_by_id(student.id) is not None
     assert store.student_family(student.id).parent is None
+
+
+def test_study_plan_store_records_public_deletion_requests_for_support_review(tmp_path) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    student = store.create_student_account(
+        StudentAccountCreate(
+            login_id="alliyah@example.com",
+            access_code="1234",
+            name="Alliyah Olaniyan",
+            class_level="SS2 Science",
+            age=15,
+            school_name="",
+        )
+    )
+
+    matched_receipt = store.create_public_account_deletion_request(
+        PublicAccountDeletionRequestCreate(
+            role="student",
+            login_id="ALLIYAH@example.com",
+            account_label="Alliyah",
+            contact="parent@example.com",
+            reason="Cannot sign in anymore.",
+            confirmation="DELETE",
+        )
+    )
+    unmatched_receipt = store.create_public_account_deletion_request(
+        PublicAccountDeletionRequestCreate(
+            role="parent",
+            login_id="missing-parent@example.com",
+            account_label="Mrs Missing",
+            contact="support@example.com",
+            reason="Please delete this account if it exists.",
+            confirmation="DELETE",
+        )
+    )
+    duplicate_receipt = store.create_public_account_deletion_request(
+        PublicAccountDeletionRequestCreate(
+            role="student",
+            login_id="alliyah@example.com",
+            account_label="Alliyah Olaniyan",
+            contact="parent@example.com",
+            confirmation="DELETE",
+        )
+    )
+
+    deletion_requests = store.account_deletion_requests()
+    matched_request = next(request for request in deletion_requests if request.id == matched_receipt.id)
+    unmatched_request = next(request for request in deletion_requests if request.id == unmatched_receipt.id)
+
+    assert duplicate_receipt.id == matched_receipt.id
+    assert matched_request.account_id == student.id
+    assert matched_request.request_source == "public"
+    assert matched_request.verification_required is True
+    assert matched_request.matched_account is True
+    assert "Verify account ownership" in matched_request.reason
+    assert unmatched_request.account_id.startswith("unverified:parent:")
+    assert unmatched_request.account_label == "Mrs Missing"
+    assert unmatched_request.matched_account is False
+    assert "No exact account match" in unmatched_request.reason
+
+    completed_unmatched = store.review_account_deletion_request(
+        unmatched_request.id,
+        AccountDeletionReviewRequest(status="completed", admin_note="Closed after support review."),
+    )
+
+    assert completed_unmatched is not None
+    assert completed_unmatched.status == "completed"
+    assert store.student_account_by_id(student.id) is not None
 
 
 def test_study_plan_store_reports_health_and_creates_backup(tmp_path) -> None:

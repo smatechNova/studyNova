@@ -147,6 +147,15 @@ export default function HomeScreen() {
             onPress={() => router.push("/feedback" as never)}
           />
         </View>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/delete-account" as never)}
+          style={styles.privacyLink}
+        >
+          <MaterialCommunityIcons name="account-remove-outline" size={18} color={colors.muted} />
+          <Text style={styles.privacyLinkText}>Request account deletion</Text>
+        </Pressable>
       </ScrollView>
     </Screen>
   );
@@ -278,6 +287,18 @@ function createStyles(colors: AppColors) {
   },
   primaryButtonText: {
     color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800"
+  },
+  privacyLink: {
+    alignItems: "center",
+    alignSelf: "center",
+    flexDirection: "row",
+    gap: spacing.xs,
+    paddingVertical: spacing.sm
+  },
+  privacyLinkText: {
+    color: colors.muted,
     fontSize: 14,
     fontWeight: "800"
   },

@@ -12,7 +12,7 @@ Google Play requires developers to declare how the app collects, shares, protect
 | --- | --- | --- |
 | Does the app collect or share any required user data types? | Yes | StudyNova collects student, parent, study plan, progress, and support data through the app and backend. |
 | Is all collected user data encrypted in transit? | Yes, after production API is HTTPS-only | Do not submit a production/closed-test build that points to plain HTTP. Firebase/Google auth and the hosted API must use HTTPS/TLS. |
-| Does the app provide a way to request data deletion? | Yes | Signed-in users can request deletion in-app, and `docs/account-deletion-request.md` must be hosted publicly before Play submission. |
+| Does the app provide a way to request data deletion? | Yes | Signed-in users can request deletion in-app, and the hosted `/delete-account` page provides a public request path for users who cannot sign in. |
 | Is data shared with third parties? | No, if Firebase/Google auth and hosting are used only as service providers | Revisit this if analytics, ads, crash reporting, marketing pixels, or non-service-provider SDKs are added. |
 | Is data processed ephemerally only? | No | StudyNova stores account, plan, progress, support, and deletion records in the backend. |
 | Is data required or optional? | Mixed, but most core account/study data is required | Play marks required when the data is necessary for the app's primary functionality for any users. Optional support, tester feedback, and deletion reasons are only collected when users submit them. |
@@ -50,7 +50,7 @@ Do not select these unless the product changes:
 ## Security Practices
 
 - Encryption in transit: declare Yes only when the production backend uses HTTPS/TLS and the mobile app points to that URL through `EXPO_PUBLIC_API_URL`.
-- Deletion request mechanism: declare Yes. The app has in-app student/parent deletion requests, and a public web deletion request page must be hosted.
+- Deletion request mechanism: declare Yes. The app has in-app student/parent deletion requests, and the `/delete-account` public web route must be hosted.
 - Independent security review: declare No unless StudyNova completes an approved independent mobile security review.
 - Families policy badge: only opt in after the Play Console Target audience and content review confirms the app meets the applicable Families policy requirements.
 
@@ -70,7 +70,7 @@ Before submitting the Play Console Data safety form:
 
 - Confirm `EXPO_PUBLIC_API_URL` points to the production HTTPS API.
 - Confirm the privacy policy is hosted on a public, non-editable URL.
-- Confirm the account deletion page is hosted on a public URL and entered in Play Console.
+- Confirm the `/delete-account` page is hosted on a public URL and entered in Play Console.
 - Confirm no ads, third-party analytics SDK, crash reporting, remote push, file upload, contacts, calendar, location, payment, or media SDK has been added since this document was updated.
 - Confirm Firebase/Google sign-in configuration and backend token verification are ready for the Android build.
 - Confirm the privacy policy names StudyNova, includes a privacy contact, and describes retention/deletion behavior.

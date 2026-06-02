@@ -18,6 +18,7 @@ import type {
   ParentInviteCode,
   ParentAccountInput,
   ParentStudentLink,
+  PublicAccountDeletionRequestInput,
   SavedStudyPlan,
   StorageBackupReceipt,
   StorageHealth,
@@ -222,6 +223,24 @@ export async function createAccountDeletionRequest(
 
   if (!response.ok) {
     throw await createApiError(response, "Account deletion request failed");
+  }
+
+  return response.json() as Promise<AccountDeletionRequestReceipt>;
+}
+
+export async function createPublicAccountDeletionRequest(
+  payload: PublicAccountDeletionRequestInput
+): Promise<AccountDeletionRequestReceipt> {
+  const response = await apiFetch(`${API_URL}/api/v1/accounts/public-deletion-requests`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Public account deletion request failed");
   }
 
   return response.json() as Promise<AccountDeletionRequestReceipt>;

@@ -212,6 +212,12 @@ class AccountDeletionRequestCreate(BaseModel):
     confirmation: Literal["DELETE"]
 
 
+class PublicAccountDeletionRequestCreate(AccountDeletionRequestCreate):
+    role: Literal["student", "parent"]
+    login_id: str = Field(min_length=5, max_length=120)
+    account_label: str = Field(default="", max_length=80)
+
+
 class AccountDeletionRequestReceipt(BaseModel):
     id: str
     status: Literal["pending"] = "pending"
@@ -232,6 +238,9 @@ class AccountDeletionRequestRecord(BaseModel):
     login_id: str
     contact: str
     reason: str = ""
+    request_source: Literal["signed_in", "public"] = "signed_in"
+    verification_required: bool = False
+    matched_account: bool = True
     status: Literal["pending", "reviewed", "completed"] = "pending"
     reviewed_at: datetime | None = None
     completed_at: datetime | None = None

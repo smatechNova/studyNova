@@ -581,6 +581,23 @@ export default function SupportScreen() {
                     <MaterialCommunityIcons name="login-variant" size={18} color={colors.muted} />
                     <Text style={styles.detailText}>{request.login_id}</Text>
                   </View>
+                  <View style={styles.pillRow}>
+                    <View style={styles.statusPill}>
+                      <Text style={styles.statusText}>
+                        {request.request_source === "public" ? "Public form" : "Signed in"}
+                      </Text>
+                    </View>
+                    <View style={[styles.statusPill, request.matched_account ? styles.statusMatched : styles.statusUnknown]}>
+                      <Text style={styles.statusText}>
+                        {request.matched_account ? "Account match found" : "Needs account match"}
+                      </Text>
+                    </View>
+                    {request.verification_required ? (
+                      <View style={[styles.statusPill, styles.statusUnknown]}>
+                        <Text style={styles.statusText}>Verify identity</Text>
+                      </View>
+                    ) : null}
+                  </View>
                   <View style={styles.detailRow}>
                     <MaterialCommunityIcons name="phone-outline" size={18} color={colors.muted} />
                     <Text style={styles.detailText}>{request.contact}</Text>
@@ -884,6 +901,11 @@ function createStyles(colors: AppColors) {
       color: "#FFFFFF",
       fontSize: 14,
       fontWeight: "800"
+    },
+    pillRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.xs
     },
     secondaryButton: {
       alignItems: "center",

@@ -40,6 +40,7 @@ from app.schemas import (
     ParentStudentLink,
     ParentStudentLinkCreate,
     SavedStudyPlan,
+    PublicAccountDeletionRequestCreate,
     StorageBackupReceipt,
     StorageHealth,
     StudentAccount,
@@ -413,6 +414,13 @@ def create_account_deletion_request(
     if receipt is None:
         raise HTTPException(status_code=404, detail="Signed-in account was not found.")
     return receipt
+
+
+@router.post("/accounts/public-deletion-requests", response_model=AccountDeletionRequestReceipt)
+def create_public_account_deletion_request(
+    payload: PublicAccountDeletionRequestCreate,
+) -> AccountDeletionRequestReceipt:
+    return get_study_plan_store().create_public_account_deletion_request(payload)
 
 
 @router.post("/feedback/tester-requests", response_model=TesterFeedbackReceipt)

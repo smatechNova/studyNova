@@ -111,6 +111,7 @@ requireValue(easJson.submit?.production?.android?.track === "production", "produ
 
 warnValue(docs.includes("com.studynova.app"), "Play Store docs should mention the current Android package.");
 warnValue(docs.includes("account deletion"), "Play Store docs should mention account deletion.");
+warnValue(docs.includes("/delete-account"), "Play Store docs should mention the public /delete-account route.");
 warnValue(docs.includes("Data safety"), "Play Store docs should mention Data safety.");
 warnValue(docs.includes("Tester feedback"), "Play Store docs should mention tester feedback.");
 warnValue(docs.includes("Short description"), "Play Store docs should include listing copy.");

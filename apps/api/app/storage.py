@@ -32,6 +32,7 @@ from app.schemas import (
     ParentProgressSummary,
     ParentStudentLink,
     ParentStudentLinkCreate,
+    PublicAccountDeletionRequestCreate,
     SavedStudyPlan,
     StorageBackupReceipt,
     StorageHealth,
@@ -390,10 +391,12 @@ class StudyPlanStore:
                     login_id,
                     contact,
                     reason,
+                    request_source,
+                    verification_required,
                     status,
                     created_at
                 )
-                values (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+                values (?, ?, ?, ?, ?, ?, ?, 'signed_in', 0, 'pending', ?)
                 """,
                 (
                     receipt.id,
@@ -403,6 +406,66 @@ class StudyPlanStore:
                     login_id,
                     payload.contact,
                     payload.reason,
+                    receipt.created_at.isoformat(),
+                ),
+            )
+
+        return receipt
+
+    def create_public_account_deletion_request(
+        self,
+        payload: PublicAccountDeletionRequestCreate,
+    ) -> AccountDeletionRequestReceipt:
+        account_id, account_label, login_id, matched_account = self._public_deletion_account_values(payload)
+
+        with self._connect() as connection:
+            existing = connection.execute(
+                """
+                select id, created_at
+                from account_deletion_requests
+                where role = ? and account_id = ? and status in ('pending', 'reviewed')
+                order by created_at desc
+                limit 1
+                """,
+                (payload.role, account_id),
+            ).fetchone()
+            if existing is not None:
+                return AccountDeletionRequestReceipt(
+                    id=existing["id"],
+                    created_at=existing["created_at"],
+                    message="A deletion request is already active for this account. Support will review it.",
+                )
+
+            receipt = AccountDeletionRequestReceipt(
+                id=str(uuid4()),
+                created_at=datetime.now(timezone.utc),
+                message="Deletion request received. StudyNova support will verify the account before completing it.",
+            )
+            connection.execute(
+                """
+                insert into account_deletion_requests (
+                    id,
+                    role,
+                    account_id,
+                    account_label,
+                    login_id,
+                    contact,
+                    reason,
+                    request_source,
+                    verification_required,
+                    status,
+                    created_at
+                )
+                values (?, ?, ?, ?, ?, ?, ?, 'public', 1, 'pending', ?)
+                """,
+                (
+                    receipt.id,
+                    payload.role,
+                    account_id,
+                    account_label,
+                    login_id,
+                    payload.contact,
+                    self._public_deletion_reason(payload, matched_account),
                     receipt.created_at.isoformat(),
                 ),
             )
@@ -421,6 +484,8 @@ class StudyPlanStore:
                     login_id,
                     contact,
                     reason,
+                    request_source,
+                    verification_required,
                     status,
                     reviewed_at,
                     completed_at,
@@ -460,6 +525,8 @@ class StudyPlanStore:
                     login_id,
                     contact,
                     reason,
+                    request_source,
+                    verification_required,
                     status,
                     reviewed_at,
                     completed_at,
@@ -503,6 +570,8 @@ class StudyPlanStore:
                     login_id,
                     contact,
                     reason,
+                    request_source,
+                    verification_required,
                     status,
                     reviewed_at,
                     completed_at,
@@ -644,6 +713,9 @@ class StudyPlanStore:
         return self._tester_feedback_from_row(row) if row is not None else None
 
     def _complete_account_deletion(self, connection: sqlite3.Connection, request: sqlite3.Row) -> None:
+        if str(request["account_id"]).startswith("unverified:"):
+            return
+
         if request["role"] == "student":
             self._delete_student_account_data(connection, request["account_id"])
             return
@@ -1257,14 +1329,20 @@ class StudyPlanStore:
         )
 
     def _account_deletion_request_from_row(self, row: sqlite3.Row) -> AccountDeletionRequestRecord:
+        account_id = row["account_id"]
+        request_source = row["request_source"] if "request_source" in row.keys() else "signed_in"
+        verification_required = bool(row["verification_required"]) if "verification_required" in row.keys() else False
         return AccountDeletionRequestRecord(
             id=row["id"],
             role=row["role"],
-            account_id=row["account_id"],
+            account_id=account_id,
             account_label=row["account_label"],
             login_id=row["login_id"],
             contact=row["contact"],
             reason=row["reason"],
+            request_source=request_source,
+            verification_required=verification_required,
+            matched_account=not str(account_id).startswith("unverified:"),
             status=row["status"],
             reviewed_at=row["reviewed_at"],
             completed_at=row["completed_at"],
@@ -1309,6 +1387,38 @@ class StudyPlanStore:
 
         account = self.parent_account_by_contact(payload.login_id)
         return account.id if account is not None else None
+
+    def _public_deletion_account_values(
+        self,
+        payload: PublicAccountDeletionRequestCreate,
+    ) -> tuple[str, str, str, bool]:
+        if payload.role == "student":
+            student = self.student_account_by_login_id(payload.login_id)
+            if student is not None:
+                return student.id, student.name, student.login_id, True
+        else:
+            parent = self.parent_account_by_contact(payload.login_id)
+            if parent is not None:
+                return parent.id, parent.name, parent.contact, True
+
+        login_key = _contact_key(payload.login_id) or payload.login_id.strip().lower()
+        digest = hashlib.sha256(f"{payload.role}:{login_key}".encode("utf-8")).hexdigest()[:24]
+        account_label = payload.account_label.strip() or payload.login_id.strip()
+        return f"unverified:{payload.role}:{digest}", account_label, payload.login_id.strip(), False
+
+    def _public_deletion_reason(
+        self,
+        payload: PublicAccountDeletionRequestCreate,
+        matched_account: bool,
+    ) -> str:
+        note_parts = ["Public deletion request. Verify account ownership before completion."]
+        if not matched_account:
+            note_parts.append("No exact account match was found from the submitted login ID.")
+        if payload.account_label.strip():
+            note_parts.append(f"Submitted account name: {payload.account_label.strip()}.")
+        if payload.reason.strip():
+            note_parts.append(payload.reason.strip())
+        return " ".join(note_parts)
 
     def _student_access_code_hash(self, student_id: str) -> str:
         with self._connect() as connection:
@@ -2054,6 +2164,8 @@ class StudyPlanStore:
                     login_id text not null,
                     contact text not null,
                     reason text not null,
+                    request_source text not null default 'signed_in',
+                    verification_required integer not null default 0,
                     status text not null default 'pending',
                     reviewed_at text,
                     completed_at text,
@@ -2062,6 +2174,17 @@ class StudyPlanStore:
                 )
                 """
             )
+            account_deletion_columns = {
+                row["name"] for row in connection.execute("pragma table_info(account_deletion_requests)").fetchall()
+            }
+            if "request_source" not in account_deletion_columns:
+                connection.execute(
+                    "alter table account_deletion_requests add column request_source text not null default 'signed_in'"
+                )
+            if "verification_required" not in account_deletion_columns:
+                connection.execute(
+                    "alter table account_deletion_requests add column verification_required integer not null default 0"
+                )
             connection.execute(
                 """
                 create index if not exists idx_account_deletion_requests_account_status

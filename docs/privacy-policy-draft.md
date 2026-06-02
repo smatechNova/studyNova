@@ -56,11 +56,11 @@ StudyNova may be used by students. Schools, parents, or guardians should supervi
 
 ## User Choices
 
-Users may request help with account access through the sign-in help form. Signed-in students and parents can also open their dashboard privacy section and submit an account deletion request by confirming `DELETE`.
+Users may request help with account access through the sign-in help form. Signed-in students and parents can also open their dashboard privacy section and submit an account deletion request by confirming `DELETE`. Users who cannot access the app can submit the public deletion form at the hosted `/delete-account` page.
 
 Account deletion requests are reviewed before completion so StudyNova can verify the request, protect linked parent-student records, and handle school or guardian support needs carefully. When support marks a reviewed request as completed, StudyNova removes the scoped account data from the backend while keeping the deletion request record for support tracking.
 
-Before Play Store submission, StudyNova should host a public account deletion request page using `docs/account-deletion-request.md` as the starting text. This gives users a web path to request deletion even if they cannot access the app.
+Before Play Store submission, StudyNova should host the `/delete-account` page on a public web URL and enter that URL in Play Console. This gives users a web path to request deletion even if they cannot access the app.
 
 ## Contact
 

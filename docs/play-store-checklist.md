@@ -55,4 +55,5 @@ npx eas-cli@latest build --platform android --profile production
 - Parent monitoring must require student-parent linking, not open public lookup.
 - Do not collect unnecessary sensitive data.
 - Keep the in-app account deletion request flow enabled for students and parents.
-- Host the privacy policy and account deletion request page before public release.
+- Host the `/delete-account` public account deletion page before Play submission and enter the URL in Play Console.
+- Host the privacy policy before public release.

@@ -423,6 +423,46 @@ def test_signed_in_account_can_request_deletion_and_admin_can_complete(tmp_path,
     assert store.student_account_by_id(student.id) is None
 
 
+def test_public_account_deletion_request_is_reviewed_by_admin(tmp_path, monkeypatch) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)
+    client = TestClient(app)
+    student = _student(store, "alliyah@example.com", "Alliyah Olaniyan")
+
+    create_response = client.post(
+        "/api/v1/accounts/public-deletion-requests",
+        json={
+            "role": "student",
+            "login_id": "ALLIYAH@example.com",
+            "account_label": "Alliyah",
+            "contact": "parent@example.com",
+            "reason": "Cannot access the app.",
+            "confirmation": "DELETE",
+        },
+    )
+    list_response = client.get(
+        "/api/v1/admin/account-deletion-requests",
+        headers={"X-Admin-Code": "studynova-admin-dev"},
+    )
+    deletion_request = list_response.json()[0]
+    review_response = client.patch(
+        f"/api/v1/admin/account-deletion-requests/{deletion_request['id']}",
+        headers={"X-Admin-Code": "studynova-admin-dev"},
+        json={"status": "reviewed", "admin_note": "Verify requester identity before completion."},
+    )
+
+    assert create_response.status_code == 200
+    assert create_response.json()["status"] == "pending"
+    assert deletion_request["role"] == "student"
+    assert deletion_request["account_id"] == student.id
+    assert deletion_request["request_source"] == "public"
+    assert deletion_request["verification_required"] is True
+    assert deletion_request["matched_account"] is True
+    assert review_response.status_code == 200
+    assert review_response.json()["status"] == "reviewed"
+    assert review_response.json()["request_source"] == "public"
+
+
 def test_expired_session_token_is_rejected(tmp_path, monkeypatch) -> None:
     store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
     monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)

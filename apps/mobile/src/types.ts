@@ -185,6 +185,12 @@ export type AccountDeletionRequestInput = {
   confirmation: "DELETE";
 };
 
+export type PublicAccountDeletionRequestInput = AccountDeletionRequestInput & {
+  role: AuthRole;
+  login_id: string;
+  account_label: string;
+};
+
 export type AccountDeletionRequestReceipt = {
   id: string;
   status: "pending";
@@ -200,6 +206,9 @@ export type AccountDeletionRequestRecord = {
   login_id: string;
   contact: string;
   reason: string;
+  request_source: "signed_in" | "public";
+  verification_required: boolean;
+  matched_account: boolean;
   status: "pending" | "reviewed" | "completed";
   reviewed_at?: string | null;
   completed_at?: string | null;
