@@ -60,6 +60,8 @@ Please test account creation, plan generation, study completion, parent monitori
 
 Use real in-app screenshots from the Android build, not Expo web screenshots. Provide at least 4 portrait phone screenshots at minimum 1080 x 1920 where possible.
 
+Use `docs/play-store-screenshot-capture.md` for the demo routes, capture order, privacy checklist, and feature graphic handoff.
+
 | Order | Screen | Purpose | Suggested tagline |
 | --- | --- | --- | --- |
 | 1 | Home/auth role selection | Show that students and parents have separate paths. | Choose student or parent |

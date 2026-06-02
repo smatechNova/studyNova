@@ -39,6 +39,16 @@ import {
   sendTestStudyNotification,
   type NotificationReadiness
 } from "@/lib/reminders";
+import {
+  DEMO_STUDENT_ID,
+  createDemoFamilyAccount,
+  createDemoProgress,
+  createDemoReminderSettings,
+  createDemoSavedStudyPlan,
+  createDemoWeeklyDigest,
+  demoStudyPlanRequest,
+  isDemoParam
+} from "@/lib/demoData";
 import { clearStoredAuthSession, getStoredAuthSession } from "@/lib/session";
 import type {
   ParentInviteCode,
@@ -127,8 +137,9 @@ function useStudentStyles() {
 export default function StudentScreen() {
   const { colors } = useTheme();
   const styles = useStudentStyles();
-  const params = useLocalSearchParams<{ studentId?: string }>();
+  const params = useLocalSearchParams<{ studentId?: string; demo?: string }>();
   const routeStudentId = getParamValue(params.studentId);
+  const isDemoMode = isDemoParam(params.demo);
   const [sessionStudentId, setSessionStudentId] = useState<string | undefined>();
   const [isSessionLoading, setIsSessionLoading] = useState(true);
   const [authMessage, setAuthMessage] = useState("");
@@ -163,7 +174,16 @@ export default function StudentScreen() {
   const [activeSubjectId, setActiveSubjectId] = useState<string | undefined>();
   const [bulkTopicText, setBulkTopicText] = useState("");
   const [isDraftReady, setIsDraftReady] = useState(false);
-  const activeStudentId = sessionStudentId;
+  const activeStudentId = isDemoMode ? DEMO_STUDENT_ID : sessionStudentId;
+  const demoProgress = useMemo(
+    () => (isDemoMode && savedPlan ? createDemoProgress(savedPlan.plan) : null),
+    [isDemoMode, savedPlan]
+  );
+  const demoWeeklyDigest = useMemo(
+    () => (isDemoMode && savedPlan ? createDemoWeeklyDigest(savedPlan.plan) : null),
+    [isDemoMode, savedPlan]
+  );
+  const demoReminderSettings = useMemo(() => (isDemoMode ? createDemoReminderSettings() : null), [isDemoMode]);
 
   const currentStep = STEPS[stepIndex];
   const completedStepCount = getCompletedStepCount(form);
@@ -182,6 +202,13 @@ export default function StudentScreen() {
     let isMounted = true;
 
     async function loadStoredSession() {
+      if (isDemoMode) {
+        setSessionStudentId(DEMO_STUDENT_ID);
+        setAuthMessage("");
+        setIsSessionLoading(false);
+        return;
+      }
+
       setIsSessionLoading(true);
       const session = await getStoredAuthSession();
       if (!isMounted) {
@@ -212,12 +239,18 @@ export default function StudentScreen() {
     return () => {
       isMounted = false;
     };
-  }, [routeStudentId]);
+  }, [isDemoMode, routeStudentId]);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadStoredDraft() {
+      if (isDemoMode) {
+        setForm(createFormFromRequest(demoStudyPlanRequest));
+        setIsDraftReady(true);
+        return;
+      }
+
       if (!activeStudentId) {
         setIsDraftReady(false);
         return;
@@ -240,21 +273,41 @@ export default function StudentScreen() {
     return () => {
       isMounted = false;
     };
-  }, [activeStudentId]);
+  }, [activeStudentId, isDemoMode]);
 
   useEffect(() => {
-    if (!activeStudentId || !isDraftReady) {
+    if (isDemoMode || !activeStudentId || !isDraftReady) {
       return;
     }
 
     void savePlanFormDraft(activeStudentId, form);
-  }, [activeStudentId, form, isDraftReady]);
+  }, [activeStudentId, form, isDraftReady, isDemoMode]);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadAccountAndPlan() {
       if (!activeStudentId) {
+        return;
+      }
+
+      if (isDemoMode) {
+        const family = createDemoFamilyAccount();
+        const demoSavedPlan = createDemoSavedStudyPlan();
+
+        if (isMounted) {
+          setLinkedStudentId(DEMO_STUDENT_ID);
+          setForm(createFormFromRequest(demoStudyPlanRequest));
+          setDeletionContact(family.parent?.contact ?? "");
+          setLatestPlan(demoSavedPlan);
+          setSavedPlan(demoSavedPlan);
+          setPlan(demoSavedPlan.plan);
+          setPlanHistory([demoSavedPlan]);
+          setLatestMessage("");
+          setSaveMessage("Screenshot demo uses safe sample data.");
+          setIsPlanVisible(true);
+          setIsHistoryLoading(false);
+        }
         return;
       }
 
@@ -332,11 +385,23 @@ export default function StudentScreen() {
     return () => {
       isMounted = false;
     };
-  }, [activeStudentId]);
+  }, [activeStudentId, isDemoMode]);
 
   async function submitPlan(nextForm = form) {
     const request = buildRequest(nextForm);
     if (!request) {
+      return;
+    }
+
+    if (isDemoMode) {
+      const demoSavedPlan = createDemoSavedStudyPlan();
+      setPlan(demoSavedPlan.plan);
+      setSavedPlan(demoSavedPlan);
+      setLatestPlan(demoSavedPlan);
+      setPlanHistory([demoSavedPlan]);
+      setSaveMessage("Screenshot demo refreshed with safe sample data.");
+      setIsPlanVisible(true);
+      setStepIndex(STEPS.length - 1);
       return;
     }
 
@@ -412,6 +477,11 @@ export default function StudentScreen() {
   }
 
   async function generateParentInvite() {
+    if (isDemoMode) {
+      setParentInviteMessage("Demo mode does not create real parent invite codes.");
+      return;
+    }
+
     if (!activeStudentId) {
       return;
     }
@@ -719,11 +789,21 @@ export default function StudentScreen() {
   }
 
   async function switchAccount() {
+    if (isDemoMode) {
+      router.replace("/");
+      return;
+    }
+
     await clearStoredAuthSession();
     router.replace("/auth?role=student");
   }
 
   async function submitDeletionRequest() {
+    if (isDemoMode) {
+      setDeletionMessage("Demo mode uses safe sample data, so no account deletion request is created.");
+      return;
+    }
+
     if (!deletionContact.trim()) {
       setDeletionMessage("Enter an email or phone number support can use for this request.");
       return;
@@ -809,6 +889,10 @@ export default function StudentScreen() {
         plan={plan}
         savedPlan={savedPlan}
         saveMessage={saveMessage}
+        isDemoMode={isDemoMode}
+        demoProgress={demoProgress}
+        demoWeeklyDigest={demoWeeklyDigest}
+        demoReminderSettings={demoReminderSettings}
       />
     );
   }
@@ -1384,6 +1468,10 @@ type GeneratedPlanViewProps = {
   plan: StudyPlanResponse;
   savedPlan: SavedStudyPlan | null;
   saveMessage: string;
+  isDemoMode?: boolean;
+  demoProgress?: StudyPlanProgress | null;
+  demoWeeklyDigest?: WeeklyStudyDigest | null;
+  demoReminderSettings?: StudyReminderSettings | null;
   onBack: () => void;
   onEdit: () => void;
   onPlanRebalanced: (plan: SavedStudyPlan) => void;
@@ -1409,6 +1497,10 @@ function GeneratedPlanView({
   plan,
   savedPlan,
   saveMessage,
+  isDemoMode = false,
+  demoProgress,
+  demoWeeklyDigest,
+  demoReminderSettings,
   onBack,
   onEdit,
   onPlanRebalanced
@@ -1458,6 +1550,24 @@ function GeneratedPlanView({
   const plannedTodayMinutes = todayProgress?.planned_minutes ?? todayPlan?.total_minutes ?? 0;
 
   useEffect(() => {
+    if (isDemoMode) {
+      setProgress(demoProgress ?? null);
+      setWeeklyDigest(demoWeeklyDigest ?? null);
+      setReminderSettings(demoReminderSettings ?? null);
+      setNotificationReadiness({
+        canAskAgain: false,
+        channelReady: true,
+        granted: true,
+        permissionStatus: "demo",
+        platform: Platform.OS,
+        scheduledCount: 3,
+        scheduledStudyReminderCount: 3
+      });
+      setProgressMessage("");
+      setReminderMessage("Demo reminders use sample data and will not send real notifications.");
+      return;
+    }
+
     if (!planId) {
       setProgress(null);
       setWeeklyDigest(null);
@@ -1469,7 +1579,7 @@ function GeneratedPlanView({
     void refreshProgress(planId);
     void refreshReminderSettings(planId);
     void refreshNotificationReadiness(planId);
-  }, [planId]);
+  }, [demoProgress, demoReminderSettings, demoWeeklyDigest, isDemoMode, planId]);
 
   async function refreshProgress(nextPlanId = planId) {
     if (!nextPlanId) {
@@ -1516,6 +1626,12 @@ function GeneratedPlanView({
   }
 
   async function saveReminderSettings(nextSettings: StudyReminderSettings) {
+    if (isDemoMode) {
+      setReminderSettings(nextSettings);
+      setReminderMessage("Demo reminder settings updated for this screenshot only.");
+      return;
+    }
+
     if (!planId || !savedPlan) {
       setReminderMessage("Save the generated plan before setting reminders.");
       return;
@@ -1563,6 +1679,11 @@ function GeneratedPlanView({
   }
 
   async function sendReminderTest() {
+    if (isDemoMode) {
+      setReminderMessage("Demo mode does not send real phone notifications.");
+      return;
+    }
+
     setIsNotificationTesting(true);
     setReminderMessage("");
 
@@ -1589,6 +1710,11 @@ function GeneratedPlanView({
   }
 
   async function markSessionDone(studyDate: string, session: PlanSession, sessionKeyValue: string) {
+    if (isDemoMode) {
+      setProgressMessage("Demo study proof is fixed for screenshots. Use a real account to save changes.");
+      return;
+    }
+
     if (!planId) {
       setProgressMessage("Save the generated plan before tracking progress.");
       return;
@@ -1626,6 +1752,11 @@ function GeneratedPlanView({
   }
 
   async function rebalancePlan() {
+    if (isDemoMode) {
+      setProgressMessage("Demo mode already includes a sample catch-up plan.");
+      return;
+    }
+
     if (!planId) {
       setProgressMessage("Save the generated plan before rebalancing missed sessions.");
       return;
@@ -1664,6 +1795,13 @@ function GeneratedPlanView({
             <Text style={styles.secondaryButtonText}>Edit</Text>
           </Pressable>
         </View>
+
+        {isDemoMode ? (
+          <View style={styles.infoPanel}>
+            <MaterialCommunityIcons name="camera-outline" size={20} color={colors.brand} />
+            <Text style={styles.infoText}>Screenshot demo uses safe sample data. No real student record is shown.</Text>
+          </View>
+        ) : null}
 
         <View style={styles.generatedHero}>
           <Text style={styles.kicker}>Generated plan</Text>

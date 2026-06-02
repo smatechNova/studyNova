@@ -16,6 +16,14 @@ import {
   getWeeklyStudyDigest,
   redeemParentInviteCode
 } from "@/lib/api";
+import {
+  DEMO_PARENT_ID,
+  createDemoParentFamilyAccount,
+  createDemoProgress,
+  createDemoSavedStudyPlan,
+  createDemoWeeklyDigest,
+  isDemoParam
+} from "@/lib/demoData";
 import { clearStoredAuthSession, getStoredAuthSession } from "@/lib/session";
 import type { ParentFamilyAccount, PlanSession, SavedStudyPlan, StudyPlanProgress, WeeklyStudyDigest } from "@/types";
 import { spacing, type AppColors } from "@/theme";
@@ -38,8 +46,9 @@ type RecoverySummary = {
 export default function ParentScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const params = useLocalSearchParams<{ parentId?: string }>();
+  const params = useLocalSearchParams<{ parentId?: string; demo?: string }>();
   const routeParentId = getParamValue(params.parentId);
+  const isDemoMode = isDemoParam(params.demo);
   const [sessionParentId, setSessionParentId] = useState<string | undefined>();
   const [isSessionLoading, setIsSessionLoading] = useState(true);
   const [authMessage, setAuthMessage] = useState("");
@@ -61,7 +70,7 @@ export default function ParentScreen() {
   const [deletionConfirmation, setDeletionConfirmation] = useState("");
   const [deletionMessage, setDeletionMessage] = useState("");
   const [isDeletionLoading, setIsDeletionLoading] = useState(false);
-  const activeParentId = sessionParentId;
+  const activeParentId = isDemoMode ? DEMO_PARENT_ID : sessionParentId;
 
   const latestCompletion = progress?.completions.at(-1);
   const recentDays = useMemo(() => {
@@ -103,6 +112,13 @@ export default function ParentScreen() {
     let isMounted = true;
 
     async function loadStoredSession() {
+      if (isDemoMode) {
+        setSessionParentId(DEMO_PARENT_ID);
+        setAuthMessage("");
+        setIsSessionLoading(false);
+        return;
+      }
+
       setIsSessionLoading(true);
       const session = await getStoredAuthSession();
       if (!isMounted) {
@@ -133,11 +149,11 @@ export default function ParentScreen() {
     return () => {
       isMounted = false;
     };
-  }, [routeParentId]);
+  }, [isDemoMode, routeParentId]);
 
   useEffect(() => {
     void loadParentView();
-  }, [activeParentId]);
+  }, [activeParentId, isDemoMode]);
 
   async function loadParentView(nextStudentId = selectedStudentId) {
     if (!activeParentId) {
@@ -147,6 +163,24 @@ export default function ParentScreen() {
     setIsLoading(true);
     setMessage("");
     setIsHistoryLoading(false);
+
+    if (isDemoMode) {
+      const family = createDemoParentFamilyAccount();
+      const demoPlan = createDemoSavedStudyPlan();
+      const selectedStudent = family.students.find((student) => student.id === nextStudentId) ?? family.students[0];
+
+      setParentFamily(family);
+      setDeletionContact((current) => current || family.parent?.contact || "");
+      setSelectedStudentId(selectedStudent?.id);
+      setPlanHistory([demoPlan]);
+      setSavedPlan(demoPlan);
+      setProgress(createDemoProgress(demoPlan.plan));
+      setWeeklyDigest(createDemoWeeklyDigest(demoPlan.plan));
+      setMessage("Screenshot demo uses safe sample data. No real parent or student account is shown.");
+      setIsHistoryLoading(false);
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const latestFamily = await getParentFamily(activeParentId);
@@ -216,6 +250,11 @@ export default function ParentScreen() {
   }
 
   async function redeemStudentInvite() {
+    if (isDemoMode) {
+      setInviteMessage("Demo mode does not link real student accounts.");
+      return;
+    }
+
     if (!activeParentId || !inviteCode.trim()) {
       setInviteMessage("Enter the code from the student account.");
       return;
@@ -251,6 +290,14 @@ export default function ParentScreen() {
     setIsLoading(true);
     setMessage("");
 
+    if (isDemoMode) {
+      setProgress(createDemoProgress(planVersion.plan));
+      setWeeklyDigest(createDemoWeeklyDigest(planVersion.plan));
+      setMessage("Screenshot demo uses safe sample data. No backend request was made.");
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const [selectedProgress, selectedDigest] = await Promise.all([
         getStudyPlanProgress(planVersion.id),
@@ -268,11 +315,21 @@ export default function ParentScreen() {
   }
 
   async function switchAccount() {
+    if (isDemoMode) {
+      router.replace("/");
+      return;
+    }
+
     await clearStoredAuthSession();
     router.replace("/auth?role=parent");
   }
 
   async function submitDeletionRequest() {
+    if (isDemoMode) {
+      setDeletionMessage("Demo mode uses safe sample data, so no account deletion request is created.");
+      return;
+    }
+
     if (!deletionContact.trim()) {
       setDeletionMessage("Enter an email or phone number support can use for this request.");
       return;
@@ -486,12 +543,23 @@ export default function ParentScreen() {
           <View style={styles.panel}>
             <View style={styles.panelHeader}>
               <Text style={styles.sectionTitle}>Students</Text>
-              <Link href={`/accounts?parentId=${encodeURIComponent(activeParentId)}`} asChild>
-                <Pressable accessibilityRole="button" style={styles.linkButton}>
+              {isDemoMode ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setInviteMessage("Demo mode keeps linking disabled for screenshot safety.")}
+                  style={styles.linkButton}
+                >
                   <MaterialCommunityIcons name="account-plus-outline" size={18} color={colors.brand} />
-                  <Text style={styles.linkButtonText}>Link student</Text>
+                  <Text style={styles.linkButtonText}>Demo link</Text>
                 </Pressable>
-              </Link>
+              ) : (
+                <Link href={`/accounts?parentId=${encodeURIComponent(activeParentId)}`} asChild>
+                  <Pressable accessibilityRole="button" style={styles.linkButton}>
+                    <MaterialCommunityIcons name="account-plus-outline" size={18} color={colors.brand} />
+                    <Text style={styles.linkButtonText}>Link student</Text>
+                  </Pressable>
+                </Link>
+              )}
             </View>
             <Text style={styles.helper}>
               This parent can monitor multiple student accounts. Select one child to view their progress.

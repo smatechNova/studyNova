@@ -46,6 +46,7 @@ Before submitting to Play Store, host both policy documents publicly:
 - `docs/account-deletion-request.md`
 - `docs/play-store-data-safety.md`
 - `docs/play-store-listing-pack.md`
+- `docs/play-store-screenshot-capture.md`
 
 ## Closed-Test Build
 

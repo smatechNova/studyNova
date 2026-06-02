@@ -12,6 +12,7 @@ const dataSafetyDocPath = join(root, "docs", "play-store-data-safety.md");
 const listingPackDocPath = join(root, "docs", "play-store-listing-pack.md");
 const playChecklistPath = join(root, "docs", "play-store-checklist.md");
 const privacyPolicyDocPath = join(root, "docs", "privacy-policy-draft.md");
+const screenshotCaptureDocPath = join(root, "docs", "play-store-screenshot-capture.md");
 
 const failures = [];
 const warnings = [];
@@ -59,7 +60,8 @@ const docs = [
   dataSafetyDocPath,
   listingPackDocPath,
   playChecklistPath,
-  privacyPolicyDocPath
+  privacyPolicyDocPath,
+  screenshotCaptureDocPath
 ]
   .filter((path) => existsSync(path))
   .map((path) => readFileSync(path, "utf8"))
@@ -94,6 +96,8 @@ requireRootFile(accountDeletionDocPath, "Account deletion request document");
 requireRootFile(dataSafetyDocPath, "Play Store Data safety draft");
 requireRootFile(listingPackDocPath, "Play Store listing pack");
 requireRootFile(privacyPolicyDocPath, "Privacy policy draft");
+requireRootFile(screenshotCaptureDocPath, "Play Store screenshot capture plan");
+requireFile("src/lib/demoData.ts", "Screenshot demo data");
 
 requireValue(easJson.cli?.appVersionSource === "remote", "EAS appVersionSource should be remote.");
 requireValue(closedTestProfile.autoIncrement === true, "closed-test profile should auto-increment.");
@@ -109,6 +113,7 @@ warnValue(docs.includes("com.studynova.app"), "Play Store docs should mention th
 warnValue(docs.includes("account deletion"), "Play Store docs should mention account deletion.");
 warnValue(docs.includes("Data safety"), "Play Store docs should mention Data safety.");
 warnValue(docs.includes("Short description"), "Play Store docs should include listing copy.");
+warnValue(docs.includes("screenshot") && docs.includes("demo"), "Play Store docs should include screenshot demo guidance.");
 warnValue(docs.includes("npx eas-cli@latest"), "Play Store docs should prefer npx eas-cli@latest for machines without global EAS.");
 warnValue(docs.includes("mobile:release-check"), "Play Store docs should mention npm run mobile:release-check.");
 

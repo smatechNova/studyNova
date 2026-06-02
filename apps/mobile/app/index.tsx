@@ -50,6 +50,10 @@ export default function HomeScreen() {
     setSavedSession(null);
   }
 
+  function openScreenshotDemo(role: "student" | "parent") {
+    router.push(role === "student" ? "/student?demo=student" : "/parent?demo=parent");
+  }
+
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content}>
@@ -84,6 +88,29 @@ export default function HomeScreen() {
             </View>
           </View>
         ) : null}
+
+        <View style={styles.demoPanel}>
+          <View style={styles.demoIcon}>
+            <MaterialCommunityIcons name="camera-outline" size={26} color={colors.brand} />
+          </View>
+          <View style={styles.demoCopy}>
+            <Text style={styles.kicker}>Play Store screenshots</Text>
+            <Text style={styles.demoTitle}>Open safe demo data</Text>
+            <Text style={styles.subtitle}>
+              Use sample student and parent dashboards for screenshots without exposing real learner data.
+            </Text>
+          </View>
+          <View style={styles.demoActions}>
+            <Pressable accessibilityRole="button" onPress={() => openScreenshotDemo("student")} style={styles.secondaryButton}>
+              <MaterialCommunityIcons name="notebook-edit-outline" size={18} color={colors.brand} />
+              <Text style={styles.secondaryButtonText}>Student demo</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => openScreenshotDemo("parent")} style={styles.secondaryButton}>
+              <MaterialCommunityIcons name="account-supervisor-outline" size={18} color={colors.brand} />
+              <Text style={styles.secondaryButtonText}>Parent demo</Text>
+            </Pressable>
+          </View>
+        </View>
 
         <View style={styles.statsGrid}>
           <StatCard label="Smart planning" value="Daily" icon="calendar-clock" />
@@ -182,6 +209,40 @@ function createStyles(colors: AppColors) {
   heroText: {
     flex: 1,
     gap: spacing.xs
+  },
+  demoActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  demoCopy: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 220
+  },
+  demoIcon: {
+    alignItems: "center",
+    backgroundColor: colors.brandSoft,
+    borderRadius: 8,
+    height: 52,
+    justifyContent: "center",
+    width: 52
+  },
+  demoPanel: {
+    alignItems: "center",
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  demoTitle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: "800"
   },
   kicker: {
     color: colors.muted,
