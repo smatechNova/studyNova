@@ -140,6 +140,12 @@ export default function HomeScreen() {
               icon="account-multiple-plus-outline"
             />
           </Link>
+          <RoleCard
+            title="Tester feedback"
+            description="Send one clear note about anything confusing, broken, or ready."
+            icon="message-text-outline"
+            onPress={() => router.push("/feedback" as never)}
+          />
         </View>
       </ScrollView>
     </Screen>

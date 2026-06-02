@@ -13,8 +13,10 @@ import {
   getStorageBackupDownloadUrl,
   getStorageBackups,
   getStorageHealth,
+  getTesterFeedbackRequests,
   reviewAccountDeletionRequest,
-  reviewAccountRecoveryRequest
+  reviewAccountRecoveryRequest,
+  reviewTesterFeedbackRequest
 } from "@/lib/api";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
@@ -24,7 +26,8 @@ import type {
   DeploymentReadiness,
   FirebaseAuthReadiness,
   StorageBackupReceipt,
-  StorageHealth
+  StorageHealth,
+  TesterFeedbackRecord
 } from "@/types";
 
 export default function SupportScreen() {
@@ -33,6 +36,7 @@ export default function SupportScreen() {
   const [adminCode, setAdminCode] = useState("");
   const [requests, setRequests] = useState<AccountRecoveryRequestRecord[]>([]);
   const [deletionRequests, setDeletionRequests] = useState<AccountDeletionRequestRecord[]>([]);
+  const [feedbackRequests, setFeedbackRequests] = useState<TesterFeedbackRecord[]>([]);
   const [storageHealth, setStorageHealth] = useState<StorageHealth | null>(null);
   const [firebaseReadiness, setFirebaseReadiness] = useState<FirebaseAuthReadiness | null>(null);
   const [deploymentReadiness, setDeploymentReadiness] = useState<DeploymentReadiness | null>(null);
@@ -43,8 +47,10 @@ export default function SupportScreen() {
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [activeReviewId, setActiveReviewId] = useState("");
   const [activeDeletionReviewId, setActiveDeletionReviewId] = useState("");
+  const [activeFeedbackReviewId, setActiveFeedbackReviewId] = useState("");
   const openRequests = requests.filter((request) => request.status === "open").length;
   const pendingDeletionRequests = deletionRequests.filter((request) => request.status !== "completed").length;
+  const openFeedbackRequests = feedbackRequests.filter((request) => request.status === "open").length;
   const matchedRequests = requests.filter((request) => request.matched_account).length;
 
   async function loadAdminData() {
@@ -60,6 +66,7 @@ export default function SupportScreen() {
       const [
         nextRequests,
         nextDeletionRequests,
+        nextFeedbackRequests,
         nextStorageHealth,
         nextFirebaseReadiness,
         nextDeploymentReadiness,
@@ -67,6 +74,7 @@ export default function SupportScreen() {
       ] = await Promise.all([
         getAccountRecoveryRequests(adminCode.trim()),
         getAccountDeletionRequests(adminCode.trim()),
+        getTesterFeedbackRequests(adminCode.trim()),
         getStorageHealth(adminCode.trim()),
         getFirebaseAuthReadiness(adminCode.trim()),
         getDeploymentReadiness(adminCode.trim()),
@@ -74,18 +82,20 @@ export default function SupportScreen() {
       ]);
       setRequests(nextRequests);
       setDeletionRequests(nextDeletionRequests);
+      setFeedbackRequests(nextFeedbackRequests);
       setStorageHealth(nextStorageHealth);
       setFirebaseReadiness(nextFirebaseReadiness);
       setDeploymentReadiness(nextDeploymentReadiness);
       setBackups(nextBackups);
       setMessage(
-        nextRequests.length || nextDeletionRequests.length
+        nextRequests.length || nextDeletionRequests.length || nextFeedbackRequests.length
           ? "Latest support and deployment status loaded."
           : "Deployment status loaded. No account help requests have been submitted yet."
       );
     } catch {
       setRequests([]);
       setDeletionRequests([]);
+      setFeedbackRequests([]);
       setStorageHealth(null);
       setFirebaseReadiness(null);
       setDeploymentReadiness(null);
@@ -174,6 +184,31 @@ export default function SupportScreen() {
     }
   }
 
+  async function markFeedbackReviewed(feedbackId: string) {
+    if (!adminCode.trim()) {
+      setMessage("Enter the admin code first.");
+      return;
+    }
+
+    setActiveFeedbackReviewId(feedbackId);
+    setMessage("");
+
+    try {
+      const reviewedFeedback = await reviewTesterFeedbackRequest(adminCode.trim(), feedbackId, {
+        status: "reviewed",
+        admin_note: "Reviewed from StudyNova support admin."
+      });
+      setFeedbackRequests((currentRequests) =>
+        currentRequests.map((request) => (request.id === reviewedFeedback.id ? reviewedFeedback : request))
+      );
+      setMessage("Tester feedback marked as reviewed.");
+    } catch {
+      setMessage("Could not update tester feedback. Check the admin code and API connection.");
+    } finally {
+      setActiveFeedbackReviewId("");
+    }
+  }
+
   return (
     <Screen>
       <ScrollView
@@ -246,6 +281,11 @@ export default function SupportScreen() {
             <Text style={styles.helper}>Deletion requests</Text>
           </View>
           <View style={styles.summaryCard}>
+            <MaterialCommunityIcons name="message-alert-outline" size={24} color={colors.brand} />
+            <Text style={styles.metric}>{openFeedbackRequests}</Text>
+            <Text style={styles.helper}>Tester feedback</Text>
+          </View>
+          <View style={styles.summaryCard}>
             <MaterialCommunityIcons
               name={storageHealth?.production_ready ? "database-check-outline" : "database-alert-outline"}
               size={24}
@@ -278,6 +318,93 @@ export default function SupportScreen() {
           <View style={styles.messagePanel}>
             <MaterialCommunityIcons name="information-outline" size={22} color={colors.brand} />
             <Text style={styles.messageText}>{message}</Text>
+          </View>
+        ) : null}
+
+        {feedbackRequests.length ? (
+          <View style={styles.panel}>
+            <View style={styles.requestHeader}>
+              <View style={styles.heroCopy}>
+                <Text style={styles.kicker}>Closed-test feedback</Text>
+                <Text style={styles.sectionTitle}>Tester feedback queue</Text>
+                <Text style={styles.helper}>
+                  Review tester notes from the in-app feedback form before the next Play Store build.
+                </Text>
+              </View>
+              <View style={[styles.statusPill, openFeedbackRequests ? styles.statusUnknown : styles.statusMatched]}>
+                <Text style={styles.statusText}>{openFeedbackRequests ? "Open" : "Clear"}</Text>
+              </View>
+            </View>
+            <View style={styles.list}>
+              {feedbackRequests.map((feedback) => (
+                <View key={feedback.id} style={styles.requestCard}>
+                  <View style={styles.requestHeader}>
+                    <View>
+                      <Text style={styles.kicker}>{feedback.category}</Text>
+                      <Text style={styles.requestTitle}>{feedback.tester_name || "Unnamed tester"}</Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.statusPill,
+                        feedback.status === "reviewed" ? styles.statusMatched : styles.statusUnknown
+                      ]}
+                    >
+                      <Text style={styles.statusText}>
+                        {feedback.status === "reviewed" ? "Reviewed" : `${feedback.rating}/5`}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <MaterialCommunityIcons name="account-outline" size={18} color={colors.muted} />
+                    <Text style={styles.detailText}>{feedback.role}</Text>
+                  </View>
+                  {feedback.contact ? (
+                    <View style={styles.detailRow}>
+                      <MaterialCommunityIcons name="phone-outline" size={18} color={colors.muted} />
+                      <Text style={styles.detailText}>{feedback.contact}</Text>
+                    </View>
+                  ) : null}
+                  <View style={styles.detailRow}>
+                    <MaterialCommunityIcons name="cellphone" size={18} color={colors.muted} />
+                    <Text style={styles.detailText}>
+                      {[feedback.device_model, feedback.android_version].filter(Boolean).join(" - ") || "Device not set"}
+                    </Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <MaterialCommunityIcons name="clock-outline" size={18} color={colors.muted} />
+                    <Text style={styles.detailText}>{formatTimestamp(feedback.created_at)}</Text>
+                  </View>
+                  {feedback.what_worked ? <Text style={styles.note}>Worked: {feedback.what_worked}</Text> : null}
+                  {feedback.what_failed ? <Text style={styles.note}>Failed: {feedback.what_failed}</Text> : null}
+                  {feedback.improvement ? <Text style={styles.note}>Improve: {feedback.improvement}</Text> : null}
+                  {feedback.message ? <Text style={styles.note}>{feedback.message}</Text> : null}
+                  <Text style={styles.helper}>
+                    Recommendation: {feedback.recommend === null ? "Not answered" : feedback.recommend ? "Yes" : "No"}
+                  </Text>
+                  {feedback.admin_note ? <Text style={styles.note}>Admin note: {feedback.admin_note}</Text> : null}
+                  {feedback.reviewed_at ? (
+                    <Text style={styles.helper}>Reviewed {formatTimestamp(feedback.reviewed_at)}</Text>
+                  ) : null}
+                  {feedback.status === "open" ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={activeFeedbackReviewId === feedback.id}
+                      onPress={() => void markFeedbackReviewed(feedback.id)}
+                      style={[styles.secondaryButton, activeFeedbackReviewId === feedback.id ? styles.disabledButton : null]}
+                    >
+                      {activeFeedbackReviewId === feedback.id ? (
+                        <ActivityIndicator color={colors.brand} />
+                      ) : (
+                        <>
+                          <MaterialCommunityIcons name="check-decagram-outline" size={18} color={colors.brand} />
+                          <Text style={styles.secondaryButtonText}>Mark reviewed</Text>
+                        </>
+                      )}
+                    </Pressable>
+                  ) : null}
+                </View>
+              ))}
+            </View>
           </View>
         ) : null}
 

@@ -43,6 +43,7 @@ function ThemedStack() {
         <Stack.Screen name="accounts" options={{ title: "Account Setup" }} />
         <Stack.Screen name="student" options={{ title: "Student Dashboard" }} />
         <Stack.Screen name="parent" options={{ title: "Parent Dashboard" }} />
+        <Stack.Screen name="feedback" options={{ title: "Tester Feedback" }} />
         <Stack.Screen name="support" options={{ title: "Support Admin" }} />
       </Stack>
     </>

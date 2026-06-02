@@ -239,6 +239,41 @@ class AccountDeletionRequestRecord(BaseModel):
     created_at: datetime
 
 
+class TesterFeedbackCreate(BaseModel):
+    tester_name: str = Field(default="", max_length=80)
+    contact: str = Field(default="", max_length=120)
+    role: Literal["student", "parent", "school", "general"] = "general"
+    device_model: str = Field(default="", max_length=120)
+    android_version: str = Field(default="", max_length=80)
+    category: Literal["setup", "student", "parent", "reminders", "ui", "bug", "other"] = "other"
+    rating: int = Field(ge=1, le=5)
+    what_worked: str = Field(default="", max_length=480)
+    what_failed: str = Field(default="", max_length=480)
+    improvement: str = Field(default="", max_length=480)
+    recommend: bool | None = None
+    message: str = Field(default="", max_length=800)
+
+
+class TesterFeedbackReceipt(BaseModel):
+    id: str
+    status: Literal["received"] = "received"
+    message: str
+    created_at: datetime
+
+
+class TesterFeedbackReviewRequest(BaseModel):
+    status: Literal["open", "reviewed"]
+    admin_note: str = Field(default="", max_length=240)
+
+
+class TesterFeedbackRecord(TesterFeedbackCreate):
+    id: str
+    status: Literal["open", "reviewed"] = "open"
+    reviewed_at: datetime | None = None
+    admin_note: str = ""
+    created_at: datetime
+
+
 class StorageHealth(BaseModel):
     provider: Literal["sqlite"] = "sqlite"
     database_path: str

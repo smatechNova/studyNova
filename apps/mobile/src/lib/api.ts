@@ -30,6 +30,10 @@ import type {
   StudyPlanResponse,
   StudySessionCompletion,
   StudySessionCompletionRequest,
+  TesterFeedbackInput,
+  TesterFeedbackReceipt,
+  TesterFeedbackRecord,
+  TesterFeedbackReviewInput,
   WeeklyStudyDigest
 } from "@/types";
 import { clearStoredAuthSession, getStoredAuthSession } from "@/lib/session";
@@ -223,6 +227,22 @@ export async function createAccountDeletionRequest(
   return response.json() as Promise<AccountDeletionRequestReceipt>;
 }
 
+export async function createTesterFeedback(payload: TesterFeedbackInput): Promise<TesterFeedbackReceipt> {
+  const response = await apiFetch(`${API_URL}/api/v1/feedback/tester-requests`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Tester feedback request failed");
+  }
+
+  return response.json() as Promise<TesterFeedbackReceipt>;
+}
+
 export async function getAccountRecoveryRequests(adminCode: string, limit = 50): Promise<AccountRecoveryRequestRecord[]> {
   const params = new URLSearchParams({ limit: String(limit) });
   const response = await apiFetch(`${API_URL}/api/v1/admin/account-recovery-requests?${params.toString()}`, {
@@ -293,6 +313,42 @@ export async function reviewAccountDeletionRequest(
   }
 
   return response.json() as Promise<AccountDeletionRequestRecord>;
+}
+
+export async function getTesterFeedbackRequests(adminCode: string, limit = 50): Promise<TesterFeedbackRecord[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  const response = await apiFetch(`${API_URL}/api/v1/admin/tester-feedback?${params.toString()}`, {
+    headers: {
+      "X-Admin-Code": adminCode
+    }
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Tester feedback list request failed");
+  }
+
+  return response.json() as Promise<TesterFeedbackRecord[]>;
+}
+
+export async function reviewTesterFeedbackRequest(
+  adminCode: string,
+  feedbackId: string,
+  payload: TesterFeedbackReviewInput
+): Promise<TesterFeedbackRecord> {
+  const response = await apiFetch(`${API_URL}/api/v1/admin/tester-feedback/${feedbackId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Code": adminCode
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Tester feedback review request failed");
+  }
+
+  return response.json() as Promise<TesterFeedbackRecord>;
 }
 
 export async function getStorageHealth(adminCode: string): Promise<StorageHealth> {

@@ -139,8 +139,9 @@ Ask testers to confirm:
 - Missed-session messages make sense and feel encouraging.
 - The UI is readable in light and dark mode.
 - A signed-in student or parent can submit an account deletion request from the app privacy section.
+- Testers can open Tester feedback from the home screen and submit one structured feedback note.
 
-Use `docs/tester-feedback-template.md` to collect structured feedback.
+Use the in-app Tester feedback screen for normal closed-test notes. Use `docs/tester-feedback-template.md` when a tester cannot open the app or needs to send feedback manually.
 
 ## Known V1 Blockers Before Public Production
 
@@ -150,4 +151,4 @@ Use `docs/tester-feedback-template.md` to collect structured feedback.
 - Privacy policy must be hosted on a public URL.
 - Account deletion request instructions must be hosted on a public URL.
 - Real-world testing must confirm notifications and parent linking on Android phones.
-- Admin/support workflow must be tested for account recovery requests, account deletion requests, and backup export.
+- Admin/support workflow must be tested for tester feedback, account recovery requests, account deletion requests, and backup export.

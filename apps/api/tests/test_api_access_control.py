@@ -311,6 +311,57 @@ def test_admin_can_review_account_recovery_requests(tmp_path, monkeypatch) -> No
     assert review_response.json()["reviewed_at"] is not None
 
 
+def test_public_tester_feedback_and_admin_review(tmp_path, monkeypatch) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)
+    client = TestClient(app)
+
+    create_response = client.post(
+        "/api/v1/feedback/tester-requests",
+        json={
+            "tester_name": "Abeeb",
+            "contact": "tester@example.com",
+            "role": "parent",
+            "device_model": "Redmi Note 12",
+            "android_version": "Android 14",
+            "category": "parent",
+            "rating": 4,
+            "what_worked": "Parent dashboard showed the latest recall note.",
+            "what_failed": "I was not sure where to find the invite code.",
+            "improvement": "Add a shorter parent linking guide.",
+            "recommend": True,
+            "message": "Useful for exam preparation.",
+        },
+    )
+    blocked_list_response = client.get("/api/v1/admin/tester-feedback")
+    list_response = client.get(
+        "/api/v1/admin/tester-feedback",
+        headers={"X-Admin-Code": "studynova-admin-dev"},
+    )
+    feedback_id = list_response.json()[0]["id"]
+    blocked_review_response = client.patch(
+        f"/api/v1/admin/tester-feedback/{feedback_id}",
+        json={"status": "reviewed", "admin_note": "Follow up."},
+    )
+    review_response = client.patch(
+        f"/api/v1/admin/tester-feedback/{feedback_id}",
+        headers={"X-Admin-Code": "studynova-admin-dev"},
+        json={"status": "reviewed", "admin_note": "Follow up."},
+    )
+
+    assert create_response.status_code == 200
+    assert create_response.json()["status"] == "received"
+    assert blocked_list_response.status_code == 403
+    assert list_response.status_code == 200
+    assert list_response.json()[0]["tester_name"] == "Abeeb"
+    assert list_response.json()[0]["rating"] == 4
+    assert list_response.json()[0]["status"] == "open"
+    assert blocked_review_response.status_code == 403
+    assert review_response.status_code == 200
+    assert review_response.json()["status"] == "reviewed"
+    assert review_response.json()["reviewed_at"] is not None
+
+
 def test_signed_in_account_can_request_deletion_and_admin_can_complete(tmp_path, monkeypatch) -> None:
     store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
     monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)

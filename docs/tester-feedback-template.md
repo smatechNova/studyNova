@@ -1,5 +1,7 @@
 # StudyNova Closed-Test Feedback Template
 
+Use the in-app Tester feedback screen first when possible. Use this manual template when the app will not open, the tester cannot submit from the phone, or feedback is collected over WhatsApp/email.
+
 Tester name:
 
 Device model:

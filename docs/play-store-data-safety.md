@@ -15,7 +15,7 @@ Google Play requires developers to declare how the app collects, shares, protect
 | Does the app provide a way to request data deletion? | Yes | Signed-in users can request deletion in-app, and `docs/account-deletion-request.md` must be hosted publicly before Play submission. |
 | Is data shared with third parties? | No, if Firebase/Google auth and hosting are used only as service providers | Revisit this if analytics, ads, crash reporting, marketing pixels, or non-service-provider SDKs are added. |
 | Is data processed ephemerally only? | No | StudyNova stores account, plan, progress, support, and deletion records in the backend. |
-| Is data required or optional? | Mixed, but most core account/study data is required | Play marks required when the data is necessary for the app's primary functionality for any users. Optional support/deletion reasons are only collected when users submit them. |
+| Is data required or optional? | Mixed, but most core account/study data is required | Play marks required when the data is necessary for the app's primary functionality for any users. Optional support, tester feedback, and deletion reasons are only collected when users submit them. |
 
 ## Data Types To Declare
 
@@ -27,8 +27,8 @@ Google Play requires developers to declare how the app collects, shares, protect
 | Personal info | Phone number | Yes | No | Required when phone is used as parent contact or login contact | App functionality, Account management, Developer communications | Parent/guardian contact, support contact, deletion contact. |
 | Personal info | Other info | Yes | No | Required for student setup/profile | App functionality, Personalization, Account management | Age, class level, school name, parent relationship. |
 | App activity | App interactions | Yes | No | Required | App functionality, Personalization, Analytics | Study progress, selected student, linked parent/student monitoring activity, reminder preferences. |
-| App activity | Other user-generated content | Yes | No | Required for study planning; optional for support notes | App functionality, Personalization, Account management, Developer communications | Subjects, topics, pages, study resources, reading pace notes, recall proof, confidence, support notes, deletion request reason. |
-| App activity | Other actions | Yes | No | Required | App functionality, Personalization, Analytics | Marking sessions done, missed-session recovery, check-ins, rebalance activity. |
+| App activity | Other user-generated content | Yes | No | Required for study planning; optional for support and tester feedback notes | App functionality, Personalization, Account management, Developer communications | Subjects, topics, pages, study resources, reading pace notes, recall proof, confidence, support notes, tester feedback, deletion request reason. |
+| App activity | Other actions | Yes | No | Required for core app actions; optional for tester feedback ratings | App functionality, Personalization, Analytics | Marking sessions done, missed-session recovery, check-ins, rebalance activity, closed-test rating/recommendation answers. |
 
 ## Data Types Not Currently Collected
 

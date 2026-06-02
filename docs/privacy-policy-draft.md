@@ -15,6 +15,7 @@ StudyNova may collect:
 - Student name, class, age, school name, login ID, subjects, topics, study resources, exam dates, reading pace, study notes, study progress, recall notes, and confidence scores.
 - Parent or guardian name, contact information, relationship to the student, linked student accounts, and progress-monitoring activity.
 - Account recovery help requests, including login ID, contact information, and optional support notes.
+- Closed-test feedback, including optional tester name/contact, device details, rating, recommendation answer, and notes about what worked or failed.
 - Notification permission status checked locally by the app, and scheduled study reminder preferences that may be stored with the study plan.
 
 ## How We Use Information
@@ -26,6 +27,7 @@ We use this information to:
 - Show parent or guardian progress dashboards for linked students.
 - Send local study reminders when enabled.
 - Help recover account access when users request support.
+- Review closed-test feedback and prioritize fixes before public release.
 - Improve the app during testing.
 
 ## Parent And Student Linking

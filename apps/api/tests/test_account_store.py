@@ -16,6 +16,8 @@ from app.schemas import (
     StudyReminderSettingsUpdate,
     StudySessionCompletionRequest,
     SubjectInput,
+    TesterFeedbackCreate as FeedbackCreate,
+    TesterFeedbackReviewRequest as FeedbackReviewRequest,
     TopicInput,
 )
 from app.storage import StudyPlanStore
@@ -259,6 +261,43 @@ def test_study_plan_store_records_account_recovery_request_privately(tmp_path) -
     assert reviewed_request.status == "reviewed"
     assert reviewed_request.admin_note == "Called parent and confirmed the account."
     assert reviewed_request.reviewed_at is not None
+
+
+def test_study_plan_store_records_and_reviews_tester_feedback(tmp_path) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+
+    receipt = store.create_tester_feedback(
+        FeedbackCreate(
+            tester_name="Abeeb",
+            contact="tester@example.com",
+            role="parent",
+            device_model="Redmi Note 12",
+            android_version="Android 14",
+            category="parent",
+            rating=4,
+            what_worked="Parent dashboard showed the latest recall note.",
+            what_failed="I was not sure how to find the invite code.",
+            improvement="Add a shorter parent linking guide.",
+            recommend=True,
+            message="Useful for exam preparation.",
+        )
+    )
+
+    feedback_items = store.tester_feedback_requests()
+    reviewed_feedback = store.review_tester_feedback(
+        receipt.id,
+        FeedbackReviewRequest(status="reviewed", admin_note="Add linking copy to next build."),
+    )
+
+    assert receipt.status == "received"
+    assert feedback_items[0].id == receipt.id
+    assert feedback_items[0].status == "open"
+    assert feedback_items[0].rating == 4
+    assert feedback_items[0].recommend is True
+    assert reviewed_feedback is not None
+    assert reviewed_feedback.status == "reviewed"
+    assert reviewed_feedback.reviewed_at is not None
+    assert reviewed_feedback.admin_note == "Add linking copy to next build."
 
 
 def test_study_plan_store_completes_student_account_deletion_with_scoped_cleanup(tmp_path) -> None:

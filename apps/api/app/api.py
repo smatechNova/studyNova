@@ -52,6 +52,10 @@ from app.schemas import (
     StudyPlanSaveRequest,
     StudySessionCompletion,
     StudySessionCompletionRequest,
+    TesterFeedbackCreate,
+    TesterFeedbackReceipt,
+    TesterFeedbackRecord,
+    TesterFeedbackReviewRequest,
     WeeklyStudyDigest,
 )
 from app.storage import AccountAccessCodeError, get_study_plan_store
@@ -411,6 +415,11 @@ def create_account_deletion_request(
     return receipt
 
 
+@router.post("/feedback/tester-requests", response_model=TesterFeedbackReceipt)
+def create_tester_feedback(payload: TesterFeedbackCreate) -> TesterFeedbackReceipt:
+    return get_study_plan_store().create_tester_feedback(payload)
+
+
 @router.get("/admin/account-recovery-requests", response_model=list[AccountRecoveryRequestRecord])
 def get_account_recovery_requests(
     limit: int = 50,
@@ -449,6 +458,26 @@ def review_account_deletion_request(
     if request is None:
         raise HTTPException(status_code=404, detail="Account deletion request was not found.")
     return request
+
+
+@router.get("/admin/tester-feedback", response_model=list[TesterFeedbackRecord])
+def get_tester_feedback(
+    limit: int = 50,
+    _: None = Depends(require_admin),
+) -> list[TesterFeedbackRecord]:
+    return get_study_plan_store().tester_feedback_requests(limit=limit)
+
+
+@router.patch("/admin/tester-feedback/{feedback_id}", response_model=TesterFeedbackRecord)
+def review_tester_feedback(
+    feedback_id: str,
+    payload: TesterFeedbackReviewRequest,
+    _: None = Depends(require_admin),
+) -> TesterFeedbackRecord:
+    feedback = get_study_plan_store().review_tester_feedback(feedback_id, payload)
+    if feedback is None:
+        raise HTTPException(status_code=404, detail="Tester feedback was not found.")
+    return feedback
 
 
 @router.get("/admin/storage/health", response_model=StorageHealth)

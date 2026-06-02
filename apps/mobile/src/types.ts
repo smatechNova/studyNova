@@ -212,6 +212,41 @@ export type AccountDeletionReviewInput = {
   admin_note: string;
 };
 
+export type TesterFeedbackInput = {
+  tester_name: string;
+  contact: string;
+  role: "student" | "parent" | "school" | "general";
+  device_model: string;
+  android_version: string;
+  category: "setup" | "student" | "parent" | "reminders" | "ui" | "bug" | "other";
+  rating: number;
+  what_worked: string;
+  what_failed: string;
+  improvement: string;
+  recommend: boolean | null;
+  message: string;
+};
+
+export type TesterFeedbackReceipt = {
+  id: string;
+  status: "received";
+  message: string;
+  created_at: string;
+};
+
+export type TesterFeedbackReviewInput = {
+  status: "open" | "reviewed";
+  admin_note: string;
+};
+
+export type TesterFeedbackRecord = TesterFeedbackInput & {
+  id: string;
+  status: "open" | "reviewed";
+  reviewed_at?: string | null;
+  admin_note: string;
+  created_at: string;
+};
+
 export type StorageHealth = {
   provider: "sqlite";
   database_path: string;

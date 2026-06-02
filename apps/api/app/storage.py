@@ -46,6 +46,10 @@ from app.schemas import (
     StudyPlanResponse,
     StudySessionCompletion,
     StudySessionCompletionRequest,
+    TesterFeedbackCreate,
+    TesterFeedbackReceipt,
+    TesterFeedbackRecord,
+    TesterFeedbackReviewRequest,
     MissedStudySession,
 )
 
@@ -511,6 +515,133 @@ class StudyPlanStore:
             ).fetchone()
 
         return self._account_deletion_request_from_row(row) if row is not None else None
+
+    def create_tester_feedback(self, payload: TesterFeedbackCreate) -> TesterFeedbackReceipt:
+        receipt = TesterFeedbackReceipt(
+            id=str(uuid4()),
+            created_at=datetime.now(timezone.utc),
+            message="Feedback received. Thank you for helping improve StudyNova before public launch.",
+        )
+
+        with self._connect() as connection:
+            connection.execute(
+                """
+                insert into tester_feedback (
+                    id,
+                    tester_name,
+                    contact,
+                    role,
+                    device_model,
+                    android_version,
+                    category,
+                    rating,
+                    what_worked,
+                    what_failed,
+                    improvement,
+                    recommend,
+                    message,
+                    created_at
+                )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    receipt.id,
+                    payload.tester_name,
+                    payload.contact,
+                    payload.role,
+                    payload.device_model,
+                    payload.android_version,
+                    payload.category,
+                    payload.rating,
+                    payload.what_worked,
+                    payload.what_failed,
+                    payload.improvement,
+                    None if payload.recommend is None else int(payload.recommend),
+                    payload.message,
+                    receipt.created_at.isoformat(),
+                ),
+            )
+
+        return receipt
+
+    def tester_feedback_requests(self, limit: int = 50) -> list[TesterFeedbackRecord]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                select
+                    id,
+                    tester_name,
+                    contact,
+                    role,
+                    device_model,
+                    android_version,
+                    category,
+                    rating,
+                    what_worked,
+                    what_failed,
+                    improvement,
+                    recommend,
+                    message,
+                    status,
+                    reviewed_at,
+                    admin_note,
+                    created_at
+                from tester_feedback
+                order by created_at desc
+                limit ?
+                """,
+                (max(1, min(limit, 100)),),
+            ).fetchall()
+
+        return [self._tester_feedback_from_row(row) for row in rows]
+
+    def review_tester_feedback(
+        self,
+        feedback_id: str,
+        payload: TesterFeedbackReviewRequest,
+    ) -> TesterFeedbackRecord | None:
+        reviewed_at = datetime.now(timezone.utc).isoformat() if payload.status == "reviewed" else None
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                update tester_feedback
+                set status = ?,
+                    reviewed_at = ?,
+                    admin_note = ?
+                where id = ?
+                """,
+                (payload.status, reviewed_at, payload.admin_note, feedback_id),
+            )
+            if cursor.rowcount == 0:
+                return None
+
+            row = connection.execute(
+                """
+                select
+                    id,
+                    tester_name,
+                    contact,
+                    role,
+                    device_model,
+                    android_version,
+                    category,
+                    rating,
+                    what_worked,
+                    what_failed,
+                    improvement,
+                    recommend,
+                    message,
+                    status,
+                    reviewed_at,
+                    admin_note,
+                    created_at
+                from tester_feedback
+                where id = ?
+                """,
+                (feedback_id,),
+            ).fetchone()
+
+        return self._tester_feedback_from_row(row) if row is not None else None
 
     def _complete_account_deletion(self, connection: sqlite3.Connection, request: sqlite3.Row) -> None:
         if request["role"] == "student":
@@ -1137,6 +1268,28 @@ class StudyPlanStore:
             status=row["status"],
             reviewed_at=row["reviewed_at"],
             completed_at=row["completed_at"],
+            admin_note=row["admin_note"],
+            created_at=row["created_at"],
+        )
+
+    def _tester_feedback_from_row(self, row: sqlite3.Row) -> TesterFeedbackRecord:
+        recommend = row["recommend"]
+        return TesterFeedbackRecord(
+            id=row["id"],
+            tester_name=row["tester_name"],
+            contact=row["contact"],
+            role=row["role"],
+            device_model=row["device_model"],
+            android_version=row["android_version"],
+            category=row["category"],
+            rating=row["rating"],
+            what_worked=row["what_worked"],
+            what_failed=row["what_failed"],
+            improvement=row["improvement"],
+            recommend=None if recommend is None else bool(recommend),
+            message=row["message"],
+            status=row["status"],
+            reviewed_at=row["reviewed_at"],
             admin_note=row["admin_note"],
             created_at=row["created_at"],
         )
@@ -1919,6 +2072,41 @@ class StudyPlanStore:
                 """
                 create index if not exists idx_account_deletion_requests_status_created
                 on account_deletion_requests (status, created_at desc)
+                """
+            )
+            connection.execute(
+                """
+                create table if not exists tester_feedback (
+                    id text primary key,
+                    tester_name text not null default '',
+                    contact text not null default '',
+                    role text not null,
+                    device_model text not null default '',
+                    android_version text not null default '',
+                    category text not null default 'other',
+                    rating integer not null,
+                    what_worked text not null default '',
+                    what_failed text not null default '',
+                    improvement text not null default '',
+                    recommend integer,
+                    message text not null default '',
+                    status text not null default 'open',
+                    reviewed_at text,
+                    admin_note text not null default '',
+                    created_at text not null
+                )
+                """
+            )
+            connection.execute(
+                """
+                create index if not exists idx_tester_feedback_status_created
+                on tester_feedback (status, created_at desc)
+                """
+            )
+            connection.execute(
+                """
+                create index if not exists idx_tester_feedback_category_created
+                on tester_feedback (category, created_at desc)
                 """
             )
             connection.execute(
