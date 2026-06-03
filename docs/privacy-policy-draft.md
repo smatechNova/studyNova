@@ -2,7 +2,7 @@
 
 Last updated: June 2, 2026
 
-This draft must be reviewed before public launch. It is written for the StudyNova closed-test build and should be hosted on a public webpage before Play Store submission.
+This draft must be reviewed before public launch. It is written for the StudyNova closed-test build and is now represented in-app by the public `/privacy` route. Host that route on a public webpage before Play Store submission.
 
 ## Overview
 
@@ -60,7 +60,7 @@ Users may request help with account access through the sign-in help form. Signed
 
 Account deletion requests are reviewed before completion so StudyNova can verify the request, protect linked parent-student records, and handle school or guardian support needs carefully. When support marks a reviewed request as completed, StudyNova removes the scoped account data from the backend while keeping the deletion request record for support tracking.
 
-Before Play Store submission, StudyNova should host the `/delete-account` page on a public web URL and enter that URL in Play Console. This gives users a web path to request deletion even if they cannot access the app.
+Before Play Store submission, StudyNova should host the `/privacy` and `/delete-account` pages on public web URLs and enter the required URLs in Play Console. This gives users a web path to review privacy information and request deletion even if they cannot access the app.
 
 ## Contact
 

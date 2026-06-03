@@ -69,7 +69,7 @@ Do not select these unless the product changes:
 Before submitting the Play Console Data safety form:
 
 - Confirm `EXPO_PUBLIC_API_URL` points to the production HTTPS API.
-- Confirm the privacy policy is hosted on a public, non-editable URL.
+- Confirm the `/privacy` page is hosted on a public, non-editable URL and entered in Play Console.
 - Confirm the `/delete-account` page is hosted on a public URL and entered in Play Console.
 - Confirm no ads, third-party analytics SDK, crash reporting, remote push, file upload, contacts, calendar, location, payment, or media SDK has been added since this document was updated.
 - Confirm Firebase/Google sign-in configuration and backend token verification are ready for the Android build.

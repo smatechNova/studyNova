@@ -148,14 +148,24 @@ export default function HomeScreen() {
           />
         </View>
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push("/delete-account" as never)}
-          style={styles.privacyLink}
-        >
-          <MaterialCommunityIcons name="account-remove-outline" size={18} color={colors.muted} />
-          <Text style={styles.privacyLinkText}>Request account deletion</Text>
-        </Pressable>
+        <View style={styles.legalLinks}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/privacy" as never)}
+            style={styles.privacyLink}
+          >
+            <MaterialCommunityIcons name="shield-lock-outline" size={18} color={colors.muted} />
+            <Text style={styles.privacyLinkText}>Privacy policy</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/delete-account" as never)}
+            style={styles.privacyLink}
+          >
+            <MaterialCommunityIcons name="account-remove-outline" size={18} color={colors.muted} />
+            <Text style={styles.privacyLinkText}>Request account deletion</Text>
+          </Pressable>
+        </View>
       </ScrollView>
     </Screen>
   );
@@ -272,6 +282,13 @@ function createStyles(colors: AppColors) {
     height: 64,
     justifyContent: "center",
     width: 64
+  },
+  legalLinks: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    justifyContent: "center"
   },
   roleGrid: {
     gap: spacing.md

@@ -20,7 +20,7 @@ The Android package name becomes permanent after the first Play Console upload. 
 3. Google Play Console developer account.
 4. A Google Play app draft created with package name `com.studynova.app`.
 5. At least one tester email list or Google Group for Play testing.
-6. Privacy policy URL. Use `docs/privacy-policy-draft.md` as the starting text.
+6. Privacy policy URL. Host the `/privacy` route and use `docs/privacy-policy-draft.md` as the source text.
 7. Public account deletion URL. Host the `/delete-account` route and use `docs/account-deletion-request.md` for support wording.
 8. Stable network access to Expo services, including `api.expo.dev` and `keystore.expo.dev`.
 9. Firebase/Google sign-in configured using `docs/firebase-google-sign-in.md`.
