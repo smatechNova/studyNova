@@ -13,6 +13,7 @@ const listingPackDocPath = join(root, "docs", "play-store-listing-pack.md");
 const playChecklistPath = join(root, "docs", "play-store-checklist.md");
 const privacyPolicyDocPath = join(root, "docs", "privacy-policy-draft.md");
 const screenshotCaptureDocPath = join(root, "docs", "play-store-screenshot-capture.md");
+const termsDocPath = join(root, "docs", "terms-of-use-draft.md");
 
 const failures = [];
 const warnings = [];
@@ -61,7 +62,8 @@ const docs = [
   listingPackDocPath,
   playChecklistPath,
   privacyPolicyDocPath,
-  screenshotCaptureDocPath
+  screenshotCaptureDocPath,
+  termsDocPath
 ]
   .filter((path) => existsSync(path))
   .map((path) => readFileSync(path, "utf8"))
@@ -98,6 +100,8 @@ requireRootFile(listingPackDocPath, "Play Store listing pack");
 requireRootFile(privacyPolicyDocPath, "Privacy policy draft");
 requireRootFile(screenshotCaptureDocPath, "Play Store screenshot capture plan");
 requireFile("app/privacy.tsx", "Public privacy policy route");
+requireRootFile(termsDocPath, "Terms of Use draft");
+requireFile("app/terms.tsx", "Public Terms of Use route");
 requireFile("src/lib/demoData.ts", "Screenshot demo data");
 
 requireValue(easJson.cli?.appVersionSource === "remote", "EAS appVersionSource should be remote.");
@@ -113,6 +117,7 @@ requireValue(easJson.submit?.production?.android?.track === "production", "produ
 warnValue(docs.includes("com.studynova.app"), "Play Store docs should mention the current Android package.");
 warnValue(docs.includes("account deletion"), "Play Store docs should mention account deletion.");
 warnValue(docs.includes("/privacy"), "Play Store docs should mention the public /privacy route.");
+warnValue(docs.includes("/terms"), "Play Store docs should mention the public /terms route.");
 warnValue(docs.includes("/delete-account"), "Play Store docs should mention the public /delete-account route.");
 warnValue(docs.includes("Data safety"), "Play Store docs should mention Data safety.");
 warnValue(docs.includes("Tester feedback"), "Play Store docs should mention tester feedback.");

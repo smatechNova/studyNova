@@ -159,6 +159,14 @@ export default function HomeScreen() {
           </Pressable>
           <Pressable
             accessibilityRole="button"
+            onPress={() => router.push("/terms" as never)}
+            style={styles.privacyLink}
+          >
+            <MaterialCommunityIcons name="file-document-outline" size={18} color={colors.muted} />
+            <Text style={styles.privacyLinkText}>Terms of use</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
             onPress={() => router.push("/delete-account" as never)}
             style={styles.privacyLink}
           >

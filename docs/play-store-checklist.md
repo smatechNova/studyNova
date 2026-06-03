@@ -25,6 +25,7 @@ Confirm the package name before the first Play upload. It cannot be changed for 
 - Feature graphic
 - Phone screenshots
 - Privacy policy URL using the hosted `/privacy` route
+- Terms of Use URL using the hosted `/terms` route
 - App description
 - Store listing copy
 - Closed-test release notes
@@ -56,4 +57,5 @@ npx eas-cli@latest build --platform android --profile production
 - Do not collect unnecessary sensitive data.
 - Keep the in-app account deletion request flow enabled for students and parents.
 - Host the `/privacy` public privacy policy page before Play submission and enter the URL in Play Console.
+- Host the `/terms` public Terms of Use page before public testing.
 - Host the `/delete-account` public account deletion page before Play submission and enter the URL in Play Console.

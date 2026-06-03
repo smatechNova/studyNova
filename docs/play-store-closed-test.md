@@ -21,7 +21,8 @@ The Android package name becomes permanent after the first Play Console upload. 
 4. A Google Play app draft created with package name `com.studynova.app`.
 5. At least one tester email list or Google Group for Play testing.
 6. Privacy policy URL. Host the `/privacy` route and use `docs/privacy-policy-draft.md` as the source text.
-7. Public account deletion URL. Host the `/delete-account` route and use `docs/account-deletion-request.md` for support wording.
+7. Terms of Use URL. Host the `/terms` route and use `docs/terms-of-use-draft.md` as the source text.
+8. Public account deletion URL. Host the `/delete-account` route and use `docs/account-deletion-request.md` for support wording.
 8. Stable network access to Expo services, including `api.expo.dev` and `keystore.expo.dev`.
 9. Firebase/Google sign-in configured using `docs/firebase-google-sign-in.md`.
 10. Notification readiness checked using `docs/notification-readiness.md`.
@@ -149,6 +150,7 @@ Use the in-app Tester feedback screen for normal closed-test notes. Use `docs/te
 - Google sign-in must be tested with real Firebase credentials on an Android build.
 - App icon, feature graphic, and screenshots must be final.
 - Privacy policy must be hosted on a public URL.
+- Terms of Use should be hosted on a public URL for schools, parents, and testers.
 - The `/delete-account` public request page must be hosted on a public URL.
 - Real-world testing must confirm notifications and parent linking on Android phones.
 - Admin/support workflow must be tested for tester feedback, account recovery requests, account deletion requests, and backup export.

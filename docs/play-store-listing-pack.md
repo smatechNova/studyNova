@@ -127,7 +127,7 @@ Thank you for helping us shape StudyNova.
 ## Public Launch Copy Notes
 
 - Replace closed-test wording before production release.
-- Add final support email and privacy policy URL.
+- Add final support email, privacy policy URL, and Terms of Use URL.
 - Add final hosted account deletion URL.
 - Replace placeholder screenshots and feature graphic with designer-approved assets.
 - Recheck the Data safety form after adding any analytics, crash reporting, remote push notifications, file uploads, or payment features.
