@@ -6,6 +6,8 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const mobileDir = join(root, "apps", "mobile");
 const appConfigPath = join(mobileDir, "app.json");
 const easConfigPath = join(mobileDir, "eas.json");
+const closedTestEnvExamplePath = join(mobileDir, ".env.closed-test.example");
+const localMobileEnvPath = join(mobileDir, ".env.local");
 const accountDeletionDocPath = join(root, "docs", "account-deletion-request.md");
 const closedTestDocPath = join(root, "docs", "play-store-closed-test.md");
 const dataSafetyDocPath = join(root, "docs", "play-store-data-safety.md");
@@ -14,6 +16,7 @@ const playChecklistPath = join(root, "docs", "play-store-checklist.md");
 const privacyPolicyDocPath = join(root, "docs", "privacy-policy-draft.md");
 const screenshotCaptureDocPath = join(root, "docs", "play-store-screenshot-capture.md");
 const termsDocPath = join(root, "docs", "terms-of-use-draft.md");
+const renderEnvExamplePath = join(root, "infra", "render-env.closed-test.example");
 
 const failures = [];
 const warnings = [];
@@ -46,6 +49,15 @@ function requireFile(relativePath, label) {
 
 function requireRootFile(path, label) {
   requireValue(existsSync(path), `${label} is missing at ${path.replace(`${root}\\`, "")}`);
+}
+
+function readEnvValue(text, key) {
+  const line = text
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(`${key}=`));
+
+  return line ? line.slice(key.length + 1).trim() : "";
 }
 
 const appJson = readJson(appConfigPath);
@@ -94,11 +106,13 @@ requireFile("assets/adaptive-icon.png", "Adaptive icon");
 requireFile("assets/splash-icon.png", "Splash icon");
 requireFile("assets/splash.png", "Full splash artwork");
 requireFile("assets/notification-icon.png", "Notification icon");
+requireFile(".env.closed-test.example", "Closed-test mobile env example");
 requireRootFile(accountDeletionDocPath, "Account deletion request document");
 requireRootFile(dataSafetyDocPath, "Play Store Data safety draft");
 requireRootFile(listingPackDocPath, "Play Store listing pack");
 requireRootFile(privacyPolicyDocPath, "Privacy policy draft");
 requireRootFile(screenshotCaptureDocPath, "Play Store screenshot capture plan");
+requireRootFile(renderEnvExamplePath, "Render closed-test env example");
 requireFile("app/privacy.tsx", "Public privacy policy route");
 requireRootFile(termsDocPath, "Terms of Use draft");
 requireFile("app/terms.tsx", "Public Terms of Use route");
@@ -125,6 +139,37 @@ warnValue(docs.includes("Short description"), "Play Store docs should include li
 warnValue(docs.includes("screenshot") && docs.includes("demo"), "Play Store docs should include screenshot demo guidance.");
 warnValue(docs.includes("npx eas-cli@latest"), "Play Store docs should prefer npx eas-cli@latest for machines without global EAS.");
 warnValue(docs.includes("mobile:release-check"), "Play Store docs should mention npm run mobile:release-check.");
+warnValue(docs.includes("api:smoke"), "Play Store docs should mention npm run api:smoke.");
+warnValue(docs.includes("closed-test:api-env"), "Play Store docs should mention npm run closed-test:api-env.");
+warnValue(docs.includes("EXPO_PUBLIC_API_URL"), "Play Store docs should mention EXPO_PUBLIC_API_URL.");
+warnValue(docs.includes("render-env.closed-test.example"), "Play Store docs should mention the Render env example.");
+
+if (existsSync(closedTestEnvExamplePath)) {
+  const closedTestEnvExample = readFileSync(closedTestEnvExamplePath, "utf8");
+  const exampleApiUrl = readEnvValue(closedTestEnvExample, "EXPO_PUBLIC_API_URL");
+  requireValue(
+    exampleApiUrl.startsWith("https://"),
+    "apps/mobile/.env.closed-test.example should show an HTTPS EXPO_PUBLIC_API_URL."
+  );
+}
+
+if (existsSync(localMobileEnvPath)) {
+  const localMobileEnv = readFileSync(localMobileEnvPath, "utf8");
+  const localApiUrl = readEnvValue(localMobileEnv, "EXPO_PUBLIC_API_URL");
+
+  warnValue(Boolean(localApiUrl), "apps/mobile/.env.local exists but EXPO_PUBLIC_API_URL is missing.");
+  warnValue(
+    !localApiUrl ||
+      localApiUrl.startsWith("https://") ||
+      localApiUrl.startsWith("http://localhost") ||
+      localApiUrl.startsWith("http://127.0.0.1"),
+    "apps/mobile/.env.local EXPO_PUBLIC_API_URL should be HTTPS, localhost, or 127.0.0.1."
+  );
+  warnValue(
+    !localApiUrl.includes("app.github.dev"),
+    "apps/mobile/.env.local still points to Codespaces. Use the hosted API URL before closed-test builds."
+  );
+}
 
 if (warnings.length) {
   console.warn("\nRelease check warnings:");

@@ -1,22 +1,47 @@
-import { writeFile } from "node:fs/promises";
-import path from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
+
+const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
 const args = process.argv.slice(2);
 const writeMobileEnv = args.includes("--write-mobile-env");
-const positionalArgs = args.filter((arg) => arg !== "--write-mobile-env");
+const showHelp = args.includes("--help") || args.includes("-h");
+const positionalArgs = args.filter((arg) => !["--write-mobile-env", "--help", "-h"].includes(arg));
 
 const apiUrl = (positionalArgs[0] || process.env.STUDYNOVA_API_URL || "").trim().replace(/\/$/, "");
 const adminCode = (positionalArgs[1] || process.env.STUDYNOVA_ADMIN_CODE || "").trim();
 
-if (!apiUrl || !adminCode) {
+function printUsage() {
   console.error("Usage: node scripts/api-smoke-test.mjs <https-api-url> <admin-code> [--write-mobile-env]");
   console.error("Or set STUDYNOVA_API_URL and STUDYNOVA_ADMIN_CODE.");
+}
+
+if (showHelp) {
+  printUsage();
+  process.exit(0);
+}
+
+if (!apiUrl || !adminCode) {
+  printUsage();
   process.exit(1);
 }
 
-if (!apiUrl.startsWith("https://") && !apiUrl.startsWith("http://localhost")) {
-  console.error("API URL must be HTTPS for hosted testing. http://localhost is only accepted for local checks.");
+let parsedApiUrl;
+
+try {
+  parsedApiUrl = new URL(apiUrl);
+} catch (error) {
+  console.error(`API URL is invalid: ${apiUrl}`);
+  process.exit(1);
+}
+
+const isLocalUrl =
+  parsedApiUrl.protocol === "http:" && ["localhost", "127.0.0.1"].includes(parsedApiUrl.hostname);
+
+if (parsedApiUrl.protocol !== "https:" && !isLocalUrl) {
+  console.error("API URL must be HTTPS for hosted testing. Localhost is only accepted for local checks.");
   process.exit(1);
 }
 
@@ -40,6 +65,9 @@ async function main() {
   console.log(`Checking StudyNova API: ${apiUrl}`);
 
   const health = await readJson(await fetch(`${apiUrl}/health`), "Health check");
+  if (health.status !== "ok") {
+    throw new Error(`Health check returned unexpected status: ${health.status}`);
+  }
   console.log(`Health: ${health.status} (${health.environment})`);
 
   const readiness = await readJson(
@@ -51,9 +79,19 @@ async function main() {
     "Deployment readiness"
   );
 
-  for (const check of readiness.checks || []) {
+  const checks = Array.isArray(readiness.checks) ? readiness.checks : [];
+
+  if (!checks.length) {
+    throw new Error("Deployment readiness returned no checks.");
+  }
+
+  for (const check of checks) {
     const marker = check.status === "pass" ? "PASS" : check.status === "warning" ? "WARN" : "FAIL";
     console.log(`${marker} ${check.name}: ${check.message}`);
+  }
+
+  if (!isLocalUrl && readiness.environment !== "production") {
+    throw new Error(`Hosted smoke test expected production environment, received ${readiness.environment}.`);
   }
 
   if (!readiness.ready) {
@@ -67,9 +105,11 @@ async function main() {
   }
 
   if (writeMobileEnv) {
-    const outputPath = path.join(process.cwd(), "apps", "mobile", ".env.local");
+    const outputPath = join(root, "apps", "mobile", ".env.local");
+    await mkdir(dirname(outputPath), { recursive: true });
     await writeFile(outputPath, `EXPO_PUBLIC_API_URL=${apiUrl}\n`, "utf8");
     console.log(`Wrote ${outputPath}`);
+    console.log("Use the same URL in the production EAS environment before the closed-test build.");
   }
 
   console.log("Backend is ready for the mobile closed-test API URL.");

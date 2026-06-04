@@ -1,0 +1,15 @@
+# StudyNova Render closed-test backend environment
+#
+# Copy these keys into the Render service environment tab.
+# Keep private values out of Git and rotate them if they are shared accidentally.
+
+APP_ENV=production
+LOCAL_DATA_PATH=/var/data/studynova/studynova.sqlite3
+BACKUP_DATA_PATH=/var/data/studynova/backups
+SESSION_TTL_HOURS=168
+PUBLIC_API_BASE_URL=https://your-render-service.onrender.com
+ALLOWED_ORIGINS=
+ALLOWED_ORIGIN_REGEX=
+SESSION_SECRET=replace-with-32-plus-private-random-characters
+ADMIN_ACCESS_CODE=replace-with-private-admin-code
+FIREBASE_SERVICE_ACCOUNT_JSON=replace-with-firebase-admin-json-when-google-sign-in-is-enabled

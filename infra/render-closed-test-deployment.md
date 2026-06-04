@@ -21,7 +21,7 @@ The first deploy can take a few minutes because Render builds the Docker image.
 
 ## 2. Set Backend Environment Variables
 
-Use these values in Render:
+Use `infra/render-env.closed-test.example` as the copy-and-fill template. These are the values Render needs:
 
 ```text
 APP_ENV=production
@@ -37,6 +37,7 @@ FIREBASE_SERVICE_ACCOUNT_JSON=<Firebase Admin JSON if Google sign-in is enabled>
 ```
 
 Keep `SESSION_SECRET`, `ADMIN_ACCESS_CODE`, and `FIREBASE_SERVICE_ACCOUNT_JSON` private.
+The value of `PUBLIC_API_BASE_URL` must be the same HTTPS host you later set as `EXPO_PUBLIC_API_URL` for the mobile build.
 
 ## 3. Smoke Test The Hosted API
 
@@ -45,6 +46,8 @@ From the repository root:
 ```powershell
 npm run api:smoke -- https://your-render-service.onrender.com <admin-code>
 ```
+
+The smoke test checks `/health`, deployment readiness, production mode, persistent storage, secrets, CORS, Firebase verification, and whether `PUBLIC_API_BASE_URL` matches the URL you are testing.
 
 To also write the local mobile env file:
 

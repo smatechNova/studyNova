@@ -23,15 +23,16 @@ The Android package name becomes permanent after the first Play Console upload. 
 6. Privacy policy URL. Host the `/privacy` route and use `docs/privacy-policy-draft.md` as the source text.
 7. Terms of Use URL. Host the `/terms` route and use `docs/terms-of-use-draft.md` as the source text.
 8. Public account deletion URL. Host the `/delete-account` route and use `docs/account-deletion-request.md` for support wording.
-8. Stable network access to Expo services, including `api.expo.dev` and `keystore.expo.dev`.
-9. Firebase/Google sign-in configured using `docs/firebase-google-sign-in.md`.
-10. Notification readiness checked using `docs/notification-readiness.md`.
-11. Backend deployment readiness checked using `infra/api-production-readiness.md`.
-12. Data safety draft reviewed using `docs/play-store-data-safety.md`.
-13. Store listing pack reviewed using `docs/play-store-listing-pack.md`.
+9. Stable network access to Expo services, including `api.expo.dev` and `keystore.expo.dev`.
+10. Firebase/Google sign-in configured using `docs/firebase-google-sign-in.md`.
+11. Notification readiness checked using `docs/notification-readiness.md`.
+12. Backend deployment readiness checked using `infra/api-production-readiness.md`.
+13. Data safety draft reviewed using `docs/play-store-data-safety.md`.
+14. Store listing pack reviewed using `docs/play-store-listing-pack.md`.
 
 See `infra/api-persistent-disk.md` for the fastest backend path for closed testing.
 See `infra/render-closed-test-deployment.md` for the hosted Render execution path.
+Use `infra/render-env.closed-test.example` as the Render environment variable template.
 See `docs/mobile-release-readiness.md` for the mobile app identity, assets, and guarded build commands.
 
 ## Backend Persistence Setup
@@ -60,11 +61,19 @@ Before building the Android test release, open the support screen with the produ
 curl.exe -H "X-Admin-Code: <admin-code>" https://your-api-host/api/v1/admin/deployment/readiness
 ```
 
-Or run the repository smoke test and write the local mobile env file:
+Or run the repository smoke test:
+
+```powershell
+npm run api:smoke -- https://your-api-host <admin-code>
+```
+
+Then write the local mobile env file:
 
 ```powershell
 npm run closed-test:api-env -- https://your-api-host <admin-code>
 ```
+
+The hosted API URL used here must match the backend `PUBLIC_API_BASE_URL` and the EAS `EXPO_PUBLIC_API_URL`.
 
 ## Recommended Track Order
 

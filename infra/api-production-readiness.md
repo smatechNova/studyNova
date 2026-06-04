@@ -59,6 +59,8 @@ ALLOWED_ORIGIN_REGEX=
 FIREBASE_SERVICE_ACCOUNT_JSON=<Firebase Admin JSON if Google sign-in is enabled>
 ```
 
+For the Render closed-test path, use `infra/render-env.closed-test.example` as the environment variable template.
+
 Then set the mobile build variable:
 
 ```text

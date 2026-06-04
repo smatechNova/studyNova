@@ -38,19 +38,43 @@ From the repository root:
 npm run mobile:release-check
 ```
 
-This validates the app config, EAS profiles, required Android assets, notification setup, and Play Store docs references.
+This validates the app config, EAS profiles, required Android assets, notification setup, hosted API preparation files, and Play Store docs references.
 
-Before submitting to Play Store, host both policy documents publicly:
+Before submitting to Play Store, host these policy and store-readiness documents or routes publicly:
 
 - `docs/privacy-policy-draft.md`
+- `docs/terms-of-use-draft.md`
 - `docs/account-deletion-request.md`
 - `docs/play-store-data-safety.md`
 - `docs/play-store-listing-pack.md`
 - `docs/play-store-screenshot-capture.md`
 
+## Hosted API Preflight
+
+Closed-test builds must point to a hosted HTTPS API, not localhost, Codespaces, or an Expo tunnel.
+
+Use the Render execution path first:
+
+- `infra/render-closed-test-deployment.md`
+- `infra/render-env.closed-test.example`
+
+After the backend is deployed, run from the repository root:
+
+```powershell
+npm run api:smoke -- https://your-api-host <admin-code>
+npm run closed-test:api-env -- https://your-api-host <admin-code>
+```
+
+The second command writes `apps/mobile/.env.local` for local Expo testing. For EAS cloud builds, set the same URL in the production EAS environment:
+
+```powershell
+cd apps/mobile
+npx eas-cli@latest env:create production --name EXPO_PUBLIC_API_URL --value https://your-api-host --visibility plaintext --force
+```
+
 ## Closed-Test Build
 
-After the hosted API is ready and `EXPO_PUBLIC_API_URL` is set in the production EAS environment:
+After the hosted API smoke test passes and `EXPO_PUBLIC_API_URL` is set in the production EAS environment:
 
 ```powershell
 npm run mobile:build:closed-test
