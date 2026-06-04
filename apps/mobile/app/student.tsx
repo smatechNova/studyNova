@@ -4,6 +4,7 @@ import { Link, router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import {
   ActivityIndicator,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -63,6 +64,8 @@ import type {
 } from "@/types";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
+
+const studentDashboardImage = require("../assets/brand/student-dashboard.png");
 
 const RESOURCE_OPTIONS = ["Textbook", "Class notes", "Notebook", "Online notes", "Past questions"];
 const STEPS = ["Profile", "Exam", "Pace", "Subjects", "Review"] as const;
@@ -1804,10 +1807,13 @@ function GeneratedPlanView({
         ) : null}
 
         <View style={styles.generatedHero}>
-          <Text style={styles.kicker}>Generated plan</Text>
-          <Text style={styles.title}>{plan.metadata.student_name}</Text>
-          <Text style={styles.helper}>{plan.metadata.recommendation}</Text>
-          {saveMessage ? <Text style={styles.saveStatus}>{saveMessage}</Text> : null}
+          <View style={styles.visualHeroCopy}>
+            <Text style={styles.kicker}>Generated plan</Text>
+            <Text style={styles.title}>{plan.metadata.student_name}</Text>
+            <Text style={styles.helper}>{plan.metadata.recommendation}</Text>
+            {saveMessage ? <Text style={styles.saveStatus}>{saveMessage}</Text> : null}
+          </View>
+          <Image accessibilityIgnoresInvertColors source={studentDashboardImage} style={styles.dashboardArtwork} />
         </View>
 
         <View style={styles.statsGrid}>
@@ -3597,6 +3603,11 @@ function createStyles(colors: AppColors) {
   distributionList: {
     gap: spacing.md
   },
+  dashboardArtwork: {
+    borderRadius: 8,
+    height: 132,
+    width: 132
+  },
   field: {
     gap: spacing.xs,
     width: "100%"
@@ -3631,11 +3642,14 @@ function createStyles(colors: AppColors) {
     gap: spacing.sm
   },
   generatedHero: {
+    alignItems: "center",
     backgroundColor: colors.panel,
     borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
-    gap: spacing.sm,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
     padding: spacing.lg
   },
   accountButton: {
@@ -4449,6 +4463,11 @@ function createStyles(colors: AppColors) {
     color: colors.text,
     fontSize: 24,
     fontWeight: "800"
+  },
+  visualHeroCopy: {
+    flex: 1,
+    gap: spacing.sm,
+    minWidth: 220
   },
   topicCard: {
     backgroundColor: colors.surface,

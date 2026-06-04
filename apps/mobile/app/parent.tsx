@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Link, router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
 import { ProgressBar } from "@/components/ProgressBar";
@@ -28,6 +28,8 @@ import { clearStoredAuthSession, getStoredAuthSession } from "@/lib/session";
 import type { ParentFamilyAccount, PlanSession, SavedStudyPlan, StudyPlanProgress, WeeklyStudyDigest } from "@/types";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
+
+const parentDashboardImage = require("../assets/brand/parent-dashboard.png");
 
 type AttentionItem = {
   session: PlanSession;
@@ -404,6 +406,7 @@ export default function ParentScreen() {
     <Screen>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
+          <Image accessibilityIgnoresInvertColors source={parentDashboardImage} style={styles.headerArtwork} />
           <View style={styles.headerCopy}>
             <Text style={styles.kicker}>Selected student</Text>
             <Text style={styles.title}>{selectedStudent?.name ?? savedPlan?.student_name ?? "No student yet"}</Text>
@@ -1096,12 +1099,19 @@ function createStyles(colors: AppColors) {
   header: {
     alignItems: "center",
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.md,
     justifyContent: "space-between"
   },
+  headerArtwork: {
+    borderRadius: 8,
+    height: 104,
+    width: 104
+  },
   headerCopy: {
     flex: 1,
-    gap: spacing.xs
+    gap: spacing.xs,
+    minWidth: 220
   },
   headerActions: {
     alignItems: "center",

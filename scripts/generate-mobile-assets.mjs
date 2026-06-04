@@ -1,5 +1,5 @@
 import { deflateSync } from "node:zlib";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -7,6 +7,13 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const assetsDir = join(root, "apps", "mobile", "assets");
 
 mkdirSync(assetsDir, { recursive: true });
+
+const approvedBrandLogo = join(assetsDir, "brand", "studynova-logo-concept.png");
+
+if (existsSync(approvedBrandLogo)) {
+  console.log("Approved StudyNova brand artwork is present. Keeping checked-in app icon assets.");
+  process.exit(0);
+}
 
 function rgba(hex, alpha = 255) {
   const clean = hex.replace("#", "");
