@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Link, router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
 import { RoleCard } from "@/components/RoleCard";
@@ -11,6 +11,10 @@ import { clearStoredAuthSession, getStoredAuthSession } from "@/lib/session";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
 import type { AuthSession } from "@/types";
+
+const brandLogo = require("../assets/brand/studynova-logo-concept.png");
+const studentCardImage = require("../assets/brand/student-card.png");
+const parentCardImage = require("../assets/brand/parent-card.png");
 
 export default function HomeScreen() {
   const { colors } = useTheme();
@@ -59,7 +63,7 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.hero}>
           <View style={styles.logo}>
-            <MaterialCommunityIcons name="school-outline" size={34} color={colors.brand} />
+            <Image accessibilityIgnoresInvertColors source={brandLogo} style={styles.logoImage} />
           </View>
           <View style={styles.heroText}>
             <Text style={styles.kicker}>For students, parents, and schools</Text>
@@ -124,6 +128,7 @@ export default function HomeScreen() {
               title="Student sign in"
               description="Open one student's own study dashboard and progress."
               icon="notebook-edit-outline"
+              imageSource={studentCardImage}
             />
           </Link>
           <Link href="/auth?role=parent" asChild>
@@ -131,6 +136,7 @@ export default function HomeScreen() {
               title="Parent/guardian sign in"
               description="Monitor linked students from the parent dashboard."
               icon="shield-account-outline"
+              imageSource={parentCardImage}
             />
           </Link>
           <Link href="/accounts" asChild>
@@ -285,11 +291,18 @@ function createStyles(colors: AppColors) {
   },
   logo: {
     alignItems: "center",
-    backgroundColor: colors.brandSoft,
+    backgroundColor: colors.background,
     borderRadius: 8,
-    height: 64,
+    borderColor: colors.border,
+    borderWidth: 1,
+    height: 92,
     justifyContent: "center",
-    width: 64
+    overflow: "hidden",
+    width: 92
+  },
+  logoImage: {
+    height: "100%",
+    width: "100%"
   },
   legalLinks: {
     alignItems: "center",

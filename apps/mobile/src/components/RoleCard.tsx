@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { forwardRef } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Image, type ImageSourcePropType, StyleSheet, Text, View } from "react-native";
 
 import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
 import { spacing } from "@/theme";
@@ -10,11 +10,12 @@ type RoleCardProps = {
   title: string;
   description: string;
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  imageSource?: ImageSourcePropType;
   onPress?: () => void;
 };
 
 export const RoleCard = forwardRef<View, RoleCardProps>(
-  ({ title, description, icon, onPress }, ref) => {
+  ({ title, description, icon, imageSource, onPress }, ref) => {
     const { colors } = useTheme();
 
     return (
@@ -24,8 +25,12 @@ export const RoleCard = forwardRef<View, RoleCardProps>(
         style={[styles.card, { backgroundColor: colors.panel, borderColor: colors.border }]}
         accessibilityRole="button"
       >
-        <View style={[styles.icon, { backgroundColor: colors.brandSoft }]}>
-          <MaterialCommunityIcons name={icon} size={28} color={colors.brand} />
+        <View style={[styles.art, { backgroundColor: colors.brandSoft }]}>
+          {imageSource ? (
+            <Image accessibilityIgnoresInvertColors source={imageSource} style={styles.image} />
+          ) : (
+            <MaterialCommunityIcons name={icon} size={28} color={colors.brand} />
+          )}
         </View>
         <View style={styles.copy}>
           <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
@@ -56,12 +61,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20
   },
-  icon: {
+  art: {
     alignItems: "center",
     borderRadius: 8,
-    height: 52,
+    height: 72,
+    overflow: "hidden",
     justifyContent: "center",
-    width: 52
+    width: 72
+  },
+  image: {
+    height: "100%",
+    width: "100%"
   },
   title: {
     fontSize: 18,
