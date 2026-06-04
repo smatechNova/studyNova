@@ -44,6 +44,14 @@ The value of `PUBLIC_API_BASE_URL` must be the same HTTPS host you later set as 
 From the repository root:
 
 ```powershell
+npm run closed-test:preflight -- https://your-render-service.onrender.com <admin-code>
+```
+
+This runs the mobile release check, smoke-tests the hosted API, validates deployment readiness, and writes `apps/mobile/.env.local`.
+
+To smoke-test the API without writing the mobile env file:
+
+```powershell
 npm run api:smoke -- https://your-render-service.onrender.com <admin-code>
 ```
 

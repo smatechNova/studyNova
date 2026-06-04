@@ -141,6 +141,7 @@ warnValue(docs.includes("npx eas-cli@latest"), "Play Store docs should prefer np
 warnValue(docs.includes("mobile:release-check"), "Play Store docs should mention npm run mobile:release-check.");
 warnValue(docs.includes("api:smoke"), "Play Store docs should mention npm run api:smoke.");
 warnValue(docs.includes("closed-test:api-env"), "Play Store docs should mention npm run closed-test:api-env.");
+warnValue(docs.includes("closed-test:preflight"), "Play Store docs should mention npm run closed-test:preflight.");
 warnValue(docs.includes("EXPO_PUBLIC_API_URL"), "Play Store docs should mention EXPO_PUBLIC_API_URL.");
 warnValue(docs.includes("render-env.closed-test.example"), "Play Store docs should mention the Render env example.");
 

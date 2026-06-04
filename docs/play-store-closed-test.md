@@ -61,7 +61,15 @@ Before building the Android test release, open the support screen with the produ
 curl.exe -H "X-Admin-Code: <admin-code>" https://your-api-host/api/v1/admin/deployment/readiness
 ```
 
-Or run the repository smoke test:
+Or run the guarded repository preflight:
+
+```powershell
+npm run closed-test:preflight -- https://your-api-host <admin-code>
+```
+
+That command runs the mobile release check, smoke-tests the hosted API, confirms the backend is production-ready, and writes `apps/mobile/.env.local`.
+
+If you need to debug the backend checks separately, run:
 
 ```powershell
 npm run api:smoke -- https://your-api-host <admin-code>
@@ -111,6 +119,7 @@ npx eas-cli@latest build --platform android --profile preview
 From the repository root, the same guarded commands are:
 
 ```powershell
+npm run closed-test:preflight -- https://your-api-host <admin-code>
 npm run mobile:release-check
 npm run mobile:build:closed-test
 npm run mobile:submit:closed-test

@@ -11,6 +11,7 @@
     "api:smoke": "node scripts/api-smoke-test.mjs",
     "api:test": "python -m pytest apps/api/tests",
     "closed-test:api-env": "node scripts/api-smoke-test.mjs --write-mobile-env",
+    "closed-test:preflight": "node scripts/closed-test-preflight.mjs",
     "mobile": "npm --workspace @studynova/mobile run start",
     "mobile:codespace": "npm --workspace @studynova/mobile run start:codespace",
     "mobile:codespace:tunnel": "npm --workspace @studynova/mobile run start:codespace -- --tunnel",

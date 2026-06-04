@@ -61,11 +61,19 @@ Use the Render execution path first:
 After the backend is deployed, run from the repository root:
 
 ```powershell
+npm run closed-test:preflight -- https://your-api-host <admin-code>
+```
+
+That command validates the mobile release setup, smoke-tests the hosted API, and writes `apps/mobile/.env.local` for local Expo testing.
+
+If you need to debug one part at a time, use:
+
+```powershell
 npm run api:smoke -- https://your-api-host <admin-code>
 npm run closed-test:api-env -- https://your-api-host <admin-code>
 ```
 
-The second command writes `apps/mobile/.env.local` for local Expo testing. For EAS cloud builds, set the same URL in the production EAS environment:
+For EAS cloud builds, set the same URL in the production EAS environment:
 
 ```powershell
 cd apps/mobile
