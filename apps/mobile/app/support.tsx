@@ -30,6 +30,14 @@ import type {
   TesterFeedbackRecord
 } from "@/types";
 
+type LaunchGateStatus = "pending" | "ready" | "review" | "blocked";
+
+type LaunchGateItem = {
+  detail: string;
+  status: LaunchGateStatus;
+  title: string;
+};
+
 export default function SupportScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -52,6 +60,23 @@ export default function SupportScreen() {
   const pendingDeletionRequests = deletionRequests.filter((request) => request.status !== "completed").length;
   const openFeedbackRequests = feedbackRequests.filter((request) => request.status === "open").length;
   const matchedRequests = requests.filter((request) => request.matched_account).length;
+  const hasAdminData = deploymentReadiness !== null || storageHealth !== null || firebaseReadiness !== null;
+  const openSupportItems = openRequests + pendingDeletionRequests + openFeedbackRequests;
+  const launchGateItems = useMemo(
+    () =>
+      buildLaunchGateItems({
+        backups,
+        deploymentReadiness,
+        firebaseReadiness,
+        openSupportItems,
+        storageHealth
+      }),
+    [backups, deploymentReadiness, firebaseReadiness, openSupportItems, storageHealth]
+  );
+  const launchGateReadyCount = launchGateItems.filter((item) => item.status === "ready").length;
+  const launchGateBlockers = launchGateItems.filter((item) => item.status === "blocked").length;
+  const launchGateReviewItems = launchGateItems.filter((item) => item.status === "review").length;
+  const launchGateProgress = Math.round((launchGateReadyCount / launchGateItems.length) * 100);
 
   async function loadAdminData() {
     if (!adminCode.trim()) {
@@ -262,6 +287,79 @@ export default function SupportScreen() {
               </>
             )}
           </Pressable>
+        </View>
+
+        <View style={styles.launchGatePanel}>
+          <View style={styles.requestHeader}>
+            <View style={styles.heroCopy}>
+              <Text style={styles.kicker}>Production launch gate</Text>
+              <Text style={styles.title}>
+                {!hasAdminData
+                  ? "Load readiness checks"
+                  : launchGateBlockers
+                    ? `${launchGateBlockers} blocker${launchGateBlockers === 1 ? "" : "s"} found`
+                    : launchGateReviewItems
+                      ? `${launchGateReviewItems} review item${launchGateReviewItems === 1 ? "" : "s"} left`
+                      : "Ready for closed testing"}
+              </Text>
+              <Text style={styles.helper}>
+                {hasAdminData
+                  ? "This combines backend readiness, support queues, backups, and Play Store preparation into one release view."
+                  : "Enter the admin code and load the admin view to calculate the launch gate."}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.statusPill,
+                hasAdminData && !launchGateBlockers ? styles.statusMatched : styles.statusUnknown
+              ]}
+            >
+              <Text style={styles.statusText}>{hasAdminData ? `${launchGateProgress}%` : "Pending"}</Text>
+            </View>
+          </View>
+          <View style={styles.launchProgressTrack}>
+            <View style={[styles.launchProgressFill, { width: `${hasAdminData ? launchGateProgress : 0}%` }]} />
+          </View>
+          <View style={styles.launchGateList}>
+            {launchGateItems.map((item) => (
+              <View key={item.title} style={styles.launchGateItem}>
+                <View
+                  style={[
+                    styles.launchGateIcon,
+                    item.status === "ready"
+                      ? styles.statusMatched
+                      : item.status === "blocked"
+                        ? styles.statusBlocked
+                        : styles.statusUnknown
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name={getLaunchGateIcon(item.status)}
+                    size={20}
+                    color={item.status === "ready" ? colors.success : colors.warningDark}
+                  />
+                </View>
+                <View style={styles.heroCopy}>
+                  <View style={styles.requestHeader}>
+                    <Text style={styles.requestTitle}>{item.title}</Text>
+                    <View
+                      style={[
+                        styles.statusPill,
+                        item.status === "ready"
+                          ? styles.statusMatched
+                          : item.status === "blocked"
+                            ? styles.statusBlocked
+                            : styles.statusUnknown
+                      ]}
+                    >
+                      <Text style={styles.statusText}>{formatLaunchGateStatus(item.status)}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.helper}>{item.detail}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
         </View>
 
         <View style={styles.summaryGrid}>
@@ -713,6 +811,134 @@ export default function SupportScreen() {
   );
 }
 
+function buildLaunchGateItems({
+  backups,
+  deploymentReadiness,
+  firebaseReadiness,
+  openSupportItems,
+  storageHealth
+}: {
+  backups: StorageBackupReceipt[];
+  deploymentReadiness: DeploymentReadiness | null;
+  firebaseReadiness: FirebaseAuthReadiness | null;
+  openSupportItems: number;
+  storageHealth: StorageHealth | null;
+}): LaunchGateItem[] {
+  const publicApiCheck = deploymentReadiness?.checks.find((check) => check.name === "Public API URL");
+  const firebaseCheck = deploymentReadiness?.checks.find((check) => check.name === "Firebase verification");
+  const failedDeploymentChecks = deploymentReadiness?.checks.filter((check) => check.status === "fail").length ?? 0;
+  const warningDeploymentChecks = deploymentReadiness?.checks.filter((check) => check.status === "warning").length ?? 0;
+
+  return [
+    {
+      title: "Backend deployment",
+      status: deploymentReadiness
+        ? deploymentReadiness.ready
+          ? "ready"
+          : failedDeploymentChecks
+            ? "blocked"
+            : "review"
+        : "pending",
+      detail: deploymentReadiness
+        ? deploymentReadiness.ready
+          ? "Production deployment readiness is clean."
+          : `${failedDeploymentChecks} failing and ${warningDeploymentChecks} warning check${
+              warningDeploymentChecks === 1 ? "" : "s"
+            } need attention.`
+        : "Load admin view to check production backend readiness."
+    },
+    {
+      title: "Public API URL",
+      status: publicApiCheck
+        ? publicApiCheck.status === "pass"
+          ? "ready"
+          : "blocked"
+        : deploymentReadiness
+          ? "blocked"
+          : "pending",
+      detail: deploymentReadiness?.public_api_base_url
+        ? `Mobile closed-test builds should use ${deploymentReadiness.public_api_base_url}.`
+        : "Set PUBLIC_API_BASE_URL to the hosted HTTPS API."
+    },
+    {
+      title: "Persistent storage",
+      status: storageHealth ? (storageHealth.production_ready ? "ready" : "blocked") : "pending",
+      detail: storageHealth
+        ? storageHealth.production_ready
+          ? "Database and backup paths look production-ready."
+          : storageHealth.warnings[0] || "Move the database and backup directory to a persistent disk."
+        : "Load admin view to inspect database and backup paths."
+    },
+    {
+      title: "Google verification",
+      status: firebaseReadiness
+        ? firebaseReadiness.server_verification_ready
+          ? "ready"
+          : firebaseCheck?.status === "warning"
+            ? "review"
+            : "blocked"
+        : "pending",
+      detail: firebaseReadiness
+        ? firebaseReadiness.server_verification_ready
+          ? "Firebase ID token verification is configured."
+          : "Configure Firebase server credentials before relying on Google sign-in in production."
+        : "Load admin view to inspect Firebase server verification."
+    },
+    {
+      title: "Support queues",
+      status: deploymentReadiness ? (openSupportItems === 0 ? "ready" : "review") : "pending",
+      detail:
+        openSupportItems === 0
+          ? "No open recovery, deletion, or tester feedback items are waiting."
+          : `${openSupportItems} support item${openSupportItems === 1 ? "" : "s"} should be reviewed before the next release.`
+    },
+    {
+      title: "Database backup",
+      status: storageHealth ? (backups.length ? "ready" : "review") : "pending",
+      detail: backups.length
+        ? `${backups.length} backup${backups.length === 1 ? "" : "s"} available. Download one before release.`
+        : "Create and export at least one backup before closed testing."
+    },
+    {
+      title: "Policy hosting",
+      status: deploymentReadiness ? "review" : "pending",
+      detail: "Confirm public Privacy, Terms, and Delete account URLs are entered in Play Console."
+    }
+  ];
+}
+
+function getLaunchGateIcon(status: LaunchGateStatus): keyof typeof MaterialCommunityIcons.glyphMap {
+  if (status === "ready") {
+    return "check-circle-outline";
+  }
+
+  if (status === "blocked") {
+    return "close-circle-outline";
+  }
+
+  if (status === "review") {
+    return "alert-circle-outline";
+  }
+
+  return "clock-outline";
+}
+
+function formatLaunchGateStatus(status: LaunchGateStatus) {
+  if (status === "ready") {
+    return "Ready";
+  }
+
+  if (status === "blocked") {
+    return "Blocked";
+  }
+
+  if (status === "review") {
+    return "Review";
+  }
+
+  return "Pending";
+}
+
 function ReadinessPill({ label, ready }: { label: string; ready: boolean }) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -835,6 +1061,46 @@ function createStyles(colors: AppColors) {
       fontWeight: "800",
       textTransform: "uppercase"
     },
+    launchGateIcon: {
+      alignItems: "center",
+      borderRadius: 8,
+      borderWidth: 1,
+      height: 44,
+      justifyContent: "center",
+      width: 44
+    },
+    launchGateItem: {
+      alignItems: "flex-start",
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+      borderRadius: 8,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.md,
+      padding: spacing.md
+    },
+    launchGateList: {
+      gap: spacing.sm
+    },
+    launchGatePanel: {
+      backgroundColor: colors.panel,
+      borderColor: colors.border,
+      borderRadius: 8,
+      borderWidth: 1,
+      gap: spacing.md,
+      padding: spacing.lg
+    },
+    launchProgressFill: {
+      backgroundColor: colors.brand,
+      borderRadius: 999,
+      height: "100%"
+    },
+    launchProgressTrack: {
+      backgroundColor: colors.brandSoft,
+      borderRadius: 999,
+      height: 8,
+      overflow: "hidden"
+    },
     list: {
       gap: spacing.md
     },
@@ -955,6 +1221,10 @@ function createStyles(colors: AppColors) {
     statusMatched: {
       backgroundColor: colors.successSoft,
       borderColor: colors.success
+    },
+    statusBlocked: {
+      backgroundColor: colors.warningSoft,
+      borderColor: colors.warning
     },
     statusPill: {
       borderRadius: 8,
