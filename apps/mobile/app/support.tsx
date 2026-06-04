@@ -77,6 +77,19 @@ export default function SupportScreen() {
   const launchGateBlockers = launchGateItems.filter((item) => item.status === "blocked").length;
   const launchGateReviewItems = launchGateItems.filter((item) => item.status === "review").length;
   const launchGateProgress = Math.round((launchGateReadyCount / launchGateItems.length) * 100);
+  const playStoreChecklistItems = useMemo(
+    () =>
+      buildPlayStoreChecklistItems({
+        backups,
+        deploymentReadiness,
+        firebaseReadiness,
+        openSupportItems,
+        storageHealth
+      }),
+    [backups, deploymentReadiness, firebaseReadiness, openSupportItems, storageHealth]
+  );
+  const playStoreChecklistReadyCount = playStoreChecklistItems.filter((item) => item.status === "ready").length;
+  const playStoreChecklistBlockers = playStoreChecklistItems.filter((item) => item.status === "blocked").length;
 
   async function loadAdminData() {
     if (!adminCode.trim()) {
@@ -356,6 +369,75 @@ export default function SupportScreen() {
                     </View>
                   </View>
                   <Text style={styles.helper}>{item.detail}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.panel}>
+          <View style={styles.requestHeader}>
+            <View style={styles.heroCopy}>
+              <Text style={styles.kicker}>Play Store readiness checklist</Text>
+              <Text style={styles.sectionTitle}>
+                {hasAdminData
+                  ? `${playStoreChecklistReadyCount}/${playStoreChecklistItems.length} ready`
+                  : "Load admin view to begin"}
+              </Text>
+              <Text style={styles.helper}>
+                Use this list before building or uploading the closed-test app bundle. Manual items should be confirmed
+                in Play Console or EAS.
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.statusPill,
+                hasAdminData && playStoreChecklistBlockers === 0 ? styles.statusMatched : styles.statusUnknown
+              ]}
+            >
+              <Text style={styles.statusText}>
+                {hasAdminData
+                  ? playStoreChecklistBlockers
+                    ? `${playStoreChecklistBlockers} blocked`
+                    : "Usable"
+                  : "Pending"}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.launchGateList}>
+            {playStoreChecklistItems.map((item) => (
+              <View key={item.title} style={styles.checklistRow}>
+                <View
+                  style={[
+                    styles.launchGateIcon,
+                    item.status === "ready"
+                      ? styles.statusMatched
+                      : item.status === "blocked"
+                        ? styles.statusBlocked
+                        : styles.statusUnknown
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name={getLaunchGateIcon(item.status)}
+                    size={18}
+                    color={item.status === "ready" ? colors.success : colors.warningDark}
+                  />
+                </View>
+                <View style={styles.heroCopy}>
+                  <Text style={styles.requestTitle}>{item.title}</Text>
+                  <Text style={styles.helper}>{item.detail}</Text>
+                </View>
+                <View
+                  style={[
+                    styles.statusPill,
+                    item.status === "ready"
+                      ? styles.statusMatched
+                      : item.status === "blocked"
+                        ? styles.statusBlocked
+                        : styles.statusUnknown
+                  ]}
+                >
+                  <Text style={styles.statusText}>{formatLaunchGateStatus(item.status)}</Text>
                 </View>
               </View>
             ))}
@@ -907,6 +989,94 @@ function buildLaunchGateItems({
   ];
 }
 
+function buildPlayStoreChecklistItems({
+  backups,
+  deploymentReadiness,
+  firebaseReadiness,
+  openSupportItems,
+  storageHealth
+}: {
+  backups: StorageBackupReceipt[];
+  deploymentReadiness: DeploymentReadiness | null;
+  firebaseReadiness: FirebaseAuthReadiness | null;
+  openSupportItems: number;
+  storageHealth: StorageHealth | null;
+}): LaunchGateItem[] {
+  const backendReady = Boolean(deploymentReadiness?.ready);
+  const publicApiUrl = deploymentReadiness?.public_api_base_url || "";
+  const apiUrlReady = publicApiUrl.startsWith("https://");
+  const storageReady = Boolean(storageHealth?.production_ready);
+  const firebaseReady = Boolean(firebaseReadiness?.server_verification_ready);
+  const backupReady = backups.length > 0;
+  const supportClear = openSupportItems === 0;
+  const hasAdminData = deploymentReadiness !== null || storageHealth !== null || firebaseReadiness !== null;
+
+  return [
+    {
+      title: "Hosted API preflight",
+      status: deploymentReadiness ? (backendReady ? "ready" : "blocked") : "pending",
+      detail: backendReady
+        ? "Backend readiness is clean. Run npm run closed-test:preflight before the EAS build."
+        : "Deploy the backend and clear every failing deployment readiness check."
+    },
+    {
+      title: "EAS EXPO_PUBLIC_API_URL",
+      status: deploymentReadiness ? (apiUrlReady ? "review" : "blocked") : "pending",
+      detail: apiUrlReady
+        ? `Confirm EAS production EXPO_PUBLIC_API_URL is set to ${publicApiUrl}.`
+        : "Set PUBLIC_API_BASE_URL first, then mirror it into the EAS production environment."
+    },
+    {
+      title: "Persistent database",
+      status: storageHealth ? (storageReady ? "ready" : "blocked") : "pending",
+      detail: storageReady
+        ? "Database and backup paths are on production-ready storage."
+        : "Move SQLite and backups to a persistent disk before closed testing."
+    },
+    {
+      title: "Backup export",
+      status: storageHealth ? (backupReady ? "ready" : "review") : "pending",
+      detail: backupReady
+        ? "A backup exists. Download a copy before uploading a test release."
+        : "Create and export at least one database backup."
+    },
+    {
+      title: "Google sign-in verification",
+      status: firebaseReadiness ? (firebaseReady ? "ready" : "review") : "pending",
+      detail: firebaseReady
+        ? "Firebase token verification is configured for real-device sign-in."
+        : "Closed testing can continue with manual accounts, but Google sign-in needs Firebase server credentials."
+    },
+    {
+      title: "Support queues",
+      status: hasAdminData ? (supportClear ? "ready" : "review") : "pending",
+      detail: supportClear
+        ? "Recovery, deletion, and tester feedback queues are clear."
+        : `${openSupportItems} open support item${openSupportItems === 1 ? "" : "s"} should be reviewed before release.`
+    },
+    {
+      title: "Policy URLs",
+      status: hasAdminData ? "review" : "pending",
+      detail: "Confirm public Privacy, Terms, and Delete account URLs are hosted and entered in Play Console."
+    },
+    {
+      title: "Store listing assets",
+      status: hasAdminData ? "review" : "pending",
+      detail: "Confirm screenshots, feature graphic, app icon, description, and release notes are final for closed testing."
+    },
+    {
+      title: "Tester access",
+      status: hasAdminData ? "review" : "pending",
+      detail: "Confirm Play Console tester emails or Google Group are added before publishing the test release."
+    },
+    {
+      title: "Closed-test app bundle",
+      status: backendReady && apiUrlReady ? "review" : "pending",
+      detail: "Build the Android App Bundle with npm run mobile:build:closed-test, then upload or submit it."
+    }
+  ];
+}
+
 function getLaunchGateIcon(status: LaunchGateStatus): keyof typeof MaterialCommunityIcons.glyphMap {
   if (status === "ready") {
     return "check-circle-outline";
@@ -1003,6 +1173,17 @@ function createStyles(colors: AppColors) {
       fontFamily: "monospace",
       fontSize: 12,
       lineHeight: 18
+    },
+    checklistRow: {
+      alignItems: "flex-start",
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+      borderRadius: 8,
+      borderWidth: 1,
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.md,
+      padding: spacing.md
     },
     detailRow: {
       alignItems: "center",
