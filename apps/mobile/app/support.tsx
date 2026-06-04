@@ -10,13 +10,15 @@ import {
   getAccountRecoveryRequests,
   getDeploymentReadiness,
   getFirebaseAuthReadiness,
+  getLaunchChecklistItems,
   getStorageBackupDownloadUrl,
   getStorageBackups,
   getStorageHealth,
   getTesterFeedbackRequests,
   reviewAccountDeletionRequest,
   reviewAccountRecoveryRequest,
-  reviewTesterFeedbackRequest
+  reviewTesterFeedbackRequest,
+  updateLaunchChecklistItem
 } from "@/lib/api";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
@@ -25,6 +27,7 @@ import type {
   AccountRecoveryRequestRecord,
   DeploymentReadiness,
   FirebaseAuthReadiness,
+  LaunchChecklistItemRecord,
   StorageBackupReceipt,
   StorageHealth,
   TesterFeedbackRecord
@@ -34,6 +37,7 @@ type LaunchGateStatus = "pending" | "ready" | "review" | "blocked";
 
 type LaunchGateItem = {
   detail: string;
+  itemKey?: string;
   status: LaunchGateStatus;
   title: string;
 };
@@ -48,6 +52,8 @@ export default function SupportScreen() {
   const [storageHealth, setStorageHealth] = useState<StorageHealth | null>(null);
   const [firebaseReadiness, setFirebaseReadiness] = useState<FirebaseAuthReadiness | null>(null);
   const [deploymentReadiness, setDeploymentReadiness] = useState<DeploymentReadiness | null>(null);
+  const [launchChecklistItems, setLaunchChecklistItems] = useState<LaunchChecklistItemRecord[]>([]);
+  const [launchChecklistNotes, setLaunchChecklistNotes] = useState<Record<string, string>>({});
   const [latestBackup, setLatestBackup] = useState<StorageBackupReceipt | null>(null);
   const [backups, setBackups] = useState<StorageBackupReceipt[]>([]);
   const [message, setMessage] = useState("Enter the admin code to review account help requests.");
@@ -56,12 +62,17 @@ export default function SupportScreen() {
   const [activeReviewId, setActiveReviewId] = useState("");
   const [activeDeletionReviewId, setActiveDeletionReviewId] = useState("");
   const [activeFeedbackReviewId, setActiveFeedbackReviewId] = useState("");
+  const [activeLaunchChecklistItem, setActiveLaunchChecklistItem] = useState("");
   const openRequests = requests.filter((request) => request.status === "open").length;
   const pendingDeletionRequests = deletionRequests.filter((request) => request.status !== "completed").length;
   const openFeedbackRequests = feedbackRequests.filter((request) => request.status === "open").length;
   const matchedRequests = requests.filter((request) => request.matched_account).length;
   const hasAdminData = deploymentReadiness !== null || storageHealth !== null || firebaseReadiness !== null;
   const openSupportItems = openRequests + pendingDeletionRequests + openFeedbackRequests;
+  const launchChecklistByKey = useMemo(
+    () => new Map(launchChecklistItems.map((item) => [item.item_key, item])),
+    [launchChecklistItems]
+  );
   const launchGateItems = useMemo(
     () =>
       buildLaunchGateItems({
@@ -83,10 +94,11 @@ export default function SupportScreen() {
         backups,
         deploymentReadiness,
         firebaseReadiness,
+        launchChecklistByKey,
         openSupportItems,
         storageHealth
       }),
-    [backups, deploymentReadiness, firebaseReadiness, openSupportItems, storageHealth]
+    [backups, deploymentReadiness, firebaseReadiness, launchChecklistByKey, openSupportItems, storageHealth]
   );
   const playStoreChecklistReadyCount = playStoreChecklistItems.filter((item) => item.status === "ready").length;
   const playStoreChecklistBlockers = playStoreChecklistItems.filter((item) => item.status === "blocked").length;
@@ -108,7 +120,8 @@ export default function SupportScreen() {
         nextStorageHealth,
         nextFirebaseReadiness,
         nextDeploymentReadiness,
-        nextBackups
+        nextBackups,
+        nextLaunchChecklistItems
       ] = await Promise.all([
         getAccountRecoveryRequests(adminCode.trim()),
         getAccountDeletionRequests(adminCode.trim()),
@@ -116,7 +129,8 @@ export default function SupportScreen() {
         getStorageHealth(adminCode.trim()),
         getFirebaseAuthReadiness(adminCode.trim()),
         getDeploymentReadiness(adminCode.trim()),
-        getStorageBackups(adminCode.trim())
+        getStorageBackups(adminCode.trim()),
+        getLaunchChecklistItems(adminCode.trim())
       ]);
       setRequests(nextRequests);
       setDeletionRequests(nextDeletionRequests);
@@ -125,6 +139,10 @@ export default function SupportScreen() {
       setFirebaseReadiness(nextFirebaseReadiness);
       setDeploymentReadiness(nextDeploymentReadiness);
       setBackups(nextBackups);
+      setLaunchChecklistItems(nextLaunchChecklistItems);
+      setLaunchChecklistNotes(
+        Object.fromEntries(nextLaunchChecklistItems.map((item) => [item.item_key, item.admin_note]))
+      );
       setMessage(
         nextRequests.length || nextDeletionRequests.length || nextFeedbackRequests.length
           ? "Latest support and deployment status loaded."
@@ -138,6 +156,8 @@ export default function SupportScreen() {
       setFirebaseReadiness(null);
       setDeploymentReadiness(null);
       setBackups([]);
+      setLaunchChecklistItems([]);
+      setLaunchChecklistNotes({});
       setMessage("Could not load admin data. Check the admin code and API connection.");
     } finally {
       setIsLoading(false);
@@ -244,6 +264,41 @@ export default function SupportScreen() {
       setMessage("Could not update tester feedback. Check the admin code and API connection.");
     } finally {
       setActiveFeedbackReviewId("");
+    }
+  }
+
+  async function saveLaunchChecklistItem(item: LaunchGateItem, confirmed: boolean) {
+    if (!item.itemKey) {
+      return;
+    }
+
+    if (!adminCode.trim()) {
+      setMessage("Enter the admin code first.");
+      return;
+    }
+
+    setActiveLaunchChecklistItem(item.itemKey);
+    setMessage("");
+
+    try {
+      const note = launchChecklistNotes[item.itemKey] ?? launchChecklistByKey.get(item.itemKey)?.admin_note ?? "";
+      const updatedItem = await updateLaunchChecklistItem(adminCode.trim(), item.itemKey, {
+        confirmed,
+        admin_note: note
+      });
+      setLaunchChecklistItems((currentItems) => {
+        const withoutItem = currentItems.filter((currentItem) => currentItem.item_key !== updatedItem.item_key);
+        return [...withoutItem, updatedItem].sort((left, right) => left.item_key.localeCompare(right.item_key));
+      });
+      setLaunchChecklistNotes((currentNotes) => ({
+        ...currentNotes,
+        [updatedItem.item_key]: updatedItem.admin_note
+      }));
+      setMessage(confirmed ? `${item.title} confirmed.` : `${item.title} confirmation removed.`);
+    } catch {
+      setMessage("Could not update the launch checklist. Check the admin code and API connection.");
+    } finally {
+      setActiveLaunchChecklistItem("");
     }
   }
 
@@ -405,42 +460,107 @@ export default function SupportScreen() {
             </View>
           </View>
           <View style={styles.launchGateList}>
-            {playStoreChecklistItems.map((item) => (
-              <View key={item.title} style={styles.checklistRow}>
-                <View
-                  style={[
-                    styles.launchGateIcon,
-                    item.status === "ready"
-                      ? styles.statusMatched
-                      : item.status === "blocked"
-                        ? styles.statusBlocked
-                        : styles.statusUnknown
-                  ]}
-                >
-                  <MaterialCommunityIcons
-                    name={getLaunchGateIcon(item.status)}
-                    size={18}
-                    color={item.status === "ready" ? colors.success : colors.warningDark}
-                  />
+            {playStoreChecklistItems.map((item) => {
+              const storedItem = item.itemKey ? launchChecklistByKey.get(item.itemKey) : undefined;
+              const noteValue = item.itemKey
+                ? launchChecklistNotes[item.itemKey] ?? storedItem?.admin_note ?? ""
+                : "";
+              const isSaving = item.itemKey ? activeLaunchChecklistItem === item.itemKey : false;
+              const canConfirmManualItem = item.status !== "blocked" && item.status !== "pending";
+
+              return (
+                <View key={item.title} style={styles.checklistRow}>
+                  <View
+                    style={[
+                      styles.launchGateIcon,
+                      item.status === "ready"
+                        ? styles.statusMatched
+                        : item.status === "blocked"
+                          ? styles.statusBlocked
+                          : styles.statusUnknown
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name={getLaunchGateIcon(item.status)}
+                      size={18}
+                      color={item.status === "ready" ? colors.success : colors.warningDark}
+                    />
+                  </View>
+                  <View style={styles.heroCopy}>
+                    <View style={styles.requestHeader}>
+                      <Text style={styles.requestTitle}>{item.title}</Text>
+                      <View
+                        style={[
+                          styles.statusPill,
+                          item.status === "ready"
+                            ? styles.statusMatched
+                            : item.status === "blocked"
+                              ? styles.statusBlocked
+                              : styles.statusUnknown
+                        ]}
+                      >
+                        <Text style={styles.statusText}>{formatLaunchGateStatus(item.status)}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.helper}>{item.detail}</Text>
+                    {storedItem?.confirmed_at ? (
+                      <Text style={styles.helper}>Confirmed {formatTimestamp(storedItem.confirmed_at)}</Text>
+                    ) : null}
+                    {item.itemKey && hasAdminData ? (
+                      <View style={styles.manualChecklistControls}>
+                        <TextInput
+                          multiline
+                          onChangeText={(value) =>
+                            setLaunchChecklistNotes((currentNotes) => ({
+                              ...currentNotes,
+                              [item.itemKey as string]: value
+                            }))
+                          }
+                          placeholder="Optional admin note"
+                          placeholderTextColor={colors.muted}
+                          style={[styles.input, styles.noteInput]}
+                          value={noteValue}
+                        />
+                        <View style={styles.actionRow}>
+                          <Pressable
+                            accessibilityRole="button"
+                            disabled={isSaving || !canConfirmManualItem}
+                            onPress={() => void saveLaunchChecklistItem(item, !storedItem?.confirmed)}
+                            style={[
+                              storedItem?.confirmed ? styles.warningButton : styles.secondaryButton,
+                              isSaving || !canConfirmManualItem ? styles.disabledButton : null
+                            ]}
+                          >
+                            {isSaving ? (
+                              <ActivityIndicator color={storedItem?.confirmed ? colors.warningDark : colors.brand} />
+                            ) : (
+                              <>
+                                <MaterialCommunityIcons
+                                  name={storedItem?.confirmed ? "undo-variant" : "check-decagram-outline"}
+                                  size={18}
+                                  color={storedItem?.confirmed ? colors.warningDark : colors.brand}
+                                />
+                                <Text
+                                  style={
+                                    storedItem?.confirmed ? styles.warningButtonText : styles.secondaryButtonText
+                                  }
+                                >
+                                  {!canConfirmManualItem
+                                    ? "Resolve blocker first"
+                                    : storedItem?.confirmed
+                                      ? "Undo confirmation"
+                                      : "Confirm item"}
+                                </Text>
+                              </>
+                            )}
+                          </Pressable>
+                        </View>
+                      </View>
+                    ) : null}
+                  </View>
                 </View>
-                <View style={styles.heroCopy}>
-                  <Text style={styles.requestTitle}>{item.title}</Text>
-                  <Text style={styles.helper}>{item.detail}</Text>
-                </View>
-                <View
-                  style={[
-                    styles.statusPill,
-                    item.status === "ready"
-                      ? styles.statusMatched
-                      : item.status === "blocked"
-                        ? styles.statusBlocked
-                        : styles.statusUnknown
-                  ]}
-                >
-                  <Text style={styles.statusText}>{formatLaunchGateStatus(item.status)}</Text>
-                </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         </View>
 
@@ -993,12 +1113,14 @@ function buildPlayStoreChecklistItems({
   backups,
   deploymentReadiness,
   firebaseReadiness,
+  launchChecklistByKey,
   openSupportItems,
   storageHealth
 }: {
   backups: StorageBackupReceipt[];
   deploymentReadiness: DeploymentReadiness | null;
   firebaseReadiness: FirebaseAuthReadiness | null;
+  launchChecklistByKey: Map<string, LaunchChecklistItemRecord>;
   openSupportItems: number;
   storageHealth: StorageHealth | null;
 }): LaunchGateItem[] {
@@ -1010,6 +1132,8 @@ function buildPlayStoreChecklistItems({
   const backupReady = backups.length > 0;
   const supportClear = openSupportItems === 0;
   const hasAdminData = deploymentReadiness !== null || storageHealth !== null || firebaseReadiness !== null;
+  const manualStatus = (itemKey: string, fallbackStatus: LaunchGateStatus): LaunchGateStatus =>
+    launchChecklistByKey.get(itemKey)?.confirmed ? "ready" : fallbackStatus;
 
   return [
     {
@@ -1021,7 +1145,8 @@ function buildPlayStoreChecklistItems({
     },
     {
       title: "EAS EXPO_PUBLIC_API_URL",
-      status: deploymentReadiness ? (apiUrlReady ? "review" : "blocked") : "pending",
+      itemKey: "eas_api_url",
+      status: deploymentReadiness ? (apiUrlReady ? manualStatus("eas_api_url", "review") : "blocked") : "pending",
       detail: apiUrlReady
         ? `Confirm EAS production EXPO_PUBLIC_API_URL is set to ${publicApiUrl}.`
         : "Set PUBLIC_API_BASE_URL first, then mirror it into the EAS production environment."
@@ -1035,7 +1160,8 @@ function buildPlayStoreChecklistItems({
     },
     {
       title: "Backup export",
-      status: storageHealth ? (backupReady ? "ready" : "review") : "pending",
+      itemKey: "backup_export",
+      status: storageHealth ? (backupReady ? manualStatus("backup_export", "review") : "blocked") : "pending",
       detail: backupReady
         ? "A backup exists. Download a copy before uploading a test release."
         : "Create and export at least one database backup."
@@ -1056,22 +1182,31 @@ function buildPlayStoreChecklistItems({
     },
     {
       title: "Policy URLs",
-      status: hasAdminData ? "review" : "pending",
+      itemKey: "policy_urls",
+      status: hasAdminData ? manualStatus("policy_urls", "review") : "pending",
       detail: "Confirm public Privacy, Terms, and Delete account URLs are hosted and entered in Play Console."
     },
     {
       title: "Store listing assets",
-      status: hasAdminData ? "review" : "pending",
+      itemKey: "store_listing_assets",
+      status: hasAdminData ? manualStatus("store_listing_assets", "review") : "pending",
       detail: "Confirm screenshots, feature graphic, app icon, description, and release notes are final for closed testing."
     },
     {
       title: "Tester access",
-      status: hasAdminData ? "review" : "pending",
+      itemKey: "tester_access",
+      status: hasAdminData ? manualStatus("tester_access", "review") : "pending",
       detail: "Confirm Play Console tester emails or Google Group are added before publishing the test release."
     },
     {
       title: "Closed-test app bundle",
-      status: backendReady && apiUrlReady ? "review" : "pending",
+      itemKey: "closed_test_bundle",
+      status:
+        backendReady && apiUrlReady
+          ? manualStatus("closed_test_bundle", "review")
+          : deploymentReadiness
+            ? "blocked"
+            : "pending",
       detail: "Build the Android App Bundle with npm run mobile:build:closed-test, then upload or submit it."
     }
   ];
@@ -1293,6 +1428,9 @@ function createStyles(colors: AppColors) {
       justifyContent: "center",
       width: 58
     },
+    manualChecklistControls: {
+      gap: spacing.sm
+    },
     messagePanel: {
       alignItems: "center",
       backgroundColor: colors.brandSoft,
@@ -1324,6 +1462,10 @@ function createStyles(colors: AppColors) {
       fontSize: 14,
       lineHeight: 20,
       padding: spacing.md
+    },
+    noteInput: {
+      minHeight: 72,
+      textAlignVertical: "top"
     },
     panel: {
       backgroundColor: colors.panel,

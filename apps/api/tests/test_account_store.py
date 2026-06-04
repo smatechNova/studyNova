@@ -9,6 +9,7 @@ from app.schemas import (
     AccountRecoveryReviewRequest,
     AccountSignInRequest,
     CheckInRequest,
+    LaunchChecklistItemUpdate,
     ParentAccountCreate,
     ParentStudentLinkCreate,
     PublicAccountDeletionRequestCreate,
@@ -603,6 +604,29 @@ def test_study_plan_store_reports_health_and_creates_backup(tmp_path) -> None:
 
     assert row is not None
     assert row[0] == 1
+
+
+def test_study_plan_store_persists_launch_checklist_confirmations(tmp_path) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+
+    confirmed = store.update_launch_checklist_item(
+        "policy_urls",
+        LaunchChecklistItemUpdate(confirmed=True, admin_note="Policy pages hosted."),
+    )
+    items = store.launch_checklist_items()
+    unconfirmed = store.update_launch_checklist_item(
+        "policy_urls",
+        LaunchChecklistItemUpdate(confirmed=False, admin_note="Policy URLs need another review."),
+    )
+
+    assert confirmed.item_key == "policy_urls"
+    assert confirmed.confirmed is True
+    assert confirmed.confirmed_at is not None
+    assert confirmed.admin_note == "Policy pages hosted."
+    assert items[0].item_key == "policy_urls"
+    assert unconfirmed.confirmed is False
+    assert unconfirmed.confirmed_at is None
+    assert unconfirmed.admin_note == "Policy URLs need another review."
 
 
 def test_study_plan_store_binds_firebase_identity_by_role(tmp_path) -> None:

@@ -708,3 +708,54 @@ def test_deployment_readiness_flags_unsafe_production_defaults(tmp_path, monkeyp
     assert payload["ready"] is False
     assert {"Public API URL", "Session secret", "CORS policy"}.issubset(failed_checks)
     assert "Firebase verification" in warning_checks
+
+
+def test_admin_can_manage_launch_checklist(tmp_path, monkeypatch) -> None:
+    class TestSettings:
+        app_env = "development"
+        admin_access_code = "admin-test-code"
+        session_secret = "studynova-local-session-secret"
+        session_ttl_hours = 168
+
+        @property
+        def is_production(self) -> bool:
+            return False
+
+        @property
+        def uses_default_admin_access_code(self) -> bool:
+            return False
+
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)
+    monkeypatch.setattr(api_module, "get_settings", lambda: TestSettings())
+    client = TestClient(app)
+
+    blocked_list_response = client.get("/api/v1/admin/launch-checklist")
+    invalid_key_response = client.put(
+        "/api/v1/admin/launch-checklist/Bad Key",
+        headers={"X-Admin-Code": "admin-test-code"},
+        json={"confirmed": True, "admin_note": "Should fail."},
+    )
+    update_response = client.put(
+        "/api/v1/admin/launch-checklist/policy_urls",
+        headers={"X-Admin-Code": "admin-test-code"},
+        json={"confirmed": True, "admin_note": "Policy URLs are hosted."},
+    )
+    list_response = client.get("/api/v1/admin/launch-checklist", headers={"X-Admin-Code": "admin-test-code"})
+    reset_response = client.put(
+        "/api/v1/admin/launch-checklist/policy_urls",
+        headers={"X-Admin-Code": "admin-test-code"},
+        json={"confirmed": False, "admin_note": "Needs final URL."},
+    )
+
+    assert blocked_list_response.status_code == 403
+    assert invalid_key_response.status_code == 400
+    assert update_response.status_code == 200
+    assert update_response.json()["item_key"] == "policy_urls"
+    assert update_response.json()["confirmed"] is True
+    assert update_response.json()["confirmed_at"] is not None
+    assert list_response.status_code == 200
+    assert list_response.json()[0]["admin_note"] == "Policy URLs are hosted."
+    assert reset_response.status_code == 200
+    assert reset_response.json()["confirmed"] is False
+    assert reset_response.json()["confirmed_at"] is None

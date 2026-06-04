@@ -299,6 +299,19 @@ export type DeploymentReadiness = {
   checks: DeploymentCheck[];
 };
 
+export type LaunchChecklistItemRecord = {
+  item_key: string;
+  confirmed: boolean;
+  confirmed_at: string | null;
+  admin_note: string;
+  updated_at: string;
+};
+
+export type LaunchChecklistItemUpdate = {
+  confirmed: boolean;
+  admin_note: string;
+};
+
 export type FirebaseSignInInput = {
   role: AuthRole;
   id_token: string;

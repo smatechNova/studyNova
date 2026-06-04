@@ -326,6 +326,19 @@ class DeploymentReadiness(BaseModel):
     checks: list[DeploymentCheck] = Field(default_factory=list)
 
 
+class LaunchChecklistItemUpdate(BaseModel):
+    confirmed: bool = True
+    admin_note: str = Field(default="", max_length=360)
+
+
+class LaunchChecklistItemRecord(BaseModel):
+    item_key: str
+    confirmed: bool = False
+    confirmed_at: datetime | None = None
+    admin_note: str = ""
+    updated_at: datetime
+
+
 class FirebaseSignInRequest(BaseModel):
     role: Literal["student", "parent"]
     id_token: str = Field(min_length=20)

@@ -13,6 +13,8 @@ import type {
   FamilyAccount,
   FirebaseAuthReadiness,
   FirebaseSignInInput,
+  LaunchChecklistItemRecord,
+  LaunchChecklistItemUpdate,
   ParentAccount,
   ParentFamilyAccount,
   ParentInviteCode,
@@ -444,6 +446,41 @@ export async function getDeploymentReadiness(adminCode: string): Promise<Deploym
   }
 
   return response.json() as Promise<DeploymentReadiness>;
+}
+
+export async function getLaunchChecklistItems(adminCode: string): Promise<LaunchChecklistItemRecord[]> {
+  const response = await apiFetch(`${API_URL}/api/v1/admin/launch-checklist`, {
+    headers: {
+      "X-Admin-Code": adminCode
+    }
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Launch checklist request failed");
+  }
+
+  return response.json() as Promise<LaunchChecklistItemRecord[]>;
+}
+
+export async function updateLaunchChecklistItem(
+  adminCode: string,
+  itemKey: string,
+  payload: LaunchChecklistItemUpdate
+): Promise<LaunchChecklistItemRecord> {
+  const response = await apiFetch(`${API_URL}/api/v1/admin/launch-checklist/${encodeURIComponent(itemKey)}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Code": adminCode
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Launch checklist update failed");
+  }
+
+  return response.json() as Promise<LaunchChecklistItemRecord>;
 }
 
 export async function firebaseSignInAccount(payload: FirebaseSignInInput): Promise<AuthSession> {

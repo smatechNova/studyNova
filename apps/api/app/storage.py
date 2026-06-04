@@ -25,6 +25,8 @@ from app.schemas import (
     CheckInResponse,
     DailyProgress,
     FamilyAccount,
+    LaunchChecklistItemRecord,
+    LaunchChecklistItemUpdate,
     ParentAccount,
     ParentAccountCreate,
     ParentFamilyAccount,
@@ -712,6 +714,62 @@ class StudyPlanStore:
 
         return self._tester_feedback_from_row(row) if row is not None else None
 
+    def launch_checklist_items(self) -> list[LaunchChecklistItemRecord]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                select item_key, confirmed, confirmed_at, admin_note, updated_at
+                from launch_checklist_items
+                order by item_key
+                """
+            ).fetchall()
+
+        return [self._launch_checklist_item_from_row(row) for row in rows]
+
+    def update_launch_checklist_item(
+        self,
+        item_key: str,
+        payload: LaunchChecklistItemUpdate,
+    ) -> LaunchChecklistItemRecord:
+        updated_at = datetime.now(timezone.utc).isoformat()
+        confirmed_at = updated_at if payload.confirmed else None
+
+        with self._connect() as connection:
+            connection.execute(
+                """
+                insert into launch_checklist_items (
+                    item_key,
+                    confirmed,
+                    confirmed_at,
+                    admin_note,
+                    updated_at
+                )
+                values (?, ?, ?, ?, ?)
+                on conflict(item_key) do update set
+                    confirmed = excluded.confirmed,
+                    confirmed_at = excluded.confirmed_at,
+                    admin_note = excluded.admin_note,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    item_key,
+                    int(payload.confirmed),
+                    confirmed_at,
+                    payload.admin_note,
+                    updated_at,
+                ),
+            )
+            row = connection.execute(
+                """
+                select item_key, confirmed, confirmed_at, admin_note, updated_at
+                from launch_checklist_items
+                where item_key = ?
+                """,
+                (item_key,),
+            ).fetchone()
+
+        return self._launch_checklist_item_from_row(row)
+
     def _complete_account_deletion(self, connection: sqlite3.Connection, request: sqlite3.Row) -> None:
         if str(request["account_id"]).startswith("unverified:"):
             return
@@ -1370,6 +1428,15 @@ class StudyPlanStore:
             reviewed_at=row["reviewed_at"],
             admin_note=row["admin_note"],
             created_at=row["created_at"],
+        )
+
+    def _launch_checklist_item_from_row(self, row: sqlite3.Row) -> LaunchChecklistItemRecord:
+        return LaunchChecklistItemRecord(
+            item_key=row["item_key"],
+            confirmed=bool(row["confirmed"]),
+            confirmed_at=row["confirmed_at"],
+            admin_note=row["admin_note"],
+            updated_at=row["updated_at"],
         )
 
     def _student_access_code_matches(self, student_id: str, access_code: str) -> bool:
@@ -2230,6 +2297,23 @@ class StudyPlanStore:
                 """
                 create index if not exists idx_tester_feedback_category_created
                 on tester_feedback (category, created_at desc)
+                """
+            )
+            connection.execute(
+                """
+                create table if not exists launch_checklist_items (
+                    item_key text primary key,
+                    confirmed integer not null default 0,
+                    confirmed_at text,
+                    admin_note text not null default '',
+                    updated_at text not null
+                )
+                """
+            )
+            connection.execute(
+                """
+                create index if not exists idx_launch_checklist_items_confirmed
+                on launch_checklist_items (confirmed, updated_at desc)
                 """
             )
             connection.execute(

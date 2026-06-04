@@ -31,6 +31,8 @@ from app.schemas import (
     FamilyAccount,
     FirebaseAuthReadiness,
     FirebaseSignInRequest,
+    LaunchChecklistItemRecord,
+    LaunchChecklistItemUpdate,
     ParentAccount,
     ParentAccountCreate,
     ParentFamilyAccount,
@@ -531,6 +533,22 @@ def get_admin_firebase_auth_readiness(_: None = Depends(require_admin)) -> Fireb
 @router.get("/admin/deployment/readiness", response_model=DeploymentReadiness)
 def get_admin_deployment_readiness(_: None = Depends(require_admin)) -> DeploymentReadiness:
     return _build_deployment_readiness()
+
+
+@router.get("/admin/launch-checklist", response_model=list[LaunchChecklistItemRecord])
+def get_admin_launch_checklist(_: None = Depends(require_admin)) -> list[LaunchChecklistItemRecord]:
+    return get_study_plan_store().launch_checklist_items()
+
+
+@router.put("/admin/launch-checklist/{item_key}", response_model=LaunchChecklistItemRecord)
+def update_admin_launch_checklist_item(
+    item_key: str,
+    payload: LaunchChecklistItemUpdate,
+    _: None = Depends(require_admin),
+) -> LaunchChecklistItemRecord:
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{1,80}", item_key):
+        raise HTTPException(status_code=400, detail="Launch checklist item key is invalid.")
+    return get_study_plan_store().update_launch_checklist_item(item_key, payload)
 
 
 @router.post("/accounts/firebase-sign-in", response_model=AuthSession)
