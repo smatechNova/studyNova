@@ -10,7 +10,7 @@ Focus:
 - Show ready, review, and blocked states clearly.
 - Keep the support/admin UI professional.
 - Do not add backend logic.
-
+- Make logining-in easy and understanding
 Suggested commit message:
 
 ```bash
