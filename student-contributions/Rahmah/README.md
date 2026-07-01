@@ -1,11 +1,11 @@
-# Rahmah - Parent Summary Card
+# Rahmah (YOUR HIGHNESS)- Parent Summary Card
 
 Task:
 
 Improve `ParentSummaryCard.tsx`.
 
 Focus:
-
+- Allow Parents to support, check, monitor their child academic status.
 - Make parent monitoring clear and supportive.
 - Show completed sessions, missed sessions, and latest proof.
 - Keep the tone calm and encouraging.
