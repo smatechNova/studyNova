@@ -10,6 +10,7 @@ Focus:
 - Help students understand what data is needed before a plan is generated.
 - Make the visual layout calm and organized.
 - Do not add backend logic.
+- Assists students.
 
 Suggested commit message:
 
