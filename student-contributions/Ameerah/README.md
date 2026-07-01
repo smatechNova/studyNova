@@ -10,7 +10,7 @@ Focus:
 - Show planned minutes, completed minutes, and confidence.
 - Keep the card encouraging and not stressful.
 - Do not add backend logic.
-
+- Final accuracy checkup for steady output
 Suggested commit message:
 
 ```bash
