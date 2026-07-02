@@ -14,6 +14,7 @@ import { useTheme } from "@/themeContext";
 import type { AuthSession } from "@/types";
 
 const SHOW_DEMO_ENTRY = process.env.EXPO_PUBLIC_ENABLE_DEMO_ENTRY === "true";
+const SHOW_TESTER_FEEDBACK = process.env.EXPO_PUBLIC_ENABLE_TESTER_FEEDBACK === "true";
 
 export default function HomeScreen() {
   const { colors } = useTheme();
@@ -149,12 +150,15 @@ export default function HomeScreen() {
               imageSource={brandAssets.accountSetup}
             />
           </Link>
-          <RoleCard
-            title="Tester feedback"
-            description="Send one clear note about anything confusing, broken, or ready."
-            icon="message-text-outline"
-            onPress={() => router.push("/feedback" as never)}
-          />
+          {SHOW_TESTER_FEEDBACK ? (
+            <RoleCard
+              title="Tester feedback"
+              description="Send one clear note about anything confusing, broken, or ready."
+              icon="message-text-outline"
+              imageSource={brandAssets.feedback}
+              onPress={() => router.push("/feedback" as never)}
+            />
+          ) : null}
         </View>
 
         <View style={styles.legalLinks}>

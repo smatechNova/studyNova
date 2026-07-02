@@ -101,6 +101,7 @@ npm run typecheck
 npm run release:check
 npx eas-cli@latest login
 npx eas-cli@latest env:create production --name EXPO_PUBLIC_API_URL --value https://your-api-host --visibility plaintext --force
+npx eas-cli@latest env:create production --name EXPO_PUBLIC_ENABLE_TESTER_FEEDBACK --value true --visibility plaintext --force
 npx eas-cli@latest build --platform android --profile closed-test
 ```
 
