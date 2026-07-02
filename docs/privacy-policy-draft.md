@@ -12,7 +12,7 @@ StudyNova helps students create study plans and helps parents or guardians monit
 
 StudyNova may collect:
 
-- Student name, class, age, school name, login ID, subjects, topics, study resources, exam dates, reading pace, study notes, study progress, recall notes, and confidence scores.
+- Student name, class, age, school name, login ID, subjects, topics, study resources, exam dates, reading pace, study notes, optional study proof images, study progress, recall notes, and confidence scores.
 - Parent or guardian name, contact information, relationship to the student, linked student accounts, and progress-monitoring activity.
 - Account recovery help requests, including login ID, contact information, and optional support notes.
 - Closed-test feedback, including optional tester name/contact, device details, rating, recommendation answer, and notes about what worked or failed.
@@ -38,13 +38,13 @@ Students and parents have separate accounts. A parent can only monitor a student
 
 StudyNova does not sell user data. During testing, app administrators may review account and study progress data to support users, fix issues, and improve the product.
 
-StudyNova may use service providers to operate the app, such as backend hosting and Firebase/Google sign-in. These providers process data on StudyNova's behalf for app functionality, account management, security, and support. If analytics, ads, crash reporting, remote push notifications, file uploads, or other third-party SDKs are added later, this policy and the Play Store Data safety form must be updated before release.
+StudyNova may use service providers to operate the app, such as backend hosting, Firebase/Google sign-in, and Firebase Storage for optional study proof images. These providers process data on StudyNova's behalf for app functionality, account management, security, and support. If analytics, ads, crash reporting, remote push notifications, document uploads, or other third-party SDKs are added later, this policy and the Play Store Data safety form must be updated before release.
 
 ## Data Storage
 
 In development and testing, data may be stored in the StudyNova backend database. Before public launch, StudyNova should use production-grade hosting, access controls, backups, and retention rules.
 
-StudyNova does not currently collect location, payment data, device contacts, calendar events, photos, videos, audio recordings, user-uploaded files, health data, fitness data, SMS/MMS, or browsing history.
+StudyNova does not currently collect location, payment data, device contacts, calendar events, videos, audio recordings, document uploads, health data, fitness data, SMS/MMS, or browsing history.
 
 ## Notifications
 

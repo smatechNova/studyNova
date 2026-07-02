@@ -76,6 +76,50 @@ def test_study_plan_store_tracks_session_progress(tmp_path) -> None:
     assert reset_progress.completed_sessions == 0
 
 
+def test_study_plan_store_attaches_optional_study_proof_image(tmp_path) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    saved_plan = store.save(build_study_plan(_sample_request()))
+    first_day = saved_plan.plan.schedule[0]
+    first_session = first_day.sessions[0]
+    session_key = f"{first_day.study_date}:0"
+
+    completion = store.complete_session(
+        saved_plan.id,
+        StudySessionCompletionRequest(
+            session_key=session_key,
+            study_date=first_day.study_date,
+            kind=first_session.kind,
+            subject=first_session.subject,
+            topic=first_session.topic,
+            resource_type=first_session.resource_type,
+            minutes_planned=first_session.minutes,
+            minutes_completed=first_session.minutes,
+            recall_note="I can explain the main steps from this proof session.",
+            confidence=5,
+        ),
+    )
+
+    updated = store.attach_study_proof_image(
+        saved_plan.id,
+        session_key,
+        "firebase",
+        "study-proofs/example.jpg",
+        "image/jpeg",
+    )
+    progress = store.progress(saved_plan.id)
+
+    assert updated is not None
+    assert updated.id == completion.id
+    assert updated.proof_image_storage_backend == "firebase"
+    assert updated.proof_image_storage_path == "study-proofs/example.jpg"
+    assert updated.proof_image_content_type == "image/jpeg"
+    assert updated.proof_image_uploaded_at is not None
+    assert updated.proof_image_token
+    assert store.completion_by_proof_token(completion.id, updated.proof_image_token) is not None
+    assert progress is not None
+    assert progress.completions[0].proof_image_token == updated.proof_image_token
+
+
 def test_study_plan_progress_reports_missed_sessions(tmp_path) -> None:
     store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
     plan = build_study_plan(_sample_request())

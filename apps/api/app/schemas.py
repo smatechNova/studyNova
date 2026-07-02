@@ -366,6 +366,13 @@ class StudySessionCompletionRequest(BaseModel):
     confidence: int = Field(ge=1, le=5)
 
 
+class StudyProofImageUploadRequest(BaseModel):
+    session_key: str = Field(min_length=1, max_length=240)
+    file_name: str = Field(default="study-proof.jpg", max_length=160)
+    content_type: str = Field(default="image/jpeg", min_length=1, max_length=80)
+    image_base64: str = Field(min_length=20)
+
+
 class StudySessionCompletion(BaseModel):
     id: str
     plan_id: str
@@ -380,6 +387,12 @@ class StudySessionCompletion(BaseModel):
     recall_note: str
     confidence: int
     completed_at: datetime
+    proof_image_url: str | None = None
+    proof_image_storage_backend: str | None = None
+    proof_image_storage_path: str | None = None
+    proof_image_content_type: str | None = None
+    proof_image_uploaded_at: datetime | None = None
+    proof_image_token: str | None = None
 
 
 class MissedStudySession(BaseModel):

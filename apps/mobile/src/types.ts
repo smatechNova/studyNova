@@ -339,10 +339,23 @@ export type StudySessionCompletionRequest = {
   confidence: number;
 };
 
+export type StudyProofImageUploadRequest = {
+  session_key: string;
+  file_name: string;
+  content_type: string;
+  image_base64: string;
+};
+
 export type StudySessionCompletion = StudySessionCompletionRequest & {
   id: string;
   plan_id: string;
   completed_at: string;
+  proof_image_url?: string | null;
+  proof_image_storage_backend?: string | null;
+  proof_image_storage_path?: string | null;
+  proof_image_content_type?: string | null;
+  proof_image_uploaded_at?: string | null;
+  proof_image_token?: string | null;
 };
 
 export type MissedStudySession = {

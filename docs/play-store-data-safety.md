@@ -27,7 +27,8 @@ Google Play requires developers to declare how the app collects, shares, protect
 | Personal info | Phone number | Yes | No | Required when phone is used as parent contact or login contact | App functionality, Account management, Developer communications | Parent/guardian contact, support contact, deletion contact. |
 | Personal info | Other info | Yes | No | Required for student setup/profile | App functionality, Personalization, Account management | Age, class level, school name, parent relationship. |
 | App activity | App interactions | Yes | No | Required | App functionality, Personalization, Analytics | Study progress, selected student, linked parent/student monitoring activity, reminder preferences. |
-| App activity | Other user-generated content | Yes | No | Required for study planning; optional for support and tester feedback notes | App functionality, Personalization, Account management, Developer communications | Subjects, topics, pages, study resources, reading pace notes, recall proof, confidence, support notes, tester feedback, deletion request reason. |
+| App activity | Other user-generated content | Yes | No | Required for study planning; optional for support, tester feedback notes, and study proof images | App functionality, Personalization, Account management, Developer communications | Subjects, topics, pages, study resources, reading pace notes, recall proof, confidence, optional note photos/screenshots, support notes, tester feedback, deletion request reason. |
+| Photos and videos | Photos | Yes | No | Optional | App functionality, Account management | Optional study proof photos or screenshots attached by a student for parent review. |
 | App activity | Other actions | Yes | No | Required for core app actions; optional for tester feedback ratings | App functionality, Personalization, Analytics | Marking sessions done, missed-session recovery, check-ins, rebalance activity, closed-test rating/recommendation answers. |
 
 ## Data Types Not Currently Collected
@@ -38,9 +39,9 @@ Do not select these unless the product changes:
 - Financial info: payment info, purchase history, credit score, other financial info.
 - Health and fitness: health info, fitness info.
 - Messages: emails, SMS/MMS, other in-app messages.
-- Photos and videos: photos, videos.
+- Photos and videos: videos.
 - Audio files: voice/sound recordings, music files, other audio.
-- Files and docs: no user file uploads in the current app.
+- Files and docs: no document uploads in the current app.
 - Calendar: calendar events.
 - Contacts: device contacts.
 - Web browsing: browsing history.
@@ -71,7 +72,7 @@ Before submitting the Play Console Data safety form:
 - Confirm `EXPO_PUBLIC_API_URL` points to the production HTTPS API.
 - Confirm the `/privacy` page is hosted on a public, non-editable URL and entered in Play Console.
 - Confirm the `/delete-account` page is hosted on a public URL and entered in Play Console.
-- Confirm no ads, third-party analytics SDK, crash reporting, remote push, file upload, contacts, calendar, location, payment, or media SDK has been added since this document was updated.
+- Confirm no ads, third-party analytics SDK, crash reporting, remote push, contacts, calendar, location, payment, video, audio, or document-upload SDK has been added since this document was updated.
 - Confirm Firebase/Google sign-in configuration and backend token verification are ready for the Android build.
 - Confirm the privacy policy names StudyNova, includes a privacy contact, and describes retention/deletion behavior.
 - Export or screenshot the submitted Data safety form after Play Console submission and store it with release records.

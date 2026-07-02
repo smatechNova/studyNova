@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = ""
     local_data_path: str = "apps/api/.data/studynova.sqlite3"
     backup_data_path: str = "apps/api/.data/backups"
+    study_proof_storage_backend: str = "local"
+    study_proof_local_path: str = "apps/api/.data/study-proofs"
+    study_proof_max_upload_mb: int = 6
+    firebase_storage_bucket: str = ""
     session_secret: str = "studynova-local-session-secret"
     session_ttl_hours: int = 168
     admin_access_code: str = "studynova-admin-dev"

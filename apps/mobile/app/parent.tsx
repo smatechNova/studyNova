@@ -9,6 +9,7 @@ import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
 import {
   createAccountDeletionRequest,
+  getStudyProofImageUrl,
   getLatestStudyPlan,
   getParentFamily,
   getStudyPlanHistory,
@@ -74,6 +75,7 @@ export default function ParentScreen() {
   const activeParentId = isDemoMode ? DEMO_PARENT_ID : sessionParentId;
 
   const latestCompletion = progress?.completions.at(-1);
+  const latestProofImageUrl = latestCompletion ? getStudyProofImageUrl(latestCompletion) : null;
   const recentDays = useMemo(() => {
     if (weeklyDigest?.days.length) {
       return weeklyDigest.days;
@@ -799,6 +801,13 @@ export default function ParentScreen() {
                 <Text style={styles.sessionMeta}>
                   {latestCompletion.subject} - {formatReadableDate(latestCompletion.study_date)}
                 </Text>
+                {latestProofImageUrl ? (
+                  <Image
+                    accessibilityIgnoresInvertColors
+                    source={{ uri: latestProofImageUrl }}
+                    style={styles.proofPreviewImage}
+                  />
+                ) : null}
               </View>
             </View>
           ) : (
@@ -1045,6 +1054,11 @@ function createStyles(colors: AppColors) {
     color: colors.success,
     fontSize: 13,
     fontWeight: "800"
+  },
+  proofPreviewImage: {
+    borderRadius: 8,
+    height: 160,
+    width: 160
   },
   content: {
     gap: spacing.lg,

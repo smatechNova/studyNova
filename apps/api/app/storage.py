@@ -10,6 +10,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.config import get_settings
+from app.proof_storage import delete_study_proof_image
 from app.schemas import (
     AccountDeletionRequestCreate,
     AccountDeletionRequestReceipt,
@@ -1703,24 +1704,107 @@ class StudyPlanStore:
                     ),
                 )
 
-        return StudySessionCompletion(
-            id=completion_id,
-            plan_id=plan_id,
-            session_key=payload.session_key,
-            study_date=payload.study_date,
-            kind=payload.kind,
-            subject=payload.subject,
-            topic=payload.topic,
-            resource_type=payload.resource_type,
-            minutes_planned=payload.minutes_planned,
-            minutes_completed=payload.minutes_completed,
-            recall_note=payload.recall_note,
-            confidence=payload.confidence,
-            completed_at=completed_at,
-        )
+        completion = self.completion_by_id(completion_id)
+        if completion is None:
+            raise RuntimeError("Study session completion could not be loaded after saving.")
+        return completion
+
+    def attach_study_proof_image(
+        self,
+        plan_id: str,
+        session_key: str,
+        storage_backend: str,
+        storage_path: str,
+        content_type: str,
+    ) -> StudySessionCompletion | None:
+        uploaded_at = datetime.now(timezone.utc)
+        proof_token = secrets.token_urlsafe(32)
+
+        with self._connect() as connection:
+            existing = connection.execute(
+                """
+                select proof_image_storage_backend, proof_image_storage_path
+                from study_session_completions
+                where plan_id = ? and session_key = ?
+                """,
+                (plan_id, session_key),
+            ).fetchone()
+
+            if existing is None:
+                return None
+
+            old_backend = existing["proof_image_storage_backend"]
+            old_path = existing["proof_image_storage_path"]
+            connection.execute(
+                """
+                update study_session_completions
+                set proof_image_storage_backend = ?,
+                    proof_image_storage_path = ?,
+                    proof_image_content_type = ?,
+                    proof_image_uploaded_at = ?,
+                    proof_image_token = ?
+                where plan_id = ? and session_key = ?
+                """,
+                (
+                    storage_backend,
+                    storage_path,
+                    content_type,
+                    uploaded_at.isoformat(),
+                    proof_token,
+                    plan_id,
+                    session_key,
+                ),
+            )
+
+        delete_study_proof_image(old_backend, old_path)
+        return self.completion_for_plan_session(plan_id, session_key)
+
+    def completion_for_plan_session(self, plan_id: str, session_key: str) -> StudySessionCompletion | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                select *
+                from study_session_completions
+                where plan_id = ? and session_key = ?
+                """,
+                (plan_id, session_key),
+            ).fetchone()
+        return self._completion_from_row(row) if row is not None else None
+
+    def completion_by_id(self, completion_id: str) -> StudySessionCompletion | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                select *
+                from study_session_completions
+                where id = ?
+                """,
+                (completion_id,),
+            ).fetchone()
+        return self._completion_from_row(row) if row is not None else None
+
+    def completion_by_proof_token(self, completion_id: str, token: str) -> StudySessionCompletion | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                select *
+                from study_session_completions
+                where id = ? and proof_image_token = ?
+                """,
+                (completion_id, token),
+            ).fetchone()
+        return self._completion_from_row(row) if row is not None else None
 
     def delete_completion(self, plan_id: str, session_key: str) -> bool:
         with self._connect() as connection:
+            existing = connection.execute(
+                """
+                select proof_image_storage_backend, proof_image_storage_path
+                from study_session_completions
+                where plan_id = ? and session_key = ?
+                """,
+                (plan_id, session_key),
+            ).fetchone()
             cursor = connection.execute(
                 """
                 delete from study_session_completions
@@ -1729,6 +1813,9 @@ class StudyPlanStore:
                 (plan_id, session_key),
             )
             deleted_count = cursor.rowcount
+
+        if existing is not None:
+            delete_study_proof_image(existing["proof_image_storage_backend"], existing["proof_image_storage_path"])
 
         return deleted_count > 0
 
@@ -1999,24 +2086,30 @@ class StudyPlanStore:
                 (plan_id,),
             ).fetchall()
 
-        return [
-            StudySessionCompletion(
-                id=row["id"],
-                plan_id=row["plan_id"],
-                session_key=row["session_key"],
-                study_date=row["study_date"],
-                kind=row["kind"],
-                subject=row["subject"],
-                topic=row["topic"],
-                resource_type=row["resource_type"],
-                minutes_planned=row["minutes_planned"],
-                minutes_completed=row["minutes_completed"],
-                recall_note=row["recall_note"],
-                confidence=row["confidence"],
-                completed_at=row["completed_at"],
-            )
-            for row in rows
-        ]
+        return [self._completion_from_row(row) for row in rows]
+
+    def _completion_from_row(self, row: sqlite3.Row) -> StudySessionCompletion:
+        return StudySessionCompletion(
+            id=row["id"],
+            plan_id=row["plan_id"],
+            session_key=row["session_key"],
+            study_date=row["study_date"],
+            kind=row["kind"],
+            subject=row["subject"],
+            topic=row["topic"],
+            resource_type=row["resource_type"],
+            minutes_planned=row["minutes_planned"],
+            minutes_completed=row["minutes_completed"],
+            recall_note=row["recall_note"],
+            confidence=row["confidence"],
+            completed_at=row["completed_at"],
+            proof_image_url=None,
+            proof_image_storage_backend=row["proof_image_storage_backend"] or None,
+            proof_image_storage_path=row["proof_image_storage_path"] or None,
+            proof_image_content_type=row["proof_image_content_type"] or None,
+            proof_image_uploaded_at=row["proof_image_uploaded_at"] or None,
+            proof_image_token=row["proof_image_token"] or None,
+        )
 
     def _student_from_row(self, row: sqlite3.Row) -> StudentAccount:
         return StudentAccount(
@@ -2336,10 +2429,29 @@ class StudyPlanStore:
                 )
                 """
             )
+            completion_columns = {
+                row["name"] for row in connection.execute("pragma table_info(study_session_completions)").fetchall()
+            }
+            if "proof_image_storage_backend" not in completion_columns:
+                connection.execute("alter table study_session_completions add column proof_image_storage_backend text")
+            if "proof_image_storage_path" not in completion_columns:
+                connection.execute("alter table study_session_completions add column proof_image_storage_path text")
+            if "proof_image_content_type" not in completion_columns:
+                connection.execute("alter table study_session_completions add column proof_image_content_type text")
+            if "proof_image_uploaded_at" not in completion_columns:
+                connection.execute("alter table study_session_completions add column proof_image_uploaded_at text")
+            if "proof_image_token" not in completion_columns:
+                connection.execute("alter table study_session_completions add column proof_image_token text")
             connection.execute(
                 """
                 create index if not exists idx_study_session_completions_plan_date
                 on study_session_completions (plan_id, study_date)
+                """
+            )
+            connection.execute(
+                """
+                create index if not exists idx_study_session_completions_proof_token
+                on study_session_completions (id, proof_image_token)
                 """
             )
             connection.execute(

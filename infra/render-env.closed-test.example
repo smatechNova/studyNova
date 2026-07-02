@@ -6,6 +6,9 @@
 APP_ENV=production
 LOCAL_DATA_PATH=/var/data/studynova/studynova.sqlite3
 BACKUP_DATA_PATH=/var/data/studynova/backups
+STUDY_PROOF_STORAGE_BACKEND=firebase
+STUDY_PROOF_LOCAL_PATH=/var/data/studynova/study-proofs
+STUDY_PROOF_MAX_UPLOAD_MB=6
 SESSION_TTL_HOURS=168
 PUBLIC_API_BASE_URL=https://your-render-service.onrender.com
 ALLOWED_ORIGINS=
@@ -13,3 +16,4 @@ ALLOWED_ORIGIN_REGEX=
 SESSION_SECRET=replace-with-32-plus-private-random-characters
 ADMIN_ACCESS_CODE=replace-with-private-admin-code
 FIREBASE_SERVICE_ACCOUNT_JSON=replace-with-firebase-admin-json-when-google-sign-in-is-enabled
+FIREBASE_STORAGE_BUCKET=replace-with-firebase-storage-bucket

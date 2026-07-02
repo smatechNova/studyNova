@@ -1,3 +1,5 @@
+import base64
+import binascii
 import hashlib
 import hmac
 import re
@@ -7,11 +9,12 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from app.auth import FirebaseAuthUnavailable, InvalidFirebaseToken, firebase_auth_readiness, verify_firebase_id_token
 from app.config import get_settings
 from app.domain.study_planner import build_rebalanced_study_plan, build_study_plan
+from app.proof_storage import StudyProofStorageError, load_study_proof_image, save_study_proof_image
 from app.schemas import (
     AccountDeletionRequestCreate,
     AccountDeletionRequestReceipt,
@@ -53,6 +56,7 @@ from app.schemas import (
     StudyPlanRequest,
     StudyPlanResponse,
     StudyPlanSaveRequest,
+    StudyProofImageUploadRequest,
     StudySessionCompletion,
     StudySessionCompletionRequest,
     TesterFeedbackCreate,
@@ -721,6 +725,74 @@ def complete_study_session(
     _require_student_plan_owner(plan_id, session)
 
     return store.complete_session(plan_id, payload)
+
+
+@router.post(
+    "/study-plans/{plan_id}/session-completions/study-proof-image",
+    response_model=StudySessionCompletion,
+)
+def upload_study_proof_image(
+    plan_id: str,
+    payload: StudyProofImageUploadRequest,
+    session: SessionIdentity = Depends(require_session),
+) -> StudySessionCompletion:
+    store = get_study_plan_store()
+    _require_student_plan_owner(plan_id, session)
+    if store.completion_for_plan_session(plan_id, payload.session_key) is None:
+        raise HTTPException(status_code=404, detail="Complete the study session before attaching proof.")
+
+    try:
+        image_data = base64.b64decode(payload.image_base64, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Study proof image is not valid base64.") from exc
+
+    max_upload_bytes = max(1, get_settings().study_proof_max_upload_mb) * 1024 * 1024
+    if len(image_data) > max_upload_bytes:
+        raise HTTPException(status_code=413, detail="Study proof image is too large.")
+
+    try:
+        stored_image = save_study_proof_image(payload.session_key, image_data, payload.content_type)
+    except StudyProofStorageError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    completion = store.attach_study_proof_image(
+        plan_id,
+        payload.session_key,
+        stored_image.backend,
+        stored_image.path,
+        stored_image.content_type,
+    )
+    if completion is None:
+        raise HTTPException(status_code=404, detail="Complete the study session before attaching proof.")
+
+    return completion
+
+
+@router.get("/study-proofs/{completion_id}/image")
+def get_study_proof_image(completion_id: str, token: str) -> Response:
+    completion = get_study_plan_store().completion_by_proof_token(completion_id, token)
+    if (
+        completion is None
+        or not completion.proof_image_storage_backend
+        or not completion.proof_image_storage_path
+        or not completion.proof_image_token
+    ):
+        raise HTTPException(status_code=404, detail="Study proof image was not found.")
+
+    try:
+        image = load_study_proof_image(
+            completion.proof_image_storage_backend,
+            completion.proof_image_storage_path,
+            completion.proof_image_content_type,
+        )
+    except StudyProofStorageError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return Response(
+        content=image.data,
+        media_type=image.content_type,
+        headers={"Cache-Control": "private, max-age=300"},
+    )
 
 
 @router.delete(

@@ -1,4 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import * as SecureStore from "expo-secure-store";
 import { Link, router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
@@ -24,6 +25,7 @@ import {
   createAccountDeletionRequest,
   createParentInviteCode,
   generateStudyPlan,
+  getStudyProofImageUrl,
   getLatestStudyPlan,
   getStudyReminderSettings,
   getStudyPlanHistory,
@@ -32,6 +34,7 @@ import {
   getWeeklyStudyDigest,
   rebalanceStudyPlan,
   saveStudyPlan,
+  uploadStudyProofImage,
   updateStudyReminderSettings
 } from "@/lib/api";
 import { brandAssets } from "@/lib/brandAssets";
@@ -1478,6 +1481,13 @@ type RecoverySummary = {
   targetDailyMinutes: number;
 };
 
+type SelectedStudyProofImage = {
+  uri: string;
+  base64: string;
+  fileName: string;
+  contentType: string;
+};
+
 function GeneratedPlanView({
   plan,
   savedPlan,
@@ -1503,10 +1513,12 @@ function GeneratedPlanView({
   const [activeCompletionKey, setActiveCompletionKey] = useState("");
   const [completionNote, setCompletionNote] = useState("");
   const [completionConfidence, setCompletionConfidence] = useState(3);
+  const [completionProofImage, setCompletionProofImage] = useState<SelectedStudyProofImage | null>(null);
   const [isProgressLoading, setIsProgressLoading] = useState(false);
   const [isReminderSaving, setIsReminderSaving] = useState(false);
   const [isNotificationTesting, setIsNotificationTesting] = useState(false);
   const [isSavingCompletion, setIsSavingCompletion] = useState(false);
+  const [isPickingProofImage, setIsPickingProofImage] = useState(false);
   const [isRebalancing, setIsRebalancing] = useState(false);
   const averageDailyMinutes =
     plan.metadata.average_daily_minutes ??
@@ -1687,11 +1699,76 @@ function GeneratedPlanView({
     setActiveCompletionKey(sessionKeyValue);
     setCompletionNote(savedCompletion?.recall_note ?? "");
     setCompletionConfidence(savedCompletion?.confidence ?? 3);
+    setCompletionProofImage(null);
     setProgressMessage(
       savedCompletion
         ? "Update the reflection for this completed session."
         : "Write a quick recall note before marking the session done."
     );
+  }
+
+  async function pickStudyProofImage(source: "camera" | "library") {
+    if (isDemoMode) {
+      setProgressMessage("Demo mode uses fixed sample proof. Use a real account to attach a note photo.");
+      return;
+    }
+
+    setIsPickingProofImage(true);
+    try {
+      const permission =
+        source === "camera"
+          ? await ImagePicker.requestCameraPermissionsAsync()
+          : await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!permission.granted) {
+        setProgressMessage(
+          source === "camera"
+            ? "Camera permission is needed to take a study proof photo."
+            : "Photo library permission is needed to choose a study proof image."
+        );
+        return;
+      }
+
+      const result =
+        source === "camera"
+          ? await ImagePicker.launchCameraAsync({
+              allowsEditing: true,
+              base64: true,
+              mediaTypes: ["images"],
+              quality: 0.72
+            })
+          : await ImagePicker.launchImageLibraryAsync({
+              allowsEditing: true,
+              base64: true,
+              mediaTypes: ["images"],
+              quality: 0.72
+            });
+
+      if (result.canceled || !result.assets[0]) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      if (!asset.base64) {
+        setProgressMessage("Could not read this image. Please choose another screenshot or photo.");
+        return;
+      }
+
+      if (estimateBase64Bytes(asset.base64) > 6 * 1024 * 1024) {
+        setProgressMessage("This proof image is too large. Try a clearer crop or a smaller screenshot.");
+        return;
+      }
+
+      setCompletionProofImage({
+        uri: asset.uri,
+        base64: asset.base64,
+        fileName: asset.fileName ?? `study-proof-${Date.now()}.jpg`,
+        contentType: asset.mimeType ?? "image/jpeg"
+      });
+      setProgressMessage("Study proof attached. It will upload when you save this session.");
+    } finally {
+      setIsPickingProofImage(false);
+    }
   }
 
   async function markSessionDone(studyDate: string, session: PlanSession, sessionKeyValue: string) {
@@ -1724,10 +1801,27 @@ function GeneratedPlanView({
         recall_note: completionNote.trim(),
         confidence: completionConfidence
       });
+      let proofMessage = "";
+      if (completionProofImage) {
+        try {
+          await uploadStudyProofImage(planId, {
+            session_key: sessionKeyValue,
+            file_name: completionProofImage.fileName,
+            content_type: completionProofImage.contentType,
+            image_base64: completionProofImage.base64
+          });
+          proofMessage = " Study proof image attached for parent view.";
+        } catch {
+          proofMessage = " The reflection saved, but the study proof image could not upload.";
+        }
+      }
       const isUpdate = completedSessionKeys.has(sessionKeyValue);
       setActiveCompletionKey("");
       setCompletionNote("");
-      setProgressMessage(isUpdate ? "Study reflection updated." : "Session saved with a study reflection.");
+      setCompletionProofImage(null);
+      setProgressMessage(
+        `${isUpdate ? "Study reflection updated." : "Session saved with a study reflection."}${proofMessage}`
+      );
       await refreshProgress(planId);
     } catch {
       setProgressMessage("Could not save this session. Check that the API is running.");
@@ -1752,6 +1846,7 @@ function GeneratedPlanView({
       const rebalancedPlan = await rebalanceStudyPlan(planId);
       setActiveCompletionKey("");
       setCompletionNote("");
+      setCompletionProofImage(null);
       setProgress(null);
       setProgressMessage("Plan rebalanced after missed sessions.");
       onPlanRebalanced(rebalancedPlan);
@@ -1761,6 +1856,60 @@ function GeneratedPlanView({
     } finally {
       setIsRebalancing(false);
     }
+  }
+
+  function renderStudyProofAttachment(savedCompletion?: StudySessionCompletion) {
+    const existingProofUrl = savedCompletion ? getStudyProofImageUrl(savedCompletion) : null;
+
+    return (
+      <View style={styles.proofPanel}>
+        <View style={styles.panelHeader}>
+          <View>
+            <Text style={styles.sessionTitle}>Attach study proof</Text>
+            <Text style={styles.helper}>Optional: add a photo or screenshot of notes taken during study.</Text>
+          </View>
+          {existingProofUrl || completionProofImage ? (
+            <MaterialCommunityIcons name="image-check-outline" size={22} color={colors.success} />
+          ) : null}
+        </View>
+
+        {completionProofImage ? (
+          <Image
+            accessibilityIgnoresInvertColors
+            source={{ uri: completionProofImage.uri }}
+            style={styles.proofPreviewImage}
+          />
+        ) : existingProofUrl ? (
+          <Image accessibilityIgnoresInvertColors source={{ uri: existingProofUrl }} style={styles.proofPreviewImage} />
+        ) : null}
+
+        <View style={styles.proofActions}>
+          <Pressable
+            accessibilityRole="button"
+            disabled={isPickingProofImage || isSavingCompletion}
+            onPress={() => void pickStudyProofImage("camera")}
+            style={[styles.secondaryButton, isPickingProofImage || isSavingCompletion ? styles.disabledButton : null]}
+          >
+            <MaterialCommunityIcons name="camera-outline" size={16} color={colors.brand} />
+            <Text style={styles.secondaryButtonText}>Take photo</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            disabled={isPickingProofImage || isSavingCompletion}
+            onPress={() => void pickStudyProofImage("library")}
+            style={[styles.secondaryButton, isPickingProofImage || isSavingCompletion ? styles.disabledButton : null]}
+          >
+            <MaterialCommunityIcons name="image-outline" size={16} color={colors.brand} />
+            <Text style={styles.secondaryButtonText}>Choose image</Text>
+          </Pressable>
+          {completionProofImage ? (
+            <Pressable accessibilityRole="button" onPress={() => setCompletionProofImage(null)} style={styles.textButton}>
+              <Text style={styles.textButtonLabel}>Remove selected image</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+    );
   }
 
   return (
@@ -2095,6 +2244,7 @@ function GeneratedPlanView({
                             );
                           })}
                         </View>
+                        {renderStudyProofAttachment(savedCompletion)}
                         <Pressable
                           accessibilityRole="button"
                           disabled={isSavingCompletion}
@@ -2203,6 +2353,13 @@ function GeneratedPlanView({
                           </View>
                           <Text style={styles.helper}>{savedCompletion.recall_note}</Text>
                           <Text style={styles.sessionMeta}>Confidence: {savedCompletion.confidence}/5</Text>
+                          {getStudyProofImageUrl(savedCompletion) ? (
+                            <Image
+                              accessibilityIgnoresInvertColors
+                              source={{ uri: getStudyProofImageUrl(savedCompletion) ?? "" }}
+                              style={styles.proofPreviewImage}
+                            />
+                          ) : null}
                         </View>
                       ) : null}
 
@@ -2249,6 +2406,7 @@ function GeneratedPlanView({
                               );
                             })}
                           </View>
+                          {renderStudyProofAttachment(savedCompletion)}
                           <Pressable
                             accessibilityRole="button"
                             disabled={isSavingCompletion}
@@ -3273,6 +3431,12 @@ function sessionKey(studyDate: string, index: number) {
   return `${studyDate}:${index}`;
 }
 
+function estimateBase64Bytes(base64Value: string) {
+  const normalized = base64Value.replace(/\s/g, "");
+  const padding = normalized.endsWith("==") ? 2 : normalized.endsWith("=") ? 1 : 0;
+  return Math.floor((normalized.length * 3) / 4) - padding;
+}
+
 function getFocusSessions(plan: StudyPlanResponse, completedSessionKeys: Set<string>): FocusSessionItem[] {
   const today = toDateValue(new Date());
   const dueSessions: FocusSessionItem[] = [];
@@ -3492,6 +3656,25 @@ function createStyles(colors: AppColors) {
   completionPanelDone: {
     backgroundColor: colors.successSoft,
     borderColor: colors.success
+  },
+  proofActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  proofPanel: {
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  proofPreviewImage: {
+    alignSelf: "flex-start",
+    borderRadius: 8,
+    height: 180,
+    width: 180
   },
   confidenceChip: {
     alignItems: "center",
@@ -4074,6 +4257,16 @@ function createStyles(colors: AppColors) {
   secondaryButtonText: {
     color: colors.brand,
     fontSize: 14,
+    fontWeight: "800"
+  },
+  textButton: {
+    minHeight: 40,
+    justifyContent: "center",
+    paddingHorizontal: spacing.xs
+  },
+  textButtonLabel: {
+    color: colors.muted,
+    fontSize: 13,
     fontWeight: "800"
   },
   sectionRow: {

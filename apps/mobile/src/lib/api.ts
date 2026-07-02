@@ -28,6 +28,7 @@ import type {
   StudentAccountInput,
   StudyReminderSettings,
   StudyReminderSettingsUpdate,
+  StudyProofImageUploadRequest,
   StudyPlanProgress,
   StudyPlanRequest,
   StudyPlanResponse,
@@ -698,6 +699,35 @@ export async function completeStudySession(
   }
 
   return response.json() as Promise<StudySessionCompletion>;
+}
+
+export async function uploadStudyProofImage(
+  planId: string,
+  payload: StudyProofImageUploadRequest
+): Promise<StudySessionCompletion> {
+  const response = await apiFetch(`${API_URL}/api/v1/study-plans/${planId}/session-completions/study-proof-image`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Study proof image upload failed");
+  }
+
+  return response.json() as Promise<StudySessionCompletion>;
+}
+
+export function getStudyProofImageUrl(completion: StudySessionCompletion): string | null {
+  if (!completion.proof_image_token) {
+    return null;
+  }
+
+  return `${API_URL}/api/v1/study-proofs/${encodeURIComponent(completion.id)}/image?token=${encodeURIComponent(
+    completion.proof_image_token
+  )}`;
 }
 
 export async function deleteStudySessionCompletion(planId: string, sessionKey: string): Promise<void> {

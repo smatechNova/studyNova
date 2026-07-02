@@ -24,7 +24,7 @@ const POLICY_SECTIONS: PolicySection[] = [
   {
     title: "Information We Collect",
     bullets: [
-      "Student name, class, age, school name, login ID, subjects, topics, study resources, exam dates, reading pace, study notes, study progress, recall notes, and confidence scores.",
+      "Student name, class, age, school name, login ID, subjects, topics, study resources, exam dates, reading pace, study notes, optional study proof images, study progress, recall notes, and confidence scores.",
       "Parent or guardian name, contact information, relationship to the student, linked student accounts, and progress-monitoring activity.",
       "Account recovery help requests, including login ID, contact information, and optional support notes.",
       "Closed-test feedback, including optional tester name/contact, device details, rating, recommendation answer, and notes about what worked or failed.",
@@ -49,11 +49,11 @@ const POLICY_SECTIONS: PolicySection[] = [
   },
   {
     title: "Data Sharing",
-    body: "StudyNova does not sell user data. During testing, app administrators may review account and study progress data to support users, fix issues, and improve the product. StudyNova may use service providers such as backend hosting and Firebase/Google sign-in to operate the app."
+    body: "StudyNova does not sell user data. During testing, app administrators may review account and study progress data to support users, fix issues, and improve the product. StudyNova may use service providers such as backend hosting, Firebase/Google sign-in, and Firebase Storage for optional study proof images to operate the app."
   },
   {
     title: "Data Storage",
-    body: "In development and testing, data may be stored in the StudyNova backend database. Before public launch, StudyNova should use production-grade hosting, access controls, backups, and retention rules. StudyNova does not currently collect location, payment data, device contacts, calendar events, photos, videos, audio recordings, user-uploaded files, health data, fitness data, SMS/MMS, or browsing history."
+    body: "In development and testing, data may be stored in the StudyNova backend database and study proof image storage. Before public launch, StudyNova should use production-grade hosting, access controls, backups, and retention rules. StudyNova does not currently collect location, payment data, device contacts, calendar events, audio recordings, health data, fitness data, SMS/MMS, or browsing history."
   },
   {
     title: "Notifications",
