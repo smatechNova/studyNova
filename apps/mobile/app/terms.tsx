@@ -4,7 +4,9 @@ import { useMemo } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
+import { IllustrationPanel } from "@/components/IllustrationPanel";
 import { Screen } from "@/components/Screen";
+import { brandAssets } from "@/lib/brandAssets";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
 
@@ -89,6 +91,13 @@ export default function TermsScreen() {
             <Text style={styles.helper}>Last updated: June 3, 2026</Text>
           </View>
         </View>
+
+        <IllustrationPanel
+          body="Clear terms help schools, parents, and students understand how StudyNova should be used during testing."
+          imageSource={brandAssets.privacySecurity}
+          kicker="Shared expectations"
+          title="Simple rules for a focused study app"
+        />
 
         <View style={styles.notice}>
           <MaterialCommunityIcons name="information-outline" size={20} color={colors.brand} />

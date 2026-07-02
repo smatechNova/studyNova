@@ -4,7 +4,9 @@ import { useMemo } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
+import { IllustrationPanel } from "@/components/IllustrationPanel";
 import { Screen } from "@/components/Screen";
+import { brandAssets } from "@/lib/brandAssets";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
 
@@ -97,6 +99,13 @@ export default function PrivacyScreen() {
             <Text style={styles.helper}>Last updated: June 3, 2026</Text>
           </View>
         </View>
+
+        <IllustrationPanel
+          body="StudyNova keeps student and parent roles separate, links progress carefully, and keeps launch policies visible."
+          imageSource={brandAssets.privacySecurity}
+          kicker="Trust and safety"
+          title="Built around careful student data handling"
+        />
 
         <View style={styles.notice}>
           <MaterialCommunityIcons name="information-outline" size={20} color={colors.brand} />

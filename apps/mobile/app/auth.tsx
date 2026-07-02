@@ -14,8 +14,10 @@ import {
 } from "react-native";
 
 import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
+import { IllustrationPanel } from "@/components/IllustrationPanel";
 import { Screen } from "@/components/Screen";
 import { createAccountRecoveryRequest, firebaseSignInAccount, signInAccount } from "@/lib/api";
+import { brandAssets } from "@/lib/brandAssets";
 import {
   exchangeGoogleIdTokenForFirebaseIdToken,
   getFirebaseClientReadiness,
@@ -209,6 +211,13 @@ export default function AuthScreen() {
             </Text>
           </View>
         </View>
+
+        <IllustrationPanel
+          body="Choose the right role before signing in so each student and parent opens only the dashboard meant for them."
+          imageSource={role === "student" ? brandAssets.studentEntryCard : brandAssets.parentEntryCard}
+          kicker="Secure role access"
+          title={role === "student" ? "Student study access" : "Parent monitoring access"}
+        />
 
         <View style={styles.roleGrid}>
           {ROLE_OPTIONS.map((option) => {

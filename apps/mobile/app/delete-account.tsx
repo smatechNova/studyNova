@@ -4,8 +4,10 @@ import { useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
+import { IllustrationPanel } from "@/components/IllustrationPanel";
 import { Screen } from "@/components/Screen";
 import { createPublicAccountDeletionRequest } from "@/lib/api";
+import { brandAssets } from "@/lib/brandAssets";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
 import type { AuthRole, PublicAccountDeletionRequestInput } from "@/types";
@@ -98,6 +100,13 @@ export default function DeleteAccountScreen() {
             </Text>
           </View>
         </View>
+
+        <IllustrationPanel
+          body="Deletion requests are reviewed before completion so parent-student links and account ownership stay protected."
+          imageSource={brandAssets.privacySecurity}
+          kicker="Careful cleanup"
+          title="A safer path for deleting accounts"
+        />
 
         <View style={styles.notice}>
           <MaterialCommunityIcons name="shield-check-outline" size={20} color={colors.brand} />

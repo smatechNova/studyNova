@@ -7,14 +7,11 @@ import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
 import { RoleCard } from "@/components/RoleCard";
 import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
+import { brandAssets } from "@/lib/brandAssets";
 import { clearStoredAuthSession, getStoredAuthSession } from "@/lib/session";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
 import type { AuthSession } from "@/types";
-
-const brandLogo = require("../assets/brand/studynova-logo-concept.png");
-const studentCardImage = require("../assets/brand/student-card.png");
-const parentCardImage = require("../assets/brand/parent-card.png");
 
 export default function HomeScreen() {
   const { colors } = useTheme();
@@ -63,7 +60,7 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.hero}>
           <View style={styles.logo}>
-            <Image accessibilityIgnoresInvertColors source={brandLogo} style={styles.logoImage} />
+            <Image accessibilityIgnoresInvertColors source={brandAssets.logoMaster} style={styles.logoImage} />
           </View>
           <View style={styles.heroText}>
             <Text style={styles.kicker}>For students, parents, and schools</Text>
@@ -72,6 +69,7 @@ export default function HomeScreen() {
               A focused study planner that turns subjects, topics, reading pace, and exam dates into a daily academic plan.
             </Text>
           </View>
+          <Image accessibilityIgnoresInvertColors source={brandAssets.homeHero} style={styles.heroArtwork} />
         </View>
 
         {savedSession ? (
@@ -128,7 +126,7 @@ export default function HomeScreen() {
               title="Student sign in"
               description="Open one student's own study dashboard and progress."
               icon="notebook-edit-outline"
-              imageSource={studentCardImage}
+              imageSource={brandAssets.studentEntryCard}
             />
           </Link>
           <Link href="/auth?role=parent" asChild>
@@ -136,7 +134,7 @@ export default function HomeScreen() {
               title="Parent/guardian sign in"
               description="Monitor linked students from the parent dashboard."
               icon="shield-account-outline"
-              imageSource={parentCardImage}
+              imageSource={brandAssets.parentEntryCard}
             />
           </Link>
           <Link href="/accounts" asChild>
@@ -144,6 +142,7 @@ export default function HomeScreen() {
               title="Account setup"
               description="Create one student account, then link it to a parent monitoring account."
               icon="account-multiple-plus-outline"
+              imageSource={brandAssets.accountSetup}
             />
           </Link>
           <RoleCard
@@ -242,12 +241,19 @@ function createStyles(colors: AppColors) {
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.md,
     padding: spacing.lg
   },
   heroText: {
     flex: 1,
-    gap: spacing.xs
+    gap: spacing.xs,
+    minWidth: 220
+  },
+  heroArtwork: {
+    borderRadius: 8,
+    height: 132,
+    width: 198
   },
   demoActions: {
     flexDirection: "row",

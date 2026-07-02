@@ -4,8 +4,10 @@ import { useMemo, useState } from "react";
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
+import { IllustrationPanel } from "@/components/IllustrationPanel";
 import { Screen } from "@/components/Screen";
 import { createTesterFeedback } from "@/lib/api";
+import { brandAssets } from "@/lib/brandAssets";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
 import type { TesterFeedbackInput } from "@/types";
@@ -93,6 +95,13 @@ export default function FeedbackScreen() {
             </Text>
           </View>
         </View>
+
+        <IllustrationPanel
+          body="Capture useful notes from students, parents, and school testers before the app moves into wider release."
+          imageSource={brandAssets.feedback}
+          kicker="Tester signal"
+          title="Every report makes StudyNova sharper"
+        />
 
         <View style={styles.panel}>
           <Text style={styles.sectionTitle}>Tester details</Text>

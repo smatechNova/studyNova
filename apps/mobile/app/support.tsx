@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
+import { IllustrationPanel } from "@/components/IllustrationPanel";
 import { Screen } from "@/components/Screen";
 import {
   createStorageBackup,
@@ -20,6 +21,7 @@ import {
   reviewTesterFeedbackRequest,
   updateLaunchChecklistItem
 } from "@/lib/api";
+import { brandAssets } from "@/lib/brandAssets";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
 import type {
@@ -322,6 +324,13 @@ export default function SupportScreen() {
           </View>
         </View>
 
+        <IllustrationPanel
+          body="Use one secure workspace for account recovery, tester feedback, backups, and launch readiness checks."
+          imageSource={brandAssets.supportAdmin}
+          kicker="Admin command center"
+          title="Support with clear release control"
+        />
+
         <View style={styles.panel}>
           <Text style={styles.sectionTitle}>Admin access</Text>
           <Text style={styles.helper}>
@@ -356,6 +365,13 @@ export default function SupportScreen() {
             )}
           </Pressable>
         </View>
+
+        <IllustrationPanel
+          body="Confirm backend health, authentication, storage, backups, policies, screenshots, and tester readiness before each release."
+          imageSource={brandAssets.launchChecklist}
+          kicker="Launch gate"
+          title="Play Store readiness at a glance"
+        />
 
         <View style={styles.launchGatePanel}>
           <View style={styles.requestHeader}>

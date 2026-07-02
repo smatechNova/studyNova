@@ -24,12 +24,11 @@ import {
   createDemoWeeklyDigest,
   isDemoParam
 } from "@/lib/demoData";
+import { brandAssets } from "@/lib/brandAssets";
 import { clearStoredAuthSession, getStoredAuthSession } from "@/lib/session";
 import type { ParentFamilyAccount, PlanSession, SavedStudyPlan, StudyPlanProgress, WeeklyStudyDigest } from "@/types";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
-
-const parentDashboardImage = require("../assets/brand/parent-dashboard.png");
 
 type AttentionItem = {
   session: PlanSession;
@@ -406,7 +405,7 @@ export default function ParentScreen() {
     <Screen>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <Image accessibilityIgnoresInvertColors source={parentDashboardImage} style={styles.headerArtwork} />
+          <Image accessibilityIgnoresInvertColors source={brandAssets.parentDashboardHero} style={styles.headerArtwork} />
           <View style={styles.headerCopy}>
             <Text style={styles.kicker}>Selected student</Text>
             <Text style={styles.title}>{selectedStudent?.name ?? savedPlan?.student_name ?? "No student yet"}</Text>

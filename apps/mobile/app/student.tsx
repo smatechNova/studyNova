@@ -34,6 +34,7 @@ import {
   saveStudyPlan,
   updateStudyReminderSettings
 } from "@/lib/api";
+import { brandAssets } from "@/lib/brandAssets";
 import {
   getStudyReminderReadiness,
   scheduleStudyReminders,
@@ -65,8 +66,6 @@ import type {
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
 
-const studentDashboardImage = require("../assets/brand/student-dashboard.png");
-
 const RESOURCE_OPTIONS = ["Textbook", "Class notes", "Notebook", "Online notes", "Past questions"];
 const STEPS = ["Profile", "Exam", "Pace", "Subjects", "Review"] as const;
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -93,6 +92,14 @@ const STEP_DETAILS: Record<StepName, { icon: MaterialIconName; eyebrow: string }
   Pace: { icon: "speedometer-slow", eyebrow: "Rhythm" },
   Subjects: { icon: "bookshelf", eyebrow: "Syllabus" },
   Review: { icon: "clipboard-check-outline", eyebrow: "Ready" }
+};
+
+const STEP_IMAGES: Record<StepName, number> = {
+  Exam: brandAssets.examStep,
+  Pace: brandAssets.paceStep,
+  Profile: brandAssets.profileStep,
+  Review: brandAssets.reviewStep,
+  Subjects: brandAssets.subjectsStep
 };
 
 type TopicForm = {
@@ -1087,6 +1094,7 @@ export default function StudentScreen() {
           }}
           style={styles.panel}
         >
+          <Image accessibilityIgnoresInvertColors source={STEP_IMAGES[currentStep]} style={styles.stepArtwork} />
           <View style={styles.stepHeader}>
             <View style={styles.stepBadge}>
               <Text style={styles.stepBadgeText}>
@@ -1813,7 +1821,7 @@ function GeneratedPlanView({
             <Text style={styles.helper}>{plan.metadata.recommendation}</Text>
             {saveMessage ? <Text style={styles.saveStatus}>{saveMessage}</Text> : null}
           </View>
-          <Image accessibilityIgnoresInvertColors source={studentDashboardImage} style={styles.dashboardArtwork} />
+          <Image accessibilityIgnoresInvertColors source={brandAssets.generatedPlanHero} style={styles.dashboardArtwork} />
         </View>
 
         <View style={styles.statsGrid}>
@@ -4277,6 +4285,13 @@ function createStyles(colors: AppColors) {
     alignItems: "center",
     flexDirection: "row",
     gap: spacing.md
+  },
+  stepArtwork: {
+    alignSelf: "center",
+    borderRadius: 8,
+    height: 180,
+    maxWidth: 420,
+    width: "100%"
   },
   subjectCard: {
     backgroundColor: colors.panel,

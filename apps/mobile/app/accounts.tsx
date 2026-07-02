@@ -13,6 +13,7 @@ import {
 } from "react-native";
 
 import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
+import { IllustrationPanel } from "@/components/IllustrationPanel";
 import { Screen } from "@/components/Screen";
 import {
   createParentAccount,
@@ -22,6 +23,7 @@ import {
   linkParentStudent,
   signInAccount
 } from "@/lib/api";
+import { brandAssets } from "@/lib/brandAssets";
 import { saveAuthSession } from "@/lib/session";
 import type { ParentFamilyAccount } from "@/types";
 import { spacing, type AppColors } from "@/theme";
@@ -242,6 +244,13 @@ export default function AccountsScreen() {
             </Text>
           </View>
         </View>
+
+        <IllustrationPanel
+          body="Create separate student and parent identities, then connect them only through the approved parent link."
+          imageSource={brandAssets.accountSetup}
+          kicker="Safe linking"
+          title="One student account, many parent insights"
+        />
 
         <View style={styles.modeGrid}>
           <Pressable
