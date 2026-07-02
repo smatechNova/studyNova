@@ -20,6 +20,13 @@ type FirebaseIdpResponse = {
   };
 };
 
+type FirebaseOobResponse = {
+  email?: string;
+  error?: {
+    message?: string;
+  };
+};
+
 export function getFirebaseClientConfig(): FirebaseClientConfig {
   return {
     apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY ?? "",
@@ -97,4 +104,27 @@ export async function exchangeGoogleIdTokenForFirebaseIdToken(googleIdToken: str
   }
 
   return payload.idToken;
+}
+
+export async function sendFirebasePasswordResetEmail(email: string): Promise<void> {
+  const config = getFirebaseClientConfig();
+  if (!config.apiKey) {
+    throw new Error("Firebase API key is not configured.");
+  }
+
+  const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${config.apiKey}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      email,
+      requestType: "PASSWORD_RESET"
+    })
+  });
+  const payload = (await response.json()) as FirebaseOobResponse;
+
+  if (!response.ok) {
+    throw new Error(payload.error?.message ?? "Firebase password reset could not be sent.");
+  }
 }

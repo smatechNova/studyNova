@@ -75,6 +75,7 @@ const REMINDER_TIME_OPTIONS = [
   { label: "Evening", value: "18:00" },
   { label: "Night", value: "20:00" }
 ];
+const SETUP_SCROLL_DELAYS = [80, 320, 640];
 const PLAN_FORM_DRAFT_KEY_PREFIX = "studynova.student-plan-form.v1";
 const BLOCKED_STUDY_CONTENT_PHRASES = [
   "could not generate the plan",
@@ -182,7 +183,6 @@ export default function StudentScreen() {
   const subjectEditorOffsetY = useRef(0);
   const [newSubjectId, setNewSubjectId] = useState<string | undefined>();
   const [activeSubjectId, setActiveSubjectId] = useState<string | undefined>();
-  const [bulkTopicText, setBulkTopicText] = useState("");
   const [isDraftReady, setIsDraftReady] = useState(false);
   const activeStudentId = isDemoMode ? DEMO_STUDENT_ID : sessionStudentId;
   const demoProgress = useMemo(
@@ -502,7 +502,9 @@ export default function StudentScreen() {
     try {
       const invite = await createParentInviteCode(activeStudentId);
       setParentInvite(invite);
-      setParentInviteMessage("Share this code with the parent or guardian. It can only be used once.");
+      setParentInviteMessage(
+        "Share this code with the parent. They should sign in as parent, open the parent dashboard, and enter it in Link a student."
+      );
     } catch (error) {
       if (isSessionExpiredError(error)) {
         setSessionStudentId(undefined);
@@ -633,9 +635,10 @@ export default function StudentScreen() {
     setActiveCalendar(null);
     setStepIndex(index);
 
-    setTimeout(() => {
-      setupScrollRef.current?.scrollTo({ y: 0, animated: true });
-    }, 50);
+    queueSetupPanelScroll();
+    if (STEPS[index] === "Subjects") {
+      queueSubjectEditorScroll();
+    }
   }
 
   function goBack() {
@@ -677,19 +680,12 @@ export default function StudentScreen() {
     setError("");
     setNewSubjectId(nextSubject.id);
     setActiveSubjectId(nextSubject.id);
-    setBulkTopicText("");
     setForm((current) => ({
       ...current,
       subjects: [...current.subjects, nextSubject]
     }));
 
-    setTimeout(() => {
-      scrollToSubjectEditor();
-    }, 120);
-
-    setTimeout(() => {
-      scrollToSubjectEditor();
-    }, 320);
+    queueSubjectEditorScroll();
 
     setTimeout(() => {
       setNewSubjectId((current) => (current === nextSubject.id ? undefined : current));
@@ -699,11 +695,31 @@ export default function StudentScreen() {
   function selectSubject(subjectId: string) {
     setError("");
     setActiveSubjectId(subjectId);
-    setBulkTopicText("");
 
-    setTimeout(() => {
-      scrollToSubjectEditor();
-    }, 80);
+    queueSubjectEditorScroll();
+  }
+
+  function queueSetupPanelScroll() {
+    SETUP_SCROLL_DELAYS.forEach((delay) => {
+      setTimeout(() => {
+        scrollToSetupPanel();
+      }, delay);
+    });
+  }
+
+  function queueSubjectEditorScroll() {
+    SETUP_SCROLL_DELAYS.forEach((delay) => {
+      setTimeout(() => {
+        scrollToSubjectEditor();
+      }, delay);
+    });
+  }
+
+  function scrollToSetupPanel() {
+    setupScrollRef.current?.scrollTo({
+      y: Math.max(0, setupPanelOffsetY.current - spacing.md),
+      animated: true
+    });
   }
 
   function scrollToSubjectEditor() {
@@ -755,28 +771,6 @@ export default function StudentScreen() {
       subjects: current.subjects.map((subject) =>
         subject.id === subjectId
           ? { ...subject, topics: [...subject.topics, createTopic("", "", "Textbook")] }
-          : subject
-      )
-    }));
-  }
-
-  function importBulkTopics(subjectId: string) {
-    const topics = parseBulkTopics(bulkTopicText);
-    if (!topics.length) {
-      setError("Paste one topic per line, such as Algebra, 18, Textbook.");
-      return;
-    }
-
-    setError("");
-    setBulkTopicText("");
-    setForm((current) => ({
-      ...current,
-      subjects: current.subjects.map((subject) =>
-        subject.id === subjectId
-          ? {
-              ...subject,
-              topics: shouldReplaceStarterTopic(subject.topics) ? topics : [...subject.topics, ...topics]
-            }
           : subject
       )
     }));
@@ -1263,35 +1257,15 @@ export default function StudentScreen() {
                     onChangeText={(value) => updateSubject(activeSubject.id, value)}
                   />
 
-                  <View style={styles.bulkTopicPanel}>
-                    <View style={styles.sectionRow}>
-                      <View style={styles.subjectLibraryCopy}>
-                        <Text style={styles.fieldLabel}>Paste topics</Text>
-                        <Text style={styles.helper}>One line per topic: Algebra, 18, Textbook</Text>
-                      </View>
-                      <Pressable
-                        accessibilityRole="button"
-                        onPress={() => importBulkTopics(activeSubject.id)}
-                        style={styles.secondaryButton}
-                      >
-                        <MaterialCommunityIcons name="tray-arrow-down" size={18} color={colors.brand} />
-                        <Text style={styles.secondaryButtonText}>Import</Text>
-                      </Pressable>
-                    </View>
-                    <TextInput
-                      multiline
-                      onChangeText={setBulkTopicText}
-                      placeholder={"Algebra, 18, Textbook\nGeometry, 20, Class notes"}
-                      placeholderTextColor={colors.muted}
-                      style={[styles.input, styles.textArea]}
-                      textAlignVertical="top"
-                      value={bulkTopicText}
-                    />
-                  </View>
-
                   <View style={styles.topicTable}>
                     <View style={styles.topicTableHeader}>
-                      <Text style={styles.fieldLabel}>Topics</Text>
+                      <View style={styles.subjectLibraryCopy}>
+                        <Text style={styles.fieldLabel}>Topics</Text>
+                        <Text style={styles.helper}>
+                          Add each topic with its pages and study resource. This keeps the plan accurate without
+                          forcing a special import format.
+                        </Text>
+                      </View>
                       <Pressable
                         accessibilityRole="button"
                         onPress={() => addTopic(activeSubject.id)}
@@ -3086,36 +3060,6 @@ function getSubjectPageCount(subject: SubjectForm) {
   return subject.topics.reduce((total, topic) => total + toNumber(topic.pages), 0);
 }
 
-function shouldReplaceStarterTopic(topics: TopicForm[]) {
-  return topics.length === 1 && !topics[0]?.name.trim() && !topics[0]?.pages.trim();
-}
-
-function parseBulkTopics(value: string) {
-  return value
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const parts = line
-        .split(/[,\t|;]/)
-        .map((part) => part.trim())
-        .filter(Boolean);
-      const name = parts[0] ?? "";
-      const pages = parts.find((part, index) => index > 0 && isWholeNumber(part)) ?? "";
-      const resourceCandidate = parts.find(
-        (part, index) => index > 0 && !isWholeNumber(part) && normalizeResourceType(part) !== "Textbook"
-      );
-
-      return createTopic(name, pages, normalizeResourceType(resourceCandidate ?? parts[2] ?? "Textbook"));
-    })
-    .filter((topic) => topic.name.trim());
-}
-
-function normalizeResourceType(value: string) {
-  const normalized = value.trim().toLowerCase();
-  return RESOURCE_OPTIONS.find((resource) => resource.toLowerCase() === normalized) ?? "Textbook";
-}
-
 function futureDate(daysFromToday: number) {
   const date = new Date();
   date.setDate(date.getDate() + daysFromToday);
@@ -4338,14 +4282,6 @@ function createStyles(colors: AppColors) {
     flexDirection: "row",
     gap: spacing.md,
     justifyContent: "space-between"
-  },
-  bulkTopicPanel: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: spacing.md,
-    padding: spacing.md
   },
   topicTable: {
     gap: spacing.sm

@@ -22,7 +22,8 @@ import {
   exchangeGoogleIdTokenForFirebaseIdToken,
   getFirebaseClientReadiness,
   getFirebaseClientConfig,
-  isFirebaseClientConfigured
+  isFirebaseClientConfigured,
+  sendFirebasePasswordResetEmail
 } from "@/lib/firebaseAuth";
 import { saveAuthSession } from "@/lib/session";
 import { spacing, type AppColors } from "@/theme";
@@ -162,6 +163,14 @@ export default function AuthScreen() {
     void Linking.openURL("https://accounts.google.com/signup");
   }
 
+  function openForgotPassword() {
+    setIsHelpOpen(true);
+    setMessage("");
+    if (!recoveryContact && isValidLoginId(loginId)) {
+      setRecoveryContact(loginId.trim());
+    }
+  }
+
   async function submitAccountHelpRequest() {
     if (!isValidLoginId(loginId)) {
       setMessage("Enter the login ID first, then send the account help request.");
@@ -177,13 +186,34 @@ export default function AuthScreen() {
     setMessage("");
 
     try {
+      const canSendFirebaseReset = firebaseReady && isValidEmail(loginId.trim());
+      let firebaseResetSent = false;
+
+      if (canSendFirebaseReset) {
+        try {
+          await sendFirebasePasswordResetEmail(loginId.trim());
+          firebaseResetSent = true;
+        } catch {
+          firebaseResetSent = false;
+        }
+      }
+
       const receipt = await createAccountRecoveryRequest({
         role,
         login_id: loginId.trim(),
         contact: recoveryContact.trim(),
-        note: recoveryNote.trim()
+        note: [
+          recoveryNote.trim(),
+          firebaseResetSent ? "Firebase password reset email was requested from the sign-in screen." : ""
+        ]
+          .filter(Boolean)
+          .join(" ")
       });
-      setMessage(receipt.message);
+      setMessage(
+        firebaseResetSent
+          ? "Password reset email sent if this Gmail uses Firebase password sign-in. Support recovery was also received."
+          : receipt.message
+      );
       setRecoveryNote("");
     } catch {
       setMessage("Could not send the account help request. Check the API connection and try again.");
@@ -304,6 +334,11 @@ export default function AuthScreen() {
             value={accessCode}
           />
 
+          <Pressable accessibilityRole="button" onPress={openForgotPassword} style={styles.forgotButton}>
+            <MaterialCommunityIcons name="lock-question" size={18} color={colors.brand} />
+            <Text style={styles.forgotButtonText}>Forgot password or access code?</Text>
+          </Pressable>
+
           {role === "student" ? (
             <Pressable accessibilityRole="link" onPress={openGmailSignup} style={styles.gmailLink}>
               <MaterialCommunityIcons name="email-plus-outline" size={18} color={colors.brand} />
@@ -329,11 +364,14 @@ export default function AuthScreen() {
             style={styles.helpHeader}
           >
             <View style={styles.helpIcon}>
-              <MaterialCommunityIcons name="lifebuoy" size={20} color={colors.brand} />
+              <MaterialCommunityIcons name="lock-reset" size={20} color={colors.brand} />
             </View>
             <View style={styles.roleCopy}>
-              <Text style={styles.sectionTitle}>Need help signing in?</Text>
-              <Text style={styles.helper}>Send a safe recovery request without revealing whether the account exists.</Text>
+              <Text style={styles.sectionTitle}>Forgot password or access code?</Text>
+              <Text style={styles.helper}>
+                Send a secure recovery request. If Firebase password sign-in is active for this Gmail, StudyNova also
+                asks Firebase to send a reset email.
+              </Text>
             </View>
             <MaterialCommunityIcons
               name={isHelpOpen ? "chevron-up" : "chevron-down"}
@@ -378,7 +416,7 @@ export default function AuthScreen() {
                 ) : (
                   <>
                     <MaterialCommunityIcons name="send-outline" size={18} color={colors.brand} />
-                    <Text style={styles.secondaryButtonText}>Send account help request</Text>
+                    <Text style={styles.secondaryButtonText}>Send reset or recovery request</Text>
                   </>
                 )}
               </Pressable>
@@ -423,8 +461,7 @@ function normalizeRole(value?: string): AuthRole {
 
 function isValidLoginId(value: string) {
   const normalized = value.trim();
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (emailPattern.test(normalized)) {
+  if (isValidEmail(normalized)) {
     return true;
   }
 
@@ -434,6 +471,10 @@ function isValidLoginId(value: string) {
 
   const digits = normalized.replace(/\D/g, "");
   return digits.length >= 10 && digits.length <= 15;
+}
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
 function isValidAccessCode(value: string) {
@@ -481,6 +522,19 @@ function createStyles(colors: AppColors) {
     color: colors.text,
     fontSize: 14,
     fontWeight: "800"
+  },
+  forgotButton: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    gap: spacing.xs,
+    minHeight: 36,
+    paddingHorizontal: spacing.xs
+  },
+  forgotButtonText: {
+    color: colors.brand,
+    fontSize: 13,
+    fontWeight: "900"
   },
   helpBody: {
     gap: spacing.sm,

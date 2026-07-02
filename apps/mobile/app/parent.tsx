@@ -459,6 +459,44 @@ export default function ParentScreen() {
         ) : null}
 
         {parentFamily?.parent ? (
+          <View style={styles.linkInvitePanel}>
+            <View style={styles.panelHeader}>
+              <View style={styles.headerCopy}>
+                <Text style={styles.kicker}>Link a student</Text>
+                <Text style={styles.sectionTitle}>Enter student invite code</Text>
+                <Text style={styles.helper}>
+                  Ask the student to tap Parent link on their dashboard and share the one-time code shown there.
+                </Text>
+              </View>
+              {isInviteRedeeming ? <ActivityIndicator color={colors.brand} /> : null}
+            </View>
+            <View style={styles.inviteInputRow}>
+              <TextInput
+                autoCapitalize="characters"
+                onChangeText={(value) => {
+                  setInviteMessage("");
+                  setInviteCode(value.toUpperCase());
+                }}
+                placeholder="SN-123456"
+                placeholderTextColor={colors.muted}
+                style={styles.input}
+                value={inviteCode}
+              />
+              <Pressable
+                accessibilityRole="button"
+                disabled={isInviteRedeeming}
+                onPress={() => void redeemStudentInvite()}
+                style={[styles.linkButton, isInviteRedeeming ? styles.disabledButton : null]}
+              >
+                <MaterialCommunityIcons name="link-variant-plus" size={18} color={colors.brand} />
+                <Text style={styles.linkButtonText}>Link</Text>
+              </Pressable>
+            </View>
+            {inviteMessage ? <Text style={styles.infoText}>{inviteMessage}</Text> : null}
+          </View>
+        ) : null}
+
+        {parentFamily?.parent ? (
           <View style={styles.panel}>
             <View style={styles.panelHeader}>
               <View style={styles.headerCopy}>
@@ -586,44 +624,6 @@ export default function ParentScreen() {
                 );
               })}
             </View>
-          </View>
-        ) : null}
-
-        {parentFamily?.parent ? (
-          <View style={styles.panel}>
-            <View style={styles.panelHeader}>
-              <View style={styles.headerCopy}>
-                <Text style={styles.kicker}>Secure linking</Text>
-                <Text style={styles.sectionTitle}>Add student by invite code</Text>
-              </View>
-              {isInviteRedeeming ? <ActivityIndicator color={colors.brand} /> : null}
-            </View>
-            <Text style={styles.helper}>
-              Ask the student to generate a parent invite code from their dashboard, then enter it here.
-            </Text>
-            <View style={styles.inviteInputRow}>
-              <TextInput
-                autoCapitalize="characters"
-                onChangeText={(value) => {
-                  setInviteMessage("");
-                  setInviteCode(value.toUpperCase());
-                }}
-                placeholder="SN-123456"
-                placeholderTextColor={colors.muted}
-                style={styles.input}
-                value={inviteCode}
-              />
-              <Pressable
-                accessibilityRole="button"
-                disabled={isInviteRedeeming}
-                onPress={() => void redeemStudentInvite()}
-                style={[styles.linkButton, isInviteRedeeming ? styles.disabledButton : null]}
-              >
-                <MaterialCommunityIcons name="link-variant-plus" size={18} color={colors.brand} />
-                <Text style={styles.linkButtonText}>Link</Text>
-              </Pressable>
-            </View>
-            {inviteMessage ? <Text style={styles.infoText}>{inviteMessage}</Text> : null}
           </View>
         ) : null}
 
@@ -1215,6 +1215,14 @@ function createStyles(colors: AppColors) {
     color: colors.brand,
     fontSize: 13,
     fontWeight: "800"
+  },
+  linkInvitePanel: {
+    backgroundColor: colors.brandSoft,
+    borderColor: colors.brand,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg
   },
   metric: {
     color: colors.brand,
