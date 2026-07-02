@@ -44,6 +44,10 @@ Set these environment variables on the backend host:
 APP_ENV=production
 LOCAL_DATA_PATH=/persistent/studynova/studynova.sqlite3
 BACKUP_DATA_PATH=/persistent/studynova/backups
+STUDY_PROOF_STORAGE_BACKEND=firebase
+STUDY_PROOF_LOCAL_PATH=/persistent/studynova/study-proofs
+STUDY_PROOF_MAX_UPLOAD_MB=6
+FIREBASE_STORAGE_BUCKET=<firebase-storage-bucket>
 SESSION_SECRET=<long random secret>
 ADMIN_ACCESS_CODE=<private admin code>
 SESSION_TTL_HOURS=168

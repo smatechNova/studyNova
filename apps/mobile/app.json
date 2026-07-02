@@ -25,7 +25,8 @@
         "backgroundColor": "#2563EB"
       },
       "permissions": [
-        "POST_NOTIFICATIONS"
+        "POST_NOTIFICATIONS",
+        "CAMERA"
       ],
       "softwareKeyboardLayoutMode": "resize"
     },
@@ -36,7 +37,14 @@
     "plugins": [
       "expo-router",
       "expo-notifications",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "StudyNova uses the camera only when a student chooses to attach a study proof photo for parent review.",
+          "photosPermission": "StudyNova uses photo access only when a student chooses an image or screenshot as study proof."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

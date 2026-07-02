@@ -91,6 +91,10 @@ requireValue(
   android.permissions?.includes("POST_NOTIFICATIONS"),
   "Android POST_NOTIFICATIONS permission should be configured for reminders."
 );
+requireValue(
+  android.permissions?.includes("CAMERA"),
+  "Android CAMERA permission should be configured for optional study proof photos."
+);
 requireValue(android.softwareKeyboardLayoutMode === "resize", "Android keyboard layout mode should be resize.");
 requireValue(expo.icon === "./assets/icon.png", "Expo icon should point to ./assets/icon.png.");
 requireValue(expo.splash?.image === "./assets/splash-icon.png", "Splash image should point to ./assets/splash-icon.png.");
@@ -100,6 +104,10 @@ requireValue(
 );
 requireValue(expo.notification?.icon === "./assets/notification-icon.png", "Notification icon should be configured.");
 requireValue(expo.extra?.eas?.projectId, "EAS projectId should be linked in app.json.");
+requireValue(
+  JSON.stringify(expo.plugins ?? []).includes("expo-image-picker"),
+  "expo-image-picker config plugin should be configured for study proof image permissions."
+);
 
 requireFile("assets/icon.png", "App icon");
 requireFile("assets/adaptive-icon.png", "Adaptive icon");
@@ -144,6 +152,7 @@ warnValue(docs.includes("closed-test:api-env"), "Play Store docs should mention 
 warnValue(docs.includes("closed-test:preflight"), "Play Store docs should mention npm run closed-test:preflight.");
 warnValue(docs.includes("EXPO_PUBLIC_API_URL"), "Play Store docs should mention EXPO_PUBLIC_API_URL.");
 warnValue(docs.includes("render-env.closed-test.example"), "Play Store docs should mention the Render env example.");
+warnValue(docs.includes("STUDY_PROOF_STORAGE_BACKEND"), "Play Store docs should mention study proof image storage.");
 
 if (existsSync(closedTestEnvExamplePath)) {
   const closedTestEnvExample = readFileSync(closedTestEnvExamplePath, "utf8");
