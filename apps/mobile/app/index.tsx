@@ -13,6 +13,8 @@ import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
 import type { AuthSession } from "@/types";
 
+const SHOW_DEMO_ENTRY = process.env.EXPO_PUBLIC_ENABLE_DEMO_ENTRY === "true";
+
 export default function HomeScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -91,28 +93,30 @@ export default function HomeScreen() {
           </View>
         ) : null}
 
-        <View style={styles.demoPanel}>
-          <View style={styles.demoIcon}>
-            <MaterialCommunityIcons name="camera-outline" size={26} color={colors.brand} />
+        {SHOW_DEMO_ENTRY ? (
+          <View style={styles.demoPanel}>
+            <View style={styles.demoIcon}>
+              <MaterialCommunityIcons name="camera-outline" size={26} color={colors.brand} />
+            </View>
+            <View style={styles.demoCopy}>
+              <Text style={styles.kicker}>Play Store screenshots</Text>
+              <Text style={styles.demoTitle}>Open safe demo data</Text>
+              <Text style={styles.subtitle}>
+                Use sample student and parent dashboards for screenshots without exposing real learner data.
+              </Text>
+            </View>
+            <View style={styles.demoActions}>
+              <Pressable accessibilityRole="button" onPress={() => openScreenshotDemo("student")} style={styles.secondaryButton}>
+                <MaterialCommunityIcons name="notebook-edit-outline" size={18} color={colors.brand} />
+                <Text style={styles.secondaryButtonText}>Student demo</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={() => openScreenshotDemo("parent")} style={styles.secondaryButton}>
+                <MaterialCommunityIcons name="account-supervisor-outline" size={18} color={colors.brand} />
+                <Text style={styles.secondaryButtonText}>Parent demo</Text>
+              </Pressable>
+            </View>
           </View>
-          <View style={styles.demoCopy}>
-            <Text style={styles.kicker}>Play Store screenshots</Text>
-            <Text style={styles.demoTitle}>Open safe demo data</Text>
-            <Text style={styles.subtitle}>
-              Use sample student and parent dashboards for screenshots without exposing real learner data.
-            </Text>
-          </View>
-          <View style={styles.demoActions}>
-            <Pressable accessibilityRole="button" onPress={() => openScreenshotDemo("student")} style={styles.secondaryButton}>
-              <MaterialCommunityIcons name="notebook-edit-outline" size={18} color={colors.brand} />
-              <Text style={styles.secondaryButtonText}>Student demo</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => openScreenshotDemo("parent")} style={styles.secondaryButton}>
-              <MaterialCommunityIcons name="account-supervisor-outline" size={18} color={colors.brand} />
-              <Text style={styles.secondaryButtonText}>Parent demo</Text>
-            </Pressable>
-          </View>
-        </View>
+        ) : null}
 
         <View style={styles.statsGrid}>
           <StatCard label="Smart planning" value="Daily" icon="calendar-clock" />

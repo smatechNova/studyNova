@@ -21,7 +21,13 @@ Demo routes:
 /parent?demo=parent
 ```
 
-The home screen also includes a "Play Store screenshots" panel with Student demo and Parent demo buttons.
+The home screen can show a "Play Store screenshots" panel with Student demo and Parent demo buttons only when demo entry is explicitly enabled:
+
+```text
+EXPO_PUBLIC_ENABLE_DEMO_ENTRY=true
+```
+
+Keep this flag `false` or unset for public, closed-test, and production builds.
 
 Demo mode rules:
 
