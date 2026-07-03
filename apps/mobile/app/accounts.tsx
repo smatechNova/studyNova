@@ -141,8 +141,8 @@ export default function AccountsScreen() {
       }));
       setSetupResult({ studentId: student.id, parentId: parent.id });
       setMessage("Profiles are linked. Choose which dashboard to open next.");
-    } catch {
-      setMessage("Could not save the account setup. Check the API and confirm any existing account access code.");
+    } catch (error) {
+      setMessage(accountSetupErrorMessage(error));
     } finally {
       setActiveAction(null);
     }
@@ -641,6 +641,32 @@ function isValidLoginId(value: string) {
 
 function isValidAccessCode(value: string) {
   return /^\d{4,6}$/.test(value.trim());
+}
+
+function accountSetupErrorMessage(error: unknown) {
+  const detail = error instanceof Error ? error.message : "";
+
+  if (/Failed to fetch|Network request failed|NetworkError|Load failed/i.test(detail)) {
+    return "Could not reach the StudyNova API. Start the API server and confirm the app is using the correct API URL.";
+  }
+
+  if (detail.includes("Student account already exists with a different access code.")) {
+    return "This student login ID already exists with another access code. Use the original student code, choose a different login ID, or use account recovery.";
+  }
+
+  if (detail.includes("Parent account already exists with a different access code.")) {
+    return "This parent contact already exists with another access code. Use the original parent code, choose a different parent contact, or use account recovery.";
+  }
+
+  if (detail.includes("Parent or student account was not found.")) {
+    return "The profile was saved, but the parent-student link could not be completed. Open account setup again and link the student to the parent.";
+  }
+
+  if (detail) {
+    return detail;
+  }
+
+  return "Could not save the account setup. Check the API and confirm any existing account access code.";
 }
 
 function getParamValue(value?: string | string[]) {
