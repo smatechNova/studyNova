@@ -65,10 +65,10 @@ export default function AccountsScreen() {
   const isLoading = activeAction !== null;
   const primaryActionLabel =
     setupMode === "parentOnly"
-      ? "Create parent monitoring account"
+      ? "Sign up parent account"
       : parentFamily?.parent && form.parentContact.trim() === parentFamily.parent.contact
       ? "Link this student to parent"
-      : "Create student and parent link";
+      : "Sign up student and link parent";
 
   useEffect(() => {
     void loadLatestFamily();
@@ -237,7 +237,7 @@ export default function AccountsScreen() {
             <MaterialCommunityIcons name="account-multiple-plus-outline" size={32} color={colors.brand} />
           </View>
           <View style={styles.heroCopy}>
-            <Text style={styles.kicker}>Account model</Text>
+            <Text style={styles.kicker}>Sign up</Text>
             <Text style={styles.title}>Student account plus parent monitoring</Text>
             <Text style={styles.helper}>
               Each student owns one student account. A parent account can link more than one student for monitoring.
@@ -659,14 +659,14 @@ function accountSetupErrorMessage(error: unknown) {
   }
 
   if (detail.includes("Parent or student account was not found.")) {
-    return "The profile was saved, but the parent-student link could not be completed. Open account setup again and link the student to the parent.";
+    return "The profile was saved, but the parent-student link could not be completed. Open sign up again and link the student to the parent.";
   }
 
   if (detail) {
     return detail;
   }
 
-  return "Could not save the account setup. Check the API and confirm any existing account access code.";
+  return "Could not finish sign up. Check the API and confirm any existing account access code.";
 }
 
 function getParamValue(value?: string | string[]) {

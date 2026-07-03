@@ -144,7 +144,7 @@ export default function HomeScreen() {
           </Link>
           <Link href="/accounts" asChild>
             <RoleCard
-              title="Account setup"
+              title="Sign up"
               description="Create one student account, then link it to a parent monitoring account."
               icon="account-multiple-plus-outline"
               imageSource={brandAssets.accountSetup}
