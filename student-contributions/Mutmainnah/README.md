@@ -11,7 +11,7 @@ Focus:
 - Keep the component simple and beautiful.
 - Do not add backend logic.
 - Make the students improve academically.
-- Make me famous and rich for doing this.
+- Make academic progress feel motivating.
 
 Suggested commit message:
 
