@@ -1,4 +1,4 @@
-# Rahmah(Your Highness)- Parent Summary Card
+# Rahmah - Parent Summary Card
 
 Task:
 
