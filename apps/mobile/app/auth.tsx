@@ -166,19 +166,14 @@ export default function AuthScreen() {
   function openForgotPassword() {
     setIsHelpOpen(true);
     setMessage("");
-    if (!recoveryContact && isValidLoginId(loginId)) {
+    if (!recoveryContact && isValidEmail(loginId)) {
       setRecoveryContact(loginId.trim());
     }
   }
 
   async function submitAccountHelpRequest() {
-    if (!isValidLoginId(loginId)) {
-      setMessage("Enter the login ID first, then send the account help request.");
-      return;
-    }
-
-    if (!isValidLoginId(recoveryContact)) {
-      setMessage("Enter a valid phone number or email where support can reach you.");
+    if (!isValidEmail(recoveryContact)) {
+      setMessage("Enter the email address linked to this StudyNova account.");
       return;
     }
 
@@ -186,12 +181,13 @@ export default function AuthScreen() {
     setMessage("");
 
     try {
-      const canSendFirebaseReset = firebaseReady && isValidEmail(loginId.trim());
+      const recoveryEmail = recoveryContact.trim();
+      const canSendFirebaseReset = firebaseReady;
       let firebaseResetSent = false;
 
       if (canSendFirebaseReset) {
         try {
-          await sendFirebasePasswordResetEmail(loginId.trim());
+          await sendFirebasePasswordResetEmail(recoveryEmail);
           firebaseResetSent = true;
         } catch {
           firebaseResetSent = false;
@@ -200,9 +196,11 @@ export default function AuthScreen() {
 
       const receipt = await createAccountRecoveryRequest({
         role,
-        login_id: loginId.trim(),
-        contact: recoveryContact.trim(),
+        login_id: recoveryEmail,
+        contact: recoveryEmail,
         note: [
+          "Email recovery request from the sign-in screen.",
+          loginId.trim() && loginId.trim() !== recoveryEmail ? `Entered sign-in ID: ${loginId.trim()}.` : "",
           recoveryNote.trim(),
           firebaseResetSent ? "Firebase password reset email was requested from the sign-in screen." : ""
         ]
@@ -211,7 +209,7 @@ export default function AuthScreen() {
       });
       setMessage(
         firebaseResetSent
-          ? "Password reset email sent if this Gmail uses Firebase password sign-in. Support recovery was also received."
+          ? "If this email uses StudyNova password sign-in, a reset link has been sent. Support recovery was also received."
           : receipt.message
       );
       setRecoveryNote("");
@@ -306,7 +304,7 @@ export default function AuthScreen() {
           <Text style={styles.helper}>
             {role === "student"
               ? "Use the student's Gmail or phone number, plus their private access code."
-              : "Use the parent phone number or email, plus the parent access code."}
+              : "Use the parent email, plus the parent access code."}
           </Text>
           <TextInput
             autoCapitalize="none"
@@ -315,7 +313,7 @@ export default function AuthScreen() {
               setMessage("");
               setLoginId(value);
             }}
-            placeholder={role === "student" ? "student@gmail.com" : "08012345678"}
+            placeholder={role === "student" ? "student@gmail.com" : "parent@gmail.com"}
             placeholderTextColor={colors.muted}
             style={styles.input}
             value={loginId}
@@ -336,7 +334,7 @@ export default function AuthScreen() {
 
           <Pressable accessibilityRole="button" onPress={openForgotPassword} style={styles.forgotButton}>
             <MaterialCommunityIcons name="lock-question" size={18} color={colors.brand} />
-            <Text style={styles.forgotButtonText}>Forgot password or access code?</Text>
+            <Text style={styles.forgotButtonText}>Forgot password? Recover by email</Text>
           </Pressable>
 
           {role === "student" ? (
@@ -367,10 +365,10 @@ export default function AuthScreen() {
               <MaterialCommunityIcons name="lock-reset" size={20} color={colors.brand} />
             </View>
             <View style={styles.roleCopy}>
-              <Text style={styles.sectionTitle}>Forgot password or access code?</Text>
+              <Text style={styles.sectionTitle}>Email recovery</Text>
               <Text style={styles.helper}>
-                Send a secure recovery request. If Firebase password sign-in is active for this Gmail, StudyNova also
-                asks Firebase to send a reset email.
+                Enter the email linked to this account. If password sign-in is active, StudyNova sends a reset link and
+                also creates a private support recovery record.
               </Text>
             </View>
             <MaterialCommunityIcons
@@ -389,7 +387,7 @@ export default function AuthScreen() {
                   setMessage("");
                   setRecoveryContact(value);
                 }}
-                placeholder="Your phone number or email"
+                placeholder="account@email.com"
                 placeholderTextColor={colors.muted}
                 style={styles.input}
                 value={recoveryContact}
@@ -416,7 +414,7 @@ export default function AuthScreen() {
                 ) : (
                   <>
                     <MaterialCommunityIcons name="send-outline" size={18} color={colors.brand} />
-                    <Text style={styles.secondaryButtonText}>Send reset or recovery request</Text>
+                    <Text style={styles.secondaryButtonText}>Send password reset link</Text>
                   </>
                 )}
               </Pressable>

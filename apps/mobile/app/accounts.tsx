@@ -326,7 +326,8 @@ export default function AccountsScreen() {
               value={form.studentLoginId}
             />
             <Text style={styles.helper}>
-              For Google sign-in, use the same Gmail the student will select on this phone.
+              If the student has no Gmail yet, a phone number can be used for now. Parent email below is still required
+              for verification and recovery.
             </Text>
             <FormField
               keyboardType="number-pad"
@@ -373,7 +374,8 @@ export default function AccountsScreen() {
           <View style={styles.sectionCopy}>
             <Text style={styles.sectionTitle}>Parent monitoring account</Text>
             <Text style={styles.helper}>
-              Reuse the same parent contact when linking another student to this parent.
+              Parent email is required for verification, recovery, and future Google sign-in, even when the student has
+              no email account.
             </Text>
           </View>
           <FormField
@@ -384,13 +386,13 @@ export default function AccountsScreen() {
           />
           <FormField
             keyboardType="email-address"
-            label="Phone or email"
+            label="Parent email"
             onChangeText={(value) => updateField("parentContact", value)}
-            placeholder="08012345678"
+            placeholder="parent@gmail.com"
             value={form.parentContact}
           />
           <Text style={styles.helper}>
-            For Google sign-in, use the same Gmail the parent will select on this phone.
+            Use the same Gmail the parent will select on this phone. One parent email can monitor multiple students.
           </Text>
           <FormField
             keyboardType="number-pad"
@@ -582,8 +584,8 @@ function getAccountValidationError(form: AccountForm, setupMode: SetupMode) {
     return "Enter the parent or guardian's full name.";
   }
 
-  if (!isValidParentContact(form.parentContact)) {
-    return "Enter a valid parent phone number or email address.";
+  if (!isValidEmail(form.parentContact)) {
+    return "Enter a valid parent email address. Parent email is required for account verification and recovery.";
   }
 
   if (!isValidAccessCode(form.parentAccessCode)) {
@@ -622,8 +624,7 @@ function isValidPersonName(value: string) {
 
 function isValidParentContact(value: string) {
   const normalized = value.trim();
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (emailPattern.test(normalized)) {
+  if (isValidEmail(normalized)) {
     return true;
   }
 
@@ -637,6 +638,10 @@ function isValidParentContact(value: string) {
 
 function isValidLoginId(value: string) {
   return isValidParentContact(value);
+}
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
 function isValidAccessCode(value: string) {
@@ -655,7 +660,7 @@ function accountSetupErrorMessage(error: unknown) {
   }
 
   if (detail.includes("Parent account already exists with a different access code.")) {
-    return "This parent contact already exists with another access code. Use the original parent code, choose a different parent contact, or use account recovery.";
+    return "This parent email already exists with another access code. Use the original parent code, choose a different parent email, or use account recovery.";
   }
 
   if (detail.includes("Parent or student account was not found.")) {
