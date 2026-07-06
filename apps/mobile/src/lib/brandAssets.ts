@@ -1,5 +1,5 @@
 export const brandAssets = {
-  accountSetup: require("../../assets/stock/parent-study-support.jpg"),
+  accountSetup: require("../../assets/stock/planner-desk.jpg"),
   examStep: require("../../assets/stock/planner-desk.jpg"),
   feedback: require("../../assets/brand/feedback.png"),
   generatedPlanHero: require("../../assets/stock/planner-desk.jpg"),
