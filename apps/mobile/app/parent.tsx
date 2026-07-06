@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
+import { DashboardIntroCard } from "@/components/DashboardIntroCard";
 import { ProgressBar } from "@/components/ProgressBar";
 import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
@@ -25,6 +26,7 @@ import {
   createDemoWeeklyDigest,
   isDemoParam
 } from "@/lib/demoData";
+import { dismissDashboardIntro, hasDismissedDashboardIntro } from "@/lib/dashboardIntro";
 import { brandAssets } from "@/lib/brandAssets";
 import { clearStoredAuthSession, getStoredAuthSession } from "@/lib/session";
 import type { ParentFamilyAccount, PlanSession, SavedStudyPlan, StudyPlanProgress, WeeklyStudyDigest } from "@/types";
@@ -54,6 +56,7 @@ export default function ParentScreen() {
   const [sessionParentId, setSessionParentId] = useState<string | undefined>();
   const [isSessionLoading, setIsSessionLoading] = useState(true);
   const [authMessage, setAuthMessage] = useState("");
+  const [isIntroVisible, setIsIntroVisible] = useState(false);
   const [parentFamily, setParentFamily] = useState<ParentFamilyAccount | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | undefined>();
   const [savedPlan, setSavedPlan] = useState<SavedStudyPlan | null>(null);
@@ -153,6 +156,28 @@ export default function ParentScreen() {
       isMounted = false;
     };
   }, [isDemoMode, routeParentId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadIntroState() {
+      if (!activeParentId) {
+        setIsIntroVisible(false);
+        return;
+      }
+
+      const isDismissed = await hasDismissedDashboardIntro("parent", activeParentId);
+      if (isMounted) {
+        setIsIntroVisible(!isDismissed);
+      }
+    }
+
+    void loadIntroState();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeParentId]);
 
   useEffect(() => {
     void loadParentView();
@@ -327,6 +352,15 @@ export default function ParentScreen() {
     router.replace("/auth?role=parent");
   }
 
+  function dismissIntro() {
+    if (!activeParentId) {
+      return;
+    }
+
+    setIsIntroVisible(false);
+    void dismissDashboardIntro("parent", activeParentId);
+  }
+
   async function submitDeletionRequest() {
     if (isDemoMode) {
       setDeletionMessage("Demo mode uses safe sample data, so no account deletion request is created.");
@@ -435,6 +469,8 @@ export default function ParentScreen() {
             </Pressable>
           </View>
         </View>
+
+        {isIntroVisible ? <DashboardIntroCard role="parent" onDismiss={dismissIntro} /> : null}
 
         {message ? (
           <View style={styles.infoPanel}>

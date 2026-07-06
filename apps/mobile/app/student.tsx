@@ -17,6 +17,7 @@ import {
 } from "react-native";
 
 import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
+import { DashboardIntroCard } from "@/components/DashboardIntroCard";
 import { ProgressBar } from "@/components/ProgressBar";
 import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
@@ -54,6 +55,7 @@ import {
   demoStudyPlanRequest,
   isDemoParam
 } from "@/lib/demoData";
+import { dismissDashboardIntro, hasDismissedDashboardIntro } from "@/lib/dashboardIntro";
 import { clearStoredAuthSession, getStoredAuthSession } from "@/lib/session";
 import type {
   ParentInviteCode,
@@ -157,6 +159,7 @@ export default function StudentScreen() {
   const [sessionStudentId, setSessionStudentId] = useState<string | undefined>();
   const [isSessionLoading, setIsSessionLoading] = useState(true);
   const [authMessage, setAuthMessage] = useState("");
+  const [isIntroVisible, setIsIntroVisible] = useState(false);
   const [form, setForm] = useState<PlanForm>(() => createDefaultForm());
   const [plan, setPlan] = useState<StudyPlanResponse | null>(null);
   const [savedPlan, setSavedPlan] = useState<SavedStudyPlan | null>(null);
@@ -253,6 +256,28 @@ export default function StudentScreen() {
       isMounted = false;
     };
   }, [isDemoMode, routeStudentId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadIntroState() {
+      if (!activeStudentId) {
+        setIsIntroVisible(false);
+        return;
+      }
+
+      const isDismissed = await hasDismissedDashboardIntro("student", activeStudentId);
+      if (isMounted) {
+        setIsIntroVisible(!isDismissed);
+      }
+    }
+
+    void loadIntroState();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeStudentId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -805,6 +830,15 @@ export default function StudentScreen() {
     router.replace("/auth?role=student");
   }
 
+  function dismissIntro() {
+    if (!activeStudentId) {
+      return;
+    }
+
+    setIsIntroVisible(false);
+    void dismissDashboardIntro("student", activeStudentId);
+  }
+
   async function submitDeletionRequest() {
     if (isDemoMode) {
       setDeletionMessage("Demo mode uses safe sample data, so no account deletion request is created.");
@@ -927,6 +961,8 @@ export default function StudentScreen() {
             </Pressable>
           </View>
         </View>
+
+        {isIntroVisible ? <DashboardIntroCard role="student" onDismiss={dismissIntro} /> : null}
 
         {latestPlan ? (
           <View style={styles.panel}>
