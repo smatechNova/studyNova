@@ -38,6 +38,9 @@ from app.schemas import (
     LaunchChecklistItemUpdate,
     ParentAccount,
     ParentAccountCreate,
+    ParentEmailVerificationConfirmReceipt,
+    ParentEmailVerificationConfirmRequest,
+    ParentEmailVerificationReceipt,
     ParentFamilyAccount,
     ParentInviteCode,
     ParentInviteRedeemRequest,
@@ -363,6 +366,28 @@ def create_parent_account(payload: ParentAccountCreate) -> ParentAccount:
         return get_study_plan_store().create_parent_account(payload)
     except AccountAccessCodeError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
+@router.post("/accounts/parents/{parent_id}/email-verification", response_model=ParentEmailVerificationReceipt)
+def request_parent_email_verification(parent_id: str) -> ParentEmailVerificationReceipt:
+    receipt = get_study_plan_store().request_parent_email_verification(parent_id)
+    if receipt is None:
+        raise HTTPException(status_code=404, detail="Parent account was not found.")
+    return receipt
+
+
+@router.post(
+    "/accounts/parents/{parent_id}/email-verification/confirm",
+    response_model=ParentEmailVerificationConfirmReceipt,
+)
+def confirm_parent_email_verification(
+    parent_id: str,
+    payload: ParentEmailVerificationConfirmRequest,
+) -> ParentEmailVerificationConfirmReceipt:
+    receipt = get_study_plan_store().confirm_parent_email_verification(parent_id, payload.code)
+    if receipt is None:
+        raise HTTPException(status_code=400, detail="Verification code is invalid or expired.")
+    return receipt
 
 
 @router.post("/accounts/links", response_model=ParentStudentLink)

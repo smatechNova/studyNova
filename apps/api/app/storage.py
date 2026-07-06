@@ -30,6 +30,8 @@ from app.schemas import (
     LaunchChecklistItemUpdate,
     ParentAccount,
     ParentAccountCreate,
+    ParentEmailVerificationConfirmReceipt,
+    ParentEmailVerificationReceipt,
     ParentFamilyAccount,
     ParentInviteCode,
     ParentProgressSummary,
@@ -943,13 +945,25 @@ class StudyPlanStore:
             name=payload.name,
             contact=payload.contact,
             relationship=payload.relationship,
+            email_verified=False,
+            email_verified_at=None,
         )
 
         with self._connect() as connection:
             connection.execute(
                 """
-                insert into parent_accounts (id, access_code_hash, auth_uid, name, contact, relationship, created_at)
-                values (?, ?, ?, ?, ?, ?, ?)
+                insert into parent_accounts (
+                    id,
+                    access_code_hash,
+                    auth_uid,
+                    name,
+                    contact,
+                    relationship,
+                    email_verified,
+                    email_verified_at,
+                    created_at
+                )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     account.id,
@@ -958,11 +972,113 @@ class StudyPlanStore:
                     account.name,
                     account.contact,
                     account.relationship,
+                    0,
+                    None,
                     account.created_at.isoformat(),
                 ),
             )
 
         return account
+
+    def request_parent_email_verification(self, parent_id: str) -> ParentEmailVerificationReceipt | None:
+        parent = self.parent_account_by_id(parent_id)
+        if parent is None:
+            return None
+
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(minutes=20)
+        verification_code = f"{secrets.randbelow(1_000_000):06d}"
+        with self._connect() as connection:
+            connection.execute(
+                """
+                insert into parent_email_verifications (
+                    id,
+                    parent_id,
+                    code_hash,
+                    created_at,
+                    expires_at,
+                    consumed_at
+                )
+                values (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(uuid4()),
+                    parent.id,
+                    _hash_access_code(verification_code),
+                    now.isoformat(),
+                    expires_at.isoformat(),
+                    None,
+                ),
+            )
+
+        settings = get_settings()
+        return ParentEmailVerificationReceipt(
+            parent_id=parent.id,
+            email=parent.contact,
+            message=(
+                "Verification code sent to parent email."
+                if settings.is_production
+                else "Development verification code generated for this parent email."
+            ),
+            expires_at=expires_at,
+            dev_code=None if settings.is_production else verification_code,
+        )
+
+    def confirm_parent_email_verification(
+        self,
+        parent_id: str,
+        code: str,
+    ) -> ParentEmailVerificationConfirmReceipt | None:
+        parent = self.parent_account_by_id(parent_id)
+        if parent is None:
+            return None
+
+        now = datetime.now(timezone.utc)
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                select id, code_hash, expires_at
+                from parent_email_verifications
+                where parent_id = ? and consumed_at is null
+                order by created_at desc
+                limit 1
+                """,
+                (parent_id,),
+            ).fetchone()
+
+            if row is None:
+                return None
+
+            expires_at = _parse_datetime(row["expires_at"])
+            if expires_at <= now or not hmac.compare_digest(row["code_hash"], _hash_access_code(code)):
+                return None
+
+            connection.execute(
+                """
+                update parent_email_verifications
+                set consumed_at = ?
+                where id = ?
+                """,
+                (now.isoformat(), row["id"]),
+            )
+            connection.execute(
+                """
+                update parent_accounts
+                set email_verified = 1,
+                    email_verified_at = ?
+                where id = ?
+                """,
+                (now.isoformat(), parent_id),
+            )
+
+        verified_parent = self.parent_account_by_id(parent_id)
+        if verified_parent is None:
+            return None
+
+        return ParentEmailVerificationConfirmReceipt(
+            parent=verified_parent,
+            message="Parent email verified. The account can now open linked dashboards.",
+        )
 
     def link_parent_student(self, payload: ParentStudentLinkCreate) -> ParentStudentLink | None:
         if self.student_account_by_id(payload.student_id) is None or self.parent_account_by_id(payload.parent_id) is None:
@@ -1196,7 +1312,7 @@ class StudyPlanStore:
         with self._connect() as connection:
             row = connection.execute(
                 """
-                select id, auth_uid, name, contact, relationship, created_at
+                select id, auth_uid, name, contact, relationship, email_verified, email_verified_at, created_at
                 from parent_accounts
                 order by created_at desc
                 limit 1
@@ -1279,7 +1395,7 @@ class StudyPlanStore:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                select id, auth_uid, name, contact, relationship, created_at
+                select id, auth_uid, name, contact, relationship, email_verified, email_verified_at, created_at
                 from parent_accounts
                 order by created_at desc
                 """
@@ -1295,7 +1411,7 @@ class StudyPlanStore:
         with self._connect() as connection:
             row = connection.execute(
                 """
-                select id, auth_uid, name, contact, relationship, created_at
+                select id, auth_uid, name, contact, relationship, email_verified, email_verified_at, created_at
                 from parent_accounts
                 where auth_uid = ?
                 order by created_at desc
@@ -1310,7 +1426,7 @@ class StudyPlanStore:
         with self._connect() as connection:
             row = connection.execute(
                 """
-                select id, auth_uid, name, contact, relationship, created_at
+                select id, auth_uid, name, contact, relationship, email_verified, email_verified_at, created_at
                 from parent_accounts
                 where id = ?
                 """,
@@ -2130,6 +2246,8 @@ class StudyPlanStore:
             name=row["name"],
             contact=row["contact"],
             relationship=row["relationship"],
+            email_verified=bool(row["email_verified"]),
+            email_verified_at=row["email_verified_at"] or None,
             created_at=row["created_at"],
         )
 
@@ -2224,6 +2342,8 @@ class StudyPlanStore:
                     name text not null,
                     contact text not null,
                     relationship text not null,
+                    email_verified integer not null default 1,
+                    email_verified_at text,
                     created_at text not null
                 )
                 """
@@ -2235,10 +2355,32 @@ class StudyPlanStore:
                 connection.execute("alter table parent_accounts add column auth_uid text")
             if "access_code_hash" not in parent_account_columns:
                 connection.execute("alter table parent_accounts add column access_code_hash text")
+            if "email_verified" not in parent_account_columns:
+                connection.execute("alter table parent_accounts add column email_verified integer not null default 1")
+            if "email_verified_at" not in parent_account_columns:
+                connection.execute("alter table parent_accounts add column email_verified_at text")
             connection.execute(
                 """
                 create index if not exists idx_parent_accounts_auth_uid
                 on parent_accounts (auth_uid)
+                """
+            )
+            connection.execute(
+                """
+                create table if not exists parent_email_verifications (
+                    id text primary key,
+                    parent_id text not null,
+                    code_hash text not null,
+                    created_at text not null,
+                    expires_at text not null,
+                    consumed_at text
+                )
+                """
+            )
+            connection.execute(
+                """
+                create index if not exists idx_parent_email_verifications_parent_created
+                on parent_email_verifications (parent_id, created_at desc)
                 """
             )
             connection.execute(
@@ -2651,6 +2793,11 @@ def _normalize_parent_invite_code(code: str) -> str | None:
 
 def _compact_text(value: str) -> str:
     return " ".join(value.strip().lower().split())
+
+
+def _parse_datetime(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value)
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
 
 
 def _hash_access_code(access_code: str) -> str:

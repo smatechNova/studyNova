@@ -16,6 +16,8 @@ import type {
   LaunchChecklistItemRecord,
   LaunchChecklistItemUpdate,
   ParentAccount,
+  ParentEmailVerificationConfirmReceipt,
+  ParentEmailVerificationReceipt,
   ParentFamilyAccount,
   ParentInviteCode,
   ParentAccountInput,
@@ -130,6 +132,37 @@ export async function createParentAccount(payload: ParentAccountInput): Promise<
   }
 
   return response.json() as Promise<ParentAccount>;
+}
+
+export async function requestParentEmailVerification(parentId: string): Promise<ParentEmailVerificationReceipt> {
+  const response = await apiFetch(`${API_URL}/api/v1/accounts/parents/${parentId}/email-verification`, {
+    method: "POST"
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Parent email verification request failed");
+  }
+
+  return response.json() as Promise<ParentEmailVerificationReceipt>;
+}
+
+export async function confirmParentEmailVerification(
+  parentId: string,
+  code: string
+): Promise<ParentEmailVerificationConfirmReceipt> {
+  const response = await apiFetch(`${API_URL}/api/v1/accounts/parents/${parentId}/email-verification/confirm`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ code })
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Parent email verification confirmation failed");
+  }
+
+  return response.json() as Promise<ParentEmailVerificationConfirmReceipt>;
 }
 
 export async function linkParentStudent(parentId: string, studentId: string): Promise<ParentStudentLink> {

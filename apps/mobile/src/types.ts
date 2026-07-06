@@ -111,7 +111,24 @@ export type ParentAccountInput = {
 export type ParentAccount = Omit<ParentAccountInput, "access_code"> & {
   id: string;
   auth_uid?: string | null;
+  email_verified?: boolean;
+  email_verified_at?: string | null;
   created_at: string;
+};
+
+export type ParentEmailVerificationReceipt = {
+  parent_id: string;
+  email: string;
+  status: "sent";
+  message: string;
+  expires_at: string;
+  dev_code?: string | null;
+};
+
+export type ParentEmailVerificationConfirmReceipt = {
+  parent: ParentAccount;
+  verified: boolean;
+  message: string;
 };
 
 export type ParentStudentLink = {

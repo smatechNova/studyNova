@@ -16,16 +16,18 @@ import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
 import { IllustrationPanel } from "@/components/IllustrationPanel";
 import { Screen } from "@/components/Screen";
 import {
+  confirmParentEmailVerification,
   createParentAccount,
   createStudentAccount,
   getLatestParentFamily,
   getParentFamily,
   linkParentStudent,
+  requestParentEmailVerification,
   signInAccount
 } from "@/lib/api";
 import { brandAssets } from "@/lib/brandAssets";
 import { saveAuthSession } from "@/lib/session";
-import type { ParentFamilyAccount } from "@/types";
+import type { ParentEmailVerificationReceipt, ParentFamilyAccount } from "@/types";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
 
@@ -49,7 +51,7 @@ type SetupResult = {
 
 type SetupMode = "studentParent" | "parentOnly";
 
-type AccountAction = "save" | "student" | "parent";
+type AccountAction = "save" | "verify" | "student" | "parent";
 
 export default function AccountsScreen() {
   const { colors } = useTheme();
@@ -62,7 +64,11 @@ export default function AccountsScreen() {
   const [message, setMessage] = useState("");
   const [activeAction, setActiveAction] = useState<AccountAction | null>(null);
   const [setupResult, setSetupResult] = useState<SetupResult | null>(null);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [verificationReceipt, setVerificationReceipt] = useState<ParentEmailVerificationReceipt | null>(null);
   const isLoading = activeAction !== null;
+  const currentParent = parentFamily?.parent ?? null;
+  const isParentVerified = Boolean(currentParent?.email_verified);
   const primaryActionLabel =
     setupMode === "parentOnly"
       ? "Sign up parent account"
@@ -91,6 +97,13 @@ export default function AccountsScreen() {
     }
   }
 
+  async function beginParentEmailVerification(parentId: string) {
+    const receipt = await requestParentEmailVerification(parentId);
+    setVerificationReceipt(receipt);
+    setVerificationCode(receipt.dev_code ?? "");
+    return receipt;
+  }
+
   async function saveAccounts() {
     const validation = getAccountValidationError(form, setupMode);
     if (validation) {
@@ -115,6 +128,11 @@ export default function AccountsScreen() {
           links: current?.parent?.id === parent.id ? current.links : []
         }));
         setSetupResult({ parentId: parent.id });
+        if (!parent.email_verified) {
+          const receipt = await beginParentEmailVerification(parent.id);
+          setMessage(`Verify ${receipt.email} before opening dashboards. Enter the code sent to the parent email.`);
+          return;
+        }
         setMessage("Parent monitoring account is ready. Open the parent dashboard and link students with invite codes.");
         return;
       }
@@ -140,6 +158,11 @@ export default function AccountsScreen() {
         links: current?.parent?.id === parent.id ? upsertById(current.links, link) : [link]
       }));
       setSetupResult({ studentId: student.id, parentId: parent.id });
+      if (!parent.email_verified) {
+        const receipt = await beginParentEmailVerification(parent.id);
+        setMessage(`Verify ${receipt.email} before opening dashboards. Enter the code sent to the parent email.`);
+        return;
+      }
       setMessage("Profiles are linked. Choose which dashboard to open next.");
     } catch (error) {
       setMessage(accountSetupErrorMessage(error));
@@ -151,6 +174,8 @@ export default function AccountsScreen() {
   function updateField(field: keyof AccountForm, value: string) {
     setMessage("");
     setSetupResult(null);
+    setVerificationReceipt(null);
+    setVerificationCode("");
     setForm((current) => ({ ...current, [field]: value }));
   }
 
@@ -173,6 +198,8 @@ export default function AccountsScreen() {
       relationship: parentFamily.parent?.relationship ?? current.relationship
     }));
     setSetupResult(null);
+    setVerificationReceipt(null);
+    setVerificationCode("");
     setMessage("Parent monitoring details are ready. Enter one student's details and link that student.");
   }
 
@@ -184,6 +211,59 @@ export default function AccountsScreen() {
     setSetupMode(nextMode);
     setMessage("");
     setSetupResult(null);
+    setVerificationReceipt(null);
+    setVerificationCode("");
+  }
+
+  async function verifyParentEmail() {
+    if (!setupResult?.parentId) {
+      setMessage("Create or link the parent account first, then verify the parent email.");
+      return;
+    }
+
+    if (!/^\d{6}$/.test(verificationCode.trim())) {
+      setMessage("Enter the 6 digit code sent to the parent email.");
+      return;
+    }
+
+    setActiveAction("verify");
+    setMessage("");
+
+    try {
+      const receipt = await confirmParentEmailVerification(setupResult.parentId, verificationCode.trim());
+      setParentFamily((current) => ({
+        parent: receipt.parent,
+        students: current?.students ?? [],
+        links: current?.links ?? []
+      }));
+      setVerificationReceipt(null);
+      setVerificationCode("");
+      setMessage(receipt.message);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "";
+      setMessage(detail || "The verification code could not be confirmed. Check the code and try again.");
+    } finally {
+      setActiveAction(null);
+    }
+  }
+
+  async function resendParentVerificationCode() {
+    if (!setupResult?.parentId) {
+      setMessage("Create or link the parent account first, then request a verification code.");
+      return;
+    }
+
+    setActiveAction("verify");
+    setMessage("");
+
+    try {
+      const receipt = await beginParentEmailVerification(setupResult.parentId);
+      setMessage(`A fresh verification code was sent to ${receipt.email}.`);
+    } catch (error) {
+      setMessage(accountSetupErrorMessage(error));
+    } finally {
+      setActiveAction(null);
+    }
   }
 
   async function continueToDashboard(role: "student" | "parent") {
@@ -197,6 +277,11 @@ export default function AccountsScreen() {
 
     if (role === "student" && !setupResult.studentId) {
       setMessage("This setup only created a parent account. Create or link a student before opening a student dashboard.");
+      return;
+    }
+
+    if (!isParentVerified) {
+      setMessage("Verify the parent email before opening either dashboard.");
       return;
     }
 
@@ -418,7 +503,65 @@ export default function AccountsScreen() {
           </View>
         ) : null}
 
-        {setupResult ? (
+        {setupResult && !isParentVerified ? (
+          <View style={styles.verifyPanel}>
+            <View style={styles.readyIcon}>
+              <MaterialCommunityIcons name="email-check-outline" size={24} color={colors.brand} />
+            </View>
+            <View style={styles.readyCopy}>
+              <Text style={styles.sectionTitle}>Verify parent email</Text>
+              <Text style={styles.helper}>
+                Enter the 6 digit code sent to {verificationReceipt?.email || form.parentContact.trim()}. This keeps
+                student accounts linked to a confirmed parent or guardian.
+              </Text>
+              {verificationReceipt?.dev_code ? (
+                <View style={styles.devCodePanel}>
+                  <Text style={styles.kicker}>Development code</Text>
+                  <Text style={styles.devCodeText}>{verificationReceipt.dev_code}</Text>
+                </View>
+              ) : null}
+              <FormField
+                keyboardType="number-pad"
+                label="Verification code"
+                maxLength={6}
+                onChangeText={(value) => {
+                  setMessage("");
+                  setVerificationCode(value.replace(/\D/g, ""));
+                }}
+                placeholder="6 digits"
+                value={verificationCode}
+              />
+              <View style={styles.readyActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={isLoading}
+                  onPress={() => void verifyParentEmail()}
+                  style={[styles.primaryButton, styles.readyButton, isLoading ? styles.disabledButton : null]}
+                >
+                  {activeAction === "verify" ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <MaterialCommunityIcons name="shield-check-outline" size={18} color="#FFFFFF" />
+                      <Text style={styles.primaryButtonText}>Verify and continue</Text>
+                    </>
+                  )}
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={isLoading}
+                  onPress={() => void resendParentVerificationCode()}
+                  style={[styles.secondaryButton, styles.readyButton, isLoading ? styles.disabledButton : null]}
+                >
+                  <MaterialCommunityIcons name="email-sync-outline" size={18} color={colors.brand} />
+                  <Text style={styles.secondaryButtonText}>Send new code</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        ) : null}
+
+        {setupResult && isParentVerified ? (
           <View style={styles.readyPanel}>
             <View style={styles.readyIcon}>
               <MaterialCommunityIcons name="shield-check-outline" size={24} color={colors.success} />
@@ -699,6 +842,20 @@ function createStyles(colors: AppColors) {
   disabledButton: {
     opacity: 0.55
   },
+  devCodePanel: {
+    backgroundColor: colors.brandSoft,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: spacing.xs,
+    padding: spacing.md
+  },
+  devCodeText: {
+    color: colors.brandDark,
+    fontSize: 24,
+    fontWeight: "900",
+    letterSpacing: 0
+  },
   field: {
     gap: spacing.xs
   },
@@ -896,6 +1053,17 @@ function createStyles(colors: AppColors) {
     alignItems: "flex-start",
     backgroundColor: colors.panel,
     borderColor: colors.success,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  verifyPanel: {
+    alignItems: "flex-start",
+    backgroundColor: colors.panel,
+    borderColor: colors.brand,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: "row",

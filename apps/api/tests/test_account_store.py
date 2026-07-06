@@ -58,6 +58,33 @@ def test_study_plan_store_links_parent_and_student_accounts(tmp_path) -> None:
     assert family.student.name == "Alliyah Olaniyan"
 
 
+def test_study_plan_store_verifies_parent_email(tmp_path) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    parent = store.create_parent_account(
+        ParentAccountCreate(
+            name="Mrs Olaniyan",
+            contact="parent@example.com",
+            access_code="4321",
+            relationship="Mother",
+        )
+    )
+
+    assert parent.email_verified is False
+
+    receipt = store.request_parent_email_verification(parent.id)
+    assert receipt is not None
+    assert receipt.email == "parent@example.com"
+    assert receipt.dev_code is not None
+
+    rejected = store.confirm_parent_email_verification(parent.id, "000000")
+    assert rejected is None
+
+    confirmed = store.confirm_parent_email_verification(parent.id, receipt.dev_code)
+    assert confirmed is not None
+    assert confirmed.parent.email_verified is True
+    assert confirmed.parent.email_verified_at is not None
+
+
 def test_study_plan_store_rejects_missing_account_link(tmp_path) -> None:
     store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
 

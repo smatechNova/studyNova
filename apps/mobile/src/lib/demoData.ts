@@ -139,6 +139,8 @@ export function createDemoParentAccount(): ParentAccount {
     contact: "08000000000",
     relationship: "Guardian",
     auth_uid: "demo-auth-parent",
+    email_verified: true,
+    email_verified_at: isoOffset(-15, 10),
     created_at: isoOffset(-15, 10)
   };
 }

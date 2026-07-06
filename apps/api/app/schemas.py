@@ -133,7 +133,28 @@ class ParentAccount(BaseModel):
     name: str
     contact: str
     relationship: str = "Parent"
+    email_verified: bool = False
+    email_verified_at: datetime | None = None
     created_at: datetime
+
+
+class ParentEmailVerificationReceipt(BaseModel):
+    parent_id: str
+    email: str
+    status: Literal["sent"] = "sent"
+    message: str
+    expires_at: datetime
+    dev_code: str | None = None
+
+
+class ParentEmailVerificationConfirmRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class ParentEmailVerificationConfirmReceipt(BaseModel):
+    parent: ParentAccount
+    verified: bool = True
+    message: str
 
 
 class ParentStudentLinkCreate(BaseModel):
