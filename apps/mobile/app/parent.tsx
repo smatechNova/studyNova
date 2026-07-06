@@ -1,11 +1,12 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Link, router, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
 import { DashboardIntroCard } from "@/components/DashboardIntroCard";
 import { ProgressBar } from "@/components/ProgressBar";
+import { RoleBottomNav, type BottomNavItem } from "@/components/RoleBottomNav";
 import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
 import {
@@ -39,6 +40,16 @@ type AttentionItem = {
   studyDate: string;
 };
 
+type ParentNavKey = "home" | "students" | "progress" | "proof" | "settings";
+
+const PARENT_NAV_ITEMS: BottomNavItem<ParentNavKey>[] = [
+  { key: "home", label: "Home", icon: "home-outline" },
+  { key: "students", label: "Students", icon: "account-supervisor-outline" },
+  { key: "progress", label: "Progress", icon: "chart-line" },
+  { key: "proof", label: "Proof", icon: "book-check-outline" },
+  { key: "settings", label: "Settings", icon: "cog-outline" }
+];
+
 type RecoverySummary = {
   dailyExtraMinutes: number;
   overdueMinutes: number;
@@ -57,6 +68,7 @@ export default function ParentScreen() {
   const [isSessionLoading, setIsSessionLoading] = useState(true);
   const [authMessage, setAuthMessage] = useState("");
   const [isIntroVisible, setIsIntroVisible] = useState(false);
+  const [activeNavKey, setActiveNavKey] = useState<ParentNavKey>("home");
   const [parentFamily, setParentFamily] = useState<ParentFamilyAccount | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | undefined>();
   const [savedPlan, setSavedPlan] = useState<SavedStudyPlan | null>(null);
@@ -75,6 +87,11 @@ export default function ParentScreen() {
   const [deletionConfirmation, setDeletionConfirmation] = useState("");
   const [deletionMessage, setDeletionMessage] = useState("");
   const [isDeletionLoading, setIsDeletionLoading] = useState(false);
+  const parentScrollRef = useRef<ScrollView>(null);
+  const parentStudentsOffsetY = useRef(0);
+  const parentProgressOffsetY = useRef(0);
+  const parentProofOffsetY = useRef(0);
+  const parentSettingsOffsetY = useRef(0);
   const activeParentId = isDemoMode ? DEMO_PARENT_ID : sessionParentId;
 
   const latestCompletion = progress?.completions.at(-1);
@@ -361,6 +378,23 @@ export default function ParentScreen() {
     void dismissDashboardIntro("parent", activeParentId);
   }
 
+  function handleParentNavSelect(key: ParentNavKey) {
+    setActiveNavKey(key);
+
+    const offsets: Record<ParentNavKey, number> = {
+      home: 0,
+      students: parentStudentsOffsetY.current,
+      progress: parentProgressOffsetY.current,
+      proof: parentProofOffsetY.current,
+      settings: parentSettingsOffsetY.current
+    };
+
+    parentScrollRef.current?.scrollTo({
+      y: Math.max(0, offsets[key] - spacing.md),
+      animated: true
+    });
+  }
+
   async function submitDeletionRequest() {
     if (isDemoMode) {
       setDeletionMessage("Demo mode uses safe sample data, so no account deletion request is created.");
@@ -439,7 +473,7 @@ export default function ParentScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView ref={parentScrollRef} contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <Image accessibilityIgnoresInvertColors source={brandAssets.parentDashboardHero} style={styles.headerArtwork} />
           <View style={styles.headerCopy}>
@@ -497,7 +531,12 @@ export default function ParentScreen() {
         ) : null}
 
         {parentFamily?.parent ? (
-          <View style={styles.linkInvitePanel}>
+          <View
+            onLayout={(event) => {
+              parentStudentsOffsetY.current = event.nativeEvent.layout.y;
+            }}
+            style={styles.linkInvitePanel}
+          >
             <View style={styles.panelHeader}>
               <View style={styles.headerCopy}>
                 <Text style={styles.kicker}>Link a student</Text>
@@ -535,7 +574,12 @@ export default function ParentScreen() {
         ) : null}
 
         {parentFamily?.parent ? (
-          <View style={styles.panel}>
+          <View
+            onLayout={(event) => {
+              parentSettingsOffsetY.current = event.nativeEvent.layout.y;
+            }}
+            style={styles.panel}
+          >
             <View style={styles.panelHeader}>
               <View style={styles.headerCopy}>
                 <Text style={styles.kicker}>Privacy</Text>
@@ -709,7 +753,12 @@ export default function ParentScreen() {
           </View>
         ) : null}
 
-        <View style={styles.panel}>
+        <View
+          onLayout={(event) => {
+            parentProgressOffsetY.current = event.nativeEvent.layout.y;
+          }}
+          style={styles.panel}
+        >
           <View style={styles.panelHeader}>
             <View style={styles.headerCopy}>
               <Text style={styles.kicker}>Weekly review</Text>
@@ -821,7 +870,12 @@ export default function ParentScreen() {
           <StatCard label="Minutes" value={`${progress?.completed_minutes ?? 0}`} icon="timer-outline" />
         </View>
 
-        <View style={styles.panel}>
+        <View
+          onLayout={(event) => {
+            parentProofOffsetY.current = event.nativeEvent.layout.y;
+          }}
+          style={styles.panel}
+        >
           <View style={styles.panelHeader}>
             <Text style={styles.sectionTitle}>Latest study proof</Text>
             {latestCompletion ? <Text style={styles.confidence}>Confidence {latestCompletion.confidence}/5</Text> : null}
@@ -870,6 +924,7 @@ export default function ParentScreen() {
           </View>
         </View>
       </ScrollView>
+      <RoleBottomNav activeKey={activeNavKey} items={PARENT_NAV_ITEMS} onSelect={handleParentNavSelect} />
     </Screen>
   );
 }

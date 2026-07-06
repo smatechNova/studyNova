@@ -19,6 +19,7 @@ import {
 import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
 import { DashboardIntroCard } from "@/components/DashboardIntroCard";
 import { ProgressBar } from "@/components/ProgressBar";
+import { RoleBottomNav, type BottomNavItem } from "@/components/RoleBottomNav";
 import { Screen } from "@/components/Screen";
 import { StatCard } from "@/components/StatCard";
 import {
@@ -91,6 +92,15 @@ const BLOCKED_STUDY_CONTENT_PHRASES = [
 type StepName = (typeof STEPS)[number];
 type DateFieldName = "examStartDate" | "examEndDate";
 type MaterialIconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
+type StudentNavKey = "home" | "study" | "plan" | "progress" | "settings";
+
+const STUDENT_NAV_ITEMS: BottomNavItem<StudentNavKey>[] = [
+  { key: "home", label: "Home", icon: "home-outline" },
+  { key: "study", label: "Study", icon: "book-open-page-variant-outline" },
+  { key: "plan", label: "Plan", icon: "calendar-text-outline" },
+  { key: "progress", label: "Progress", icon: "chart-line" },
+  { key: "settings", label: "Settings", icon: "cog-outline" }
+];
 
 const STEP_DETAILS: Record<StepName, { icon: MaterialIconName; eyebrow: string }> = {
   Profile: { icon: "account-school-outline", eyebrow: "Identity" },
@@ -160,6 +170,7 @@ export default function StudentScreen() {
   const [isSessionLoading, setIsSessionLoading] = useState(true);
   const [authMessage, setAuthMessage] = useState("");
   const [isIntroVisible, setIsIntroVisible] = useState(false);
+  const [activeNavKey, setActiveNavKey] = useState<StudentNavKey>("home");
   const [form, setForm] = useState<PlanForm>(() => createDefaultForm());
   const [plan, setPlan] = useState<StudyPlanResponse | null>(null);
   const [savedPlan, setSavedPlan] = useState<SavedStudyPlan | null>(null);
@@ -185,6 +196,7 @@ export default function StudentScreen() {
   const [error, setError] = useState("");
   const setupScrollRef = useRef<ScrollView>(null);
   const setupPanelOffsetY = useRef(0);
+  const setupSettingsOffsetY = useRef(0);
   const subjectListOffsetY = useRef(0);
   const subjectEditorOffsetY = useRef(0);
   const [newSubjectId, setNewSubjectId] = useState<string | undefined>();
@@ -755,6 +767,32 @@ export default function StudentScreen() {
     setupScrollRef.current?.scrollTo({ y: Math.max(0, targetY), animated: true });
   }
 
+  function handleSetupNavSelect(key: StudentNavKey) {
+    setActiveNavKey(key);
+
+    if (key === "home") {
+      setupScrollRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
+
+    if (key === "plan") {
+      queueSetupPanelScroll();
+      return;
+    }
+
+    if (key === "settings") {
+      setupScrollRef.current?.scrollTo({
+        y: Math.max(0, setupSettingsOffsetY.current - spacing.md),
+        animated: true
+      });
+      return;
+    }
+
+    if (latestPlan) {
+      continueLatestPlan();
+    }
+  }
+
   function removeSubject(subjectId: string) {
     setForm((current) => ({
       ...current,
@@ -988,7 +1026,12 @@ export default function StudentScreen() {
           </View>
         ) : null}
 
-        <View style={styles.panel}>
+        <View
+          onLayout={(event) => {
+            setupSettingsOffsetY.current = event.nativeEvent.layout.y;
+          }}
+          style={styles.panel}
+        >
           <View style={styles.panelHeader}>
             <View style={styles.latestCopy}>
               <Text style={styles.kicker}>Parent link</Text>
@@ -1484,6 +1527,13 @@ export default function StudentScreen() {
           </View>
         </View>
       </ScrollView>
+      <RoleBottomNav
+        activeKey={activeNavKey}
+        items={STUDENT_NAV_ITEMS.map((item) =>
+          (item.key === "study" || item.key === "progress") && !latestPlan ? { ...item, disabled: true } : item
+        )}
+        onSelect={handleSetupNavSelect}
+      />
     </Screen>
   );
 }
@@ -1556,6 +1606,12 @@ function GeneratedPlanView({
   const [isSavingCompletion, setIsSavingCompletion] = useState(false);
   const [isPickingProofImage, setIsPickingProofImage] = useState(false);
   const [isRebalancing, setIsRebalancing] = useState(false);
+  const [activeNavKey, setActiveNavKey] = useState<StudentNavKey>("home");
+  const generatedScrollRef = useRef<ScrollView>(null);
+  const generatedStudyOffsetY = useRef(0);
+  const generatedPlanOffsetY = useRef(0);
+  const generatedProgressOffsetY = useRef(0);
+  const generatedSettingsOffsetY = useRef(0);
   const averageDailyMinutes =
     plan.metadata.average_daily_minutes ??
     Math.ceil(plan.metadata.total_study_minutes / Math.max(plan.metadata.days_until_exam, 1));
@@ -1894,6 +1950,23 @@ function GeneratedPlanView({
     }
   }
 
+  function handleGeneratedNavSelect(key: StudentNavKey) {
+    setActiveNavKey(key);
+
+    const offsets: Record<StudentNavKey, number> = {
+      home: 0,
+      study: generatedStudyOffsetY.current,
+      plan: generatedPlanOffsetY.current,
+      progress: generatedProgressOffsetY.current,
+      settings: generatedSettingsOffsetY.current
+    };
+
+    generatedScrollRef.current?.scrollTo({
+      y: Math.max(0, offsets[key] - spacing.md),
+      animated: true
+    });
+  }
+
   function renderStudyProofAttachment(savedCompletion?: StudySessionCompletion) {
     const existingProofUrl = savedCompletion ? getStudyProofImageUrl(savedCompletion) : null;
 
@@ -1951,6 +2024,7 @@ function GeneratedPlanView({
   return (
     <Screen>
       <ScrollView
+        ref={generatedScrollRef}
         contentContainerStyle={styles.content}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
@@ -2029,7 +2103,12 @@ function GeneratedPlanView({
           </View>
         </View>
 
-        <View style={styles.panel}>
+        <View
+          onLayout={(event) => {
+            generatedProgressOffsetY.current = event.nativeEvent.layout.y;
+          }}
+          style={styles.panel}
+        >
           <View style={styles.panelHeader}>
             <Text style={styles.sectionTitle}>Today's timetable</Text>
             <Text style={styles.metric}>{completion}%</Text>
@@ -2066,7 +2145,12 @@ function GeneratedPlanView({
           </View>
         ) : null}
 
-        <View style={styles.panel}>
+        <View
+          onLayout={(event) => {
+            generatedSettingsOffsetY.current = event.nativeEvent.layout.y;
+          }}
+          style={styles.panel}
+        >
           <View style={styles.panelHeader}>
             <View style={styles.headerCopy}>
               <Text style={styles.sectionTitle}>Study reminders</Text>
@@ -2192,7 +2276,12 @@ function GeneratedPlanView({
           ) : null}
         </View>
 
-        <View style={styles.panel}>
+        <View
+          onLayout={(event) => {
+            generatedStudyOffsetY.current = event.nativeEvent.layout.y;
+          }}
+          style={styles.panel}
+        >
           <View style={styles.panelHeader}>
             <Text style={styles.sectionTitle}>Study focus queue</Text>
             <Text style={[styles.sessionKind, overdueFocusCount ? styles.overdueText : null]}>
@@ -2307,7 +2396,12 @@ function GeneratedPlanView({
           )}
         </View>
 
-        <View style={styles.sessionList}>
+        <View
+          onLayout={(event) => {
+            generatedPlanOffsetY.current = event.nativeEvent.layout.y;
+          }}
+          style={styles.sessionList}
+        >
           <Text style={styles.sectionTitle}>Full timetable</Text>
           {plan.schedule.map((day) => (
             <View key={day.study_date} style={styles.dayCard}>
@@ -2472,6 +2566,7 @@ function GeneratedPlanView({
           ))}
         </View>
       </ScrollView>
+      <RoleBottomNav activeKey={activeNavKey} items={STUDENT_NAV_ITEMS} onSelect={handleGeneratedNavSelect} />
     </Screen>
   );
 }
