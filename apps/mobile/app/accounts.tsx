@@ -66,9 +66,14 @@ export default function AccountsScreen() {
   const [setupResult, setSetupResult] = useState<SetupResult | null>(null);
   const [verificationCode, setVerificationCode] = useState("");
   const [verificationReceipt, setVerificationReceipt] = useState<ParentEmailVerificationReceipt | null>(null);
+  const [verificationClock, setVerificationClock] = useState(() => Date.now());
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const isLoading = activeAction !== null;
   const currentParent = parentFamily?.parent ?? null;
   const isParentVerified = Boolean(currentParent?.email_verified);
+  const resendSecondsRemaining = verificationReceipt
+    ? Math.max(0, Math.ceil((new Date(verificationReceipt.resend_available_at).getTime() - verificationClock) / 1000))
+    : 0;
   const primaryActionLabel =
     setupMode === "parentOnly"
       ? "Sign up parent account"
@@ -79,6 +84,15 @@ export default function AccountsScreen() {
   useEffect(() => {
     void loadLatestFamily();
   }, [parentId]);
+
+  useEffect(() => {
+    if (!verificationReceipt || resendSecondsRemaining <= 0) {
+      return;
+    }
+
+    const timer = setInterval(() => setVerificationClock(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [verificationReceipt, resendSecondsRemaining]);
 
   async function loadLatestFamily() {
     try {
@@ -101,6 +115,7 @@ export default function AccountsScreen() {
     const receipt = await requestParentEmailVerification(parentId);
     setVerificationReceipt(receipt);
     setVerificationCode(receipt.dev_code ?? "");
+    setVerificationClock(Date.now());
     return receipt;
   }
 
@@ -108,6 +123,11 @@ export default function AccountsScreen() {
     const validation = getAccountValidationError(form, setupMode);
     if (validation) {
       setMessage(validation);
+      return;
+    }
+
+    if (!acceptedTerms) {
+      setMessage("Confirm the parent or guardian agreement before creating the accounts.");
       return;
     }
 
@@ -443,7 +463,7 @@ export default function AccountsScreen() {
               keyboardType="number-pad"
               label="Age"
               onChangeText={(value) => updateField("age", value)}
-              placeholder="15"
+              placeholder="13 or older"
               value={form.age}
             />
             <FormField
@@ -549,12 +569,18 @@ export default function AccountsScreen() {
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
-                  disabled={isLoading}
+                  disabled={isLoading || resendSecondsRemaining > 0}
                   onPress={() => void resendParentVerificationCode()}
-                  style={[styles.secondaryButton, styles.readyButton, isLoading ? styles.disabledButton : null]}
+                  style={[
+                    styles.secondaryButton,
+                    styles.readyButton,
+                    isLoading || resendSecondsRemaining > 0 ? styles.disabledButton : null
+                  ]}
                 >
                   <MaterialCommunityIcons name="email-sync-outline" size={18} color={colors.brand} />
-                  <Text style={styles.secondaryButtonText}>Send new code</Text>
+                  <Text style={styles.secondaryButtonText}>
+                    {resendSecondsRemaining > 0 ? `Send again in ${resendSecondsRemaining}s` : "Send new code"}
+                  </Text>
                 </Pressable>
               </View>
             </View>
@@ -608,6 +634,39 @@ export default function AccountsScreen() {
             </View>
           </View>
         ) : null}
+
+        <View style={styles.consentPanel}>
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: acceptedTerms }}
+            onPress={() => {
+              setAcceptedTerms((current) => !current);
+              setMessage("");
+            }}
+            style={styles.consentRow}
+          >
+            <MaterialCommunityIcons
+              name={acceptedTerms ? "checkbox-marked" : "checkbox-blank-outline"}
+              size={24}
+              color={acceptedTerms ? colors.brand : colors.muted}
+            />
+            <Text style={styles.consentText}>
+              I am the parent or guardian, I approve this student account, and I agree to StudyNova's Terms of Use and Privacy Policy.
+            </Text>
+          </Pressable>
+          <View style={styles.consentLinks}>
+            <Link href="/terms" asChild>
+              <Pressable accessibilityRole="link">
+                <Text style={styles.consentLinkText}>Read Terms of Use</Text>
+              </Pressable>
+            </Link>
+            <Link href="/privacy" asChild>
+              <Pressable accessibilityRole="link">
+                <Text style={styles.consentLinkText}>Read Privacy Policy</Text>
+              </Pressable>
+            </Link>
+          </View>
+        </View>
 
         <View style={styles.actions}>
           <Pressable
@@ -718,8 +777,8 @@ function getAccountValidationError(form: AccountForm, setupMode: SetupMode) {
       return "Enter the student's class.";
     }
 
-    if (!isIntegerInRange(form.age, 3, 30)) {
-      return "Enter a valid student age between 3 and 30.";
+    if (!isIntegerInRange(form.age, 13, 30)) {
+      return "StudyNova accounts are currently available to students aged 13 to 30.";
     }
   }
 
@@ -838,6 +897,36 @@ function createStyles(colors: AppColors) {
   content: {
     gap: spacing.lg,
     paddingBottom: spacing.xxl
+  },
+  consentLinkText: {
+    color: colors.brand,
+    fontSize: 13,
+    fontWeight: "800"
+  },
+  consentLinks: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    paddingLeft: 32
+  },
+  consentPanel: {
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  consentRow: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: spacing.sm
+  },
+  consentText: {
+    color: colors.text,
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 21
   },
   disabledButton: {
     opacity: 0.55

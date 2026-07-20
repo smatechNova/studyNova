@@ -1,72 +1,58 @@
-# StudyNova Privacy Policy Draft
+# StudyNova Privacy Policy
 
-Last updated: June 2, 2026
+Last updated: July 19, 2026
 
-This draft must be reviewed before public launch. It is written for the StudyNova closed-test build and is now represented in-app by the public `/privacy` route. Host that route on a public webpage before Play Store submission.
+Public URL: `https://studynova.app/privacy`
 
 ## Overview
 
-StudyNova helps students create study plans and helps parents or guardians monitor linked student progress. The app is designed for school and family academic support.
+StudyNova helps students create study plans and helps parents or guardians monitor progress for linked student accounts. It is designed for school and family academic support.
 
 ## Information We Collect
 
 StudyNova may collect:
 
-- Student name, class, age, school name, login ID, subjects, topics, study resources, exam dates, reading pace, study notes, optional study proof images, study progress, recall notes, and confidence scores.
-- Parent or guardian name, contact information, relationship to the student, linked student accounts, and progress-monitoring activity.
-- Account recovery help requests, including login ID, contact information, and optional support notes.
-- Closed-test feedback, including optional tester name/contact, device details, rating, recommendation answer, and notes about what worked or failed.
-- Notification permission status checked locally by the app, and scheduled study reminder preferences that may be stored with the study plan.
+- Student name, class, age, school name, login ID, subjects, topics, study resources, exam dates, reading pace, notes, optional study proof images, progress, recall notes, and confidence scores.
+- Parent or guardian name, verified email or contact information, relationship to the student, linked student accounts, and progress-monitoring activity.
+- Account verification and recovery records, including delivery status and optional support notes.
+- Optional feedback and device details when the feedback feature is enabled.
+- Notification permission status and scheduled study reminder preferences.
 
 ## How We Use Information
 
-We use this information to:
-
-- Generate student study plans and timetables.
-- Track study progress and missed sessions.
-- Show parent or guardian progress dashboards for linked students.
-- Send local study reminders when enabled.
-- Help recover account access when users request support.
-- Review closed-test feedback and prioritize fixes before public release.
-- Improve the app during testing.
+We use this information to generate timetables, track progress and missed sessions, show linked progress to parents or guardians, send requested reminders and account emails, support account access, protect the service, and improve StudyNova.
 
 ## Parent And Student Linking
 
-Students and parents have separate accounts. A parent can only monitor a student after the student account is linked through the app's parent-linking flow or invite code.
+Students and parents have separate accounts. A parent can monitor a student only after the accounts are linked through StudyNova's secure parent-linking flow.
 
 ## Data Sharing
 
-StudyNova does not sell user data. During testing, app administrators may review account and study progress data to support users, fix issues, and improve the product.
+StudyNova does not sell personal data. Authorized administrators may review account and study progress data to support users, investigate problems, and protect the service.
 
-StudyNova may use service providers to operate the app, such as backend hosting, Firebase/Google sign-in, and Firebase Storage for optional study proof images. These providers process data on StudyNova's behalf for app functionality, account management, security, and support. If analytics, ads, crash reporting, remote push notifications, document uploads, or other third-party SDKs are added later, this policy and the Play Store Data safety form must be updated before release.
+StudyNova uses service providers including Render for backend hosting, Google Firebase for authentication and optional study proof storage, and Resend for verification email. These providers process data only to deliver StudyNova's services. The policy and Play Console Data safety declaration must be updated before any new analytics, advertising, or data-collecting SDK is released.
 
-## Data Storage
+## Data Storage And Security
 
-In development and testing, data may be stored in the StudyNova backend database. Before public launch, StudyNova should use production-grade hosting, access controls, backups, and retention rules.
+StudyNova stores account and study data in its secured production backend and may store optional study proof images in Firebase Storage. Access is limited by account role and parent-student links. StudyNova uses access controls, HTTPS, backups, and operational safeguards appropriate to the service.
 
-StudyNova does not currently collect location, payment data, device contacts, calendar events, videos, audio recordings, document uploads, health data, fitness data, SMS/MMS, or browsing history.
+StudyNova does not currently collect precise location, payment data, device contacts, calendar events, audio recordings, health data, fitness data, SMS/MMS, or browsing history.
 
 ## Notifications
 
 StudyNova may ask for notification permission to send local study reminders and missed-session prompts. Users can disable reminders in the app or device settings.
 
-## Children's Privacy
+## Age And Parent Approval
 
-StudyNova may be used by students. Schools, parents, or guardians should supervise student account creation and app use. The production policy should be reviewed for local child privacy requirements before public launch.
+StudyNova accounts are currently intended for students aged 13 or older. A parent or guardian must approve student sign-up and provide a verified parent email. StudyNova does not knowingly permit self-service accounts for children under 13 in this release.
 
-## User Choices
+## User Choices And Account Deletion
 
-Users may request help with account access through the sign-in help form. Signed-in students and parents can also open their dashboard privacy section and submit an account deletion request by confirming `DELETE`. Users who cannot access the app can submit the public deletion form at the hosted `/delete-account` page.
+Users may request account help from the sign-in screen. Signed-in students and parents can submit an account deletion request from their dashboard. A user who cannot sign in can use `https://studynova.app/delete-account`.
 
-Account deletion requests are reviewed before completion so StudyNova can verify the request, protect linked parent-student records, and handle school or guardian support needs carefully. When support marks a reviewed request as completed, StudyNova removes the scoped account data from the backend while keeping the deletion request record for support tracking.
-
-Before Play Store submission, StudyNova should host the `/privacy` and `/delete-account` pages on public web URLs and enter the required URLs in Play Console. This gives users a web path to review privacy information and request deletion even if they cannot access the app.
+Deletion requests are verified to protect linked family records. Completing a verified request removes the scoped account data from the active backend. A minimal request record may be retained for support, safety, dispute, or legal purposes.
 
 ## Contact
 
-For privacy or account support, contact:
-
 StudyNova Support  
-Email: support@example.com
-
-Replace this email with the final support contact before Play Store submission.
+Email: support@studynova.app

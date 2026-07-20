@@ -40,7 +40,7 @@ def test_study_plan_store_links_parent_and_student_accounts(tmp_path) -> None:
     parent = store.create_parent_account(
         ParentAccountCreate(
             name="Mrs Olaniyan",
-            contact="08012345678",
+            contact="parent@example.com",
             access_code="4321",
             relationship="Mother",
         )
@@ -107,7 +107,7 @@ def test_study_plan_store_reuses_existing_accounts(tmp_path) -> None:
     )
     parent_payload = ParentAccountCreate(
         name="Mrs Olaniyan",
-        contact="080 1234 5678",
+        contact="parent@example.com",
         access_code="4321",
         relationship="Mother",
     )
@@ -127,7 +127,7 @@ def test_study_plan_store_reuses_existing_accounts(tmp_path) -> None:
     second_parent = store.create_parent_account(
         ParentAccountCreate(
             name="Mrs A. Olaniyan",
-            contact="08012345678",
+            contact="PARENT@EXAMPLE.COM",
             access_code="4321",
             relationship="Guardian",
         )
@@ -142,7 +142,7 @@ def test_study_plan_store_lists_multiple_students_for_one_parent(tmp_path) -> No
     parent = store.create_parent_account(
         ParentAccountCreate(
             name="Mrs Olaniyan",
-            contact="08012345678",
+            contact="parent@example.com",
             access_code="4321",
             relationship="Mother",
         )
@@ -198,7 +198,7 @@ def test_study_plan_store_signs_in_by_role_and_login_id(tmp_path) -> None:
     parent = store.create_parent_account(
         ParentAccountCreate(
             name="Mrs Olaniyan",
-            contact="08012345678",
+            contact="parent@example.com",
             access_code="4321",
             relationship="Mother",
         )
@@ -208,7 +208,9 @@ def test_study_plan_store_signs_in_by_role_and_login_id(tmp_path) -> None:
     student_session = store.sign_in(
         AccountSignInRequest(role="student", login_id="alliyah@example.com", access_code="1234")
     )
-    parent_session = store.sign_in(AccountSignInRequest(role="parent", login_id="080 1234 5678", access_code="4321"))
+    parent_session = store.sign_in(
+        AccountSignInRequest(role="parent", login_id="parent@example.com", access_code="4321")
+    )
     rejected_session = store.sign_in(
         AccountSignInRequest(role="student", login_id="alliyah@example.com", access_code="9999")
     )
@@ -561,7 +563,7 @@ def test_study_plan_store_records_public_deletion_requests_for_support_review(tm
             role="parent",
             login_id="missing-parent@example.com",
             account_label="Mrs Missing",
-            contact="support@example.com",
+            contact="parent-support@example.test",
             reason="Please delete this account if it exists.",
             confirmation="DELETE",
         )

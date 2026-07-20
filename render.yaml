@@ -1,5 +1,44 @@
 services:
   - type: web
+    name: studynova-web
+    runtime: static
+    buildCommand: npm ci && npm run mobile:export:web
+    staticPublishPath: ./apps/mobile/dist
+    envVars:
+      - key: EXPO_PUBLIC_API_URL
+        sync: false
+      - key: EXPO_PUBLIC_FIREBASE_API_KEY
+        sync: false
+      - key: EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: EXPO_PUBLIC_FIREBASE_PROJECT_ID
+        sync: false
+      - key: EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET
+        sync: false
+      - key: EXPO_PUBLIC_FIREBASE_APP_ID
+        sync: false
+      - key: EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID
+        sync: false
+      - key: EXPO_PUBLIC_ENABLE_DEMO_ENTRY
+        value: "false"
+      - key: EXPO_PUBLIC_ENABLE_TESTER_FEEDBACK
+        value: "false"
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Permissions-Policy
+        value: camera=(self), microphone=(), geolocation=()
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  - type: web
     name: studynova-api
     runtime: docker
     rootDir: apps/api
@@ -31,3 +70,19 @@ services:
         sync: false
       - key: FIREBASE_SERVICE_ACCOUNT_JSON
         sync: false
+      - key: EMAIL_PROVIDER
+        value: resend
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: SUPPORT_EMAIL
+        value: support@studynova.app
+      - key: EMAIL_VERIFICATION_TTL_MINUTES
+        value: "20"
+      - key: EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS
+        value: "60"
+      - key: EMAIL_VERIFICATION_MAX_REQUESTS_PER_HOUR
+        value: "5"
+      - key: EMAIL_VERIFICATION_MAX_ATTEMPTS
+        value: "5"

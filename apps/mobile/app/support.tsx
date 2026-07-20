@@ -22,6 +22,7 @@ import {
   updateLaunchChecklistItem
 } from "@/lib/api";
 import { brandAssets } from "@/lib/brandAssets";
+import { isFirebasePasswordResetConfigured } from "@/lib/firebaseAuth";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
 import type {
@@ -71,6 +72,7 @@ export default function SupportScreen() {
   const matchedRequests = requests.filter((request) => request.matched_account).length;
   const hasAdminData = deploymentReadiness !== null || storageHealth !== null || firebaseReadiness !== null;
   const openSupportItems = openRequests + pendingDeletionRequests + openFeedbackRequests;
+  const firebasePasswordResetReady = isFirebasePasswordResetConfigured();
   const launchChecklistByKey = useMemo(
     () => new Map(launchChecklistItems.map((item) => [item.item_key, item])),
     [launchChecklistItems]
@@ -80,11 +82,12 @@ export default function SupportScreen() {
       buildLaunchGateItems({
         backups,
         deploymentReadiness,
+        firebasePasswordResetReady,
         firebaseReadiness,
         openSupportItems,
         storageHealth
       }),
-    [backups, deploymentReadiness, firebaseReadiness, openSupportItems, storageHealth]
+    [backups, deploymentReadiness, firebasePasswordResetReady, firebaseReadiness, openSupportItems, storageHealth]
   );
   const launchGateReadyCount = launchGateItems.filter((item) => item.status === "ready").length;
   const launchGateBlockers = launchGateItems.filter((item) => item.status === "blocked").length;
@@ -95,12 +98,21 @@ export default function SupportScreen() {
       buildPlayStoreChecklistItems({
         backups,
         deploymentReadiness,
+        firebasePasswordResetReady,
         firebaseReadiness,
         launchChecklistByKey,
         openSupportItems,
         storageHealth
       }),
-    [backups, deploymentReadiness, firebaseReadiness, launchChecklistByKey, openSupportItems, storageHealth]
+    [
+      backups,
+      deploymentReadiness,
+      firebasePasswordResetReady,
+      firebaseReadiness,
+      launchChecklistByKey,
+      openSupportItems,
+      storageHealth
+    ]
   );
   const playStoreChecklistReadyCount = playStoreChecklistItems.filter((item) => item.status === "ready").length;
   const playStoreChecklistBlockers = playStoreChecklistItems.filter((item) => item.status === "blocked").length;
@@ -1032,18 +1044,21 @@ export default function SupportScreen() {
 function buildLaunchGateItems({
   backups,
   deploymentReadiness,
+  firebasePasswordResetReady,
   firebaseReadiness,
   openSupportItems,
   storageHealth
 }: {
   backups: StorageBackupReceipt[];
   deploymentReadiness: DeploymentReadiness | null;
+  firebasePasswordResetReady: boolean;
   firebaseReadiness: FirebaseAuthReadiness | null;
   openSupportItems: number;
   storageHealth: StorageHealth | null;
 }): LaunchGateItem[] {
   const publicApiCheck = deploymentReadiness?.checks.find((check) => check.name === "Public API URL");
   const firebaseCheck = deploymentReadiness?.checks.find((check) => check.name === "Firebase verification");
+  const emailCheck = deploymentReadiness?.checks.find((check) => check.name === "Transactional email");
   const failedDeploymentChecks = deploymentReadiness?.checks.filter((check) => check.status === "fail").length ?? 0;
   const warningDeploymentChecks = deploymentReadiness?.checks.filter((check) => check.status === "warning").length ?? 0;
 
@@ -1103,6 +1118,24 @@ function buildLaunchGateItems({
         : "Load admin view to inspect Firebase server verification."
     },
     {
+      title: "Password reset email",
+      status: firebasePasswordResetReady ? "ready" : "blocked",
+      detail: firebasePasswordResetReady
+        ? "This mobile build includes the Firebase API key required for password-reset email."
+        : "Set EXPO_PUBLIC_FIREBASE_API_KEY in the EAS production environment."
+    },
+    {
+      title: "Parent verification email",
+      status: emailCheck
+        ? emailCheck.status === "pass"
+          ? "ready"
+          : "blocked"
+        : deploymentReadiness
+          ? "blocked"
+          : "pending",
+      detail: emailCheck?.message ?? "Load admin view to inspect Resend verification email delivery."
+    },
+    {
       title: "Support queues",
       status: deploymentReadiness ? (openSupportItems === 0 ? "ready" : "review") : "pending",
       detail:
@@ -1128,6 +1161,7 @@ function buildLaunchGateItems({
 function buildPlayStoreChecklistItems({
   backups,
   deploymentReadiness,
+  firebasePasswordResetReady,
   firebaseReadiness,
   launchChecklistByKey,
   openSupportItems,
@@ -1135,6 +1169,7 @@ function buildPlayStoreChecklistItems({
 }: {
   backups: StorageBackupReceipt[];
   deploymentReadiness: DeploymentReadiness | null;
+  firebasePasswordResetReady: boolean;
   firebaseReadiness: FirebaseAuthReadiness | null;
   launchChecklistByKey: Map<string, LaunchChecklistItemRecord>;
   openSupportItems: number;
@@ -1145,6 +1180,7 @@ function buildPlayStoreChecklistItems({
   const apiUrlReady = publicApiUrl.startsWith("https://");
   const storageReady = Boolean(storageHealth?.production_ready);
   const firebaseReady = Boolean(firebaseReadiness?.server_verification_ready);
+  const emailCheck = deploymentReadiness?.checks.find((check) => check.name === "Transactional email");
   const backupReady = backups.length > 0;
   const supportClear = openSupportItems === 0;
   const hasAdminData = deploymentReadiness !== null || storageHealth !== null || firebaseReadiness !== null;
@@ -1188,6 +1224,18 @@ function buildPlayStoreChecklistItems({
       detail: firebaseReady
         ? "Firebase token verification is configured for real-device sign-in."
         : "Closed testing can continue with manual accounts, but Google sign-in needs Firebase server credentials."
+    },
+    {
+      title: "Firebase password reset",
+      status: firebasePasswordResetReady ? "ready" : "blocked",
+      detail: firebasePasswordResetReady
+        ? "The app has the Firebase API key needed to request reset links. Test the email on a real Android build."
+        : "Add EXPO_PUBLIC_FIREBASE_API_KEY to the EAS production environment before building."
+    },
+    {
+      title: "Parent email verification",
+      status: emailCheck ? (emailCheck.status === "pass" ? "ready" : "blocked") : "pending",
+      detail: emailCheck?.message ?? "Configure Resend before parent sign-up is tested on real devices."
     },
     {
       title: "Support queues",

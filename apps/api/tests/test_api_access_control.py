@@ -46,6 +46,26 @@ def _student(store: StudyPlanStore, login_id: str, name: str) -> StudentAccount:
     )
 
 
+def _verified_parent(
+    store: StudyPlanStore,
+    *,
+    name: str = "Mrs Olaniyan",
+    contact: str = "parent@example.com",
+    access_code: str = "4321",
+    relationship: str = "Mother",
+):
+    parent = store.create_parent_account(
+        ParentAccountCreate(
+            name=name,
+            contact=contact,
+            access_code=access_code,
+            relationship=relationship,
+        )
+    )
+    store._mark_parent_email_verified(parent.id)
+    return store.parent_account_by_id(parent.id) or parent
+
+
 def _headers(client: TestClient, role: str, login_id: str, access_code: str = "1234") -> dict[str, str]:
     response = client.post(
         "/api/v1/accounts/sign-in",
@@ -79,18 +99,11 @@ def test_parent_can_read_only_linked_student_plans(tmp_path, monkeypatch) -> Non
     client = TestClient(app)
     linked_student = _student(store, "alliyah@example.com", "Alliyah Olaniyan")
     unlinked_student = _student(store, "aminah@example.com", "Aminah Olaniyan")
-    parent = store.create_parent_account(
-        ParentAccountCreate(
-            name="Mrs Olaniyan",
-            contact="08012345678",
-            access_code="4321",
-            relationship="Mother",
-        )
-    )
+    parent = _verified_parent(store)
     store.link_parent_student(ParentStudentLinkCreate(parent_id=parent.id, student_id=linked_student.id))
     linked_plan = store.save(build_study_plan(_request("Alliyah")), student_id=linked_student.id)
     unlinked_plan = store.save(build_study_plan(_request("Aminah")), student_id=unlinked_student.id)
-    parent_headers = _headers(client, "parent", "08012345678", "4321")
+    parent_headers = _headers(client, "parent", parent.contact, "4321")
 
     linked_response = client.get(f"/api/v1/study-plans/{linked_plan.id}/progress", headers=parent_headers)
     blocked_response = client.get(f"/api/v1/study-plans/{unlinked_plan.id}/progress", headers=parent_headers)
@@ -104,19 +117,12 @@ def test_role_routes_reject_cross_role_access(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)
     client = TestClient(app)
     student = _student(store, "alliyah@example.com", "Alliyah Olaniyan")
-    parent = store.create_parent_account(
-        ParentAccountCreate(
-            name="Mrs Olaniyan",
-            contact="08012345678",
-            access_code="4321",
-            relationship="Mother",
-        )
-    )
+    parent = _verified_parent(store)
     store.link_parent_student(ParentStudentLinkCreate(parent_id=parent.id, student_id=student.id))
 
     parent_student_route = client.get(
         f"/api/v1/accounts/students/{student.id}/family",
-        headers=_headers(client, "parent", "08012345678", "4321"),
+        headers=_headers(client, "parent", parent.contact, "4321"),
     )
     student_parent_route = client.get(
         f"/api/v1/accounts/parents/{parent.id}/family",
@@ -155,14 +161,7 @@ def test_student_invite_code_links_parent_to_student(tmp_path, monkeypatch) -> N
     monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)
     client = TestClient(app)
     student = _student(store, "alliyah@example.com", "Alliyah Olaniyan")
-    parent = store.create_parent_account(
-        ParentAccountCreate(
-            name="Mrs Olaniyan",
-            contact="08012345678",
-            access_code="4321",
-            relationship="Mother",
-        )
-    )
+    parent = _verified_parent(store)
 
     invite_response = client.post(
         f"/api/v1/accounts/students/{student.id}/parent-invites",
@@ -200,21 +199,13 @@ def test_invite_code_can_only_be_redeemed_once(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)
     client = TestClient(app)
     student = _student(store, "alliyah@example.com", "Alliyah Olaniyan")
-    first_parent = store.create_parent_account(
-        ParentAccountCreate(
-            name="Mrs Olaniyan",
-            contact="08012345678",
-            access_code="4321",
-            relationship="Mother",
-        )
-    )
-    second_parent = store.create_parent_account(
-        ParentAccountCreate(
-            name="Mr Adeyemi",
-            contact="08087654321",
-            access_code="5678",
-            relationship="Guardian",
-        )
+    first_parent = _verified_parent(store)
+    second_parent = _verified_parent(
+        store,
+        name="Mr Adeyemi",
+        contact="guardian@example.com",
+        access_code="5678",
+        relationship="Guardian",
     )
     invite = client.post(
         f"/api/v1/accounts/students/{student.id}/parent-invites",
@@ -610,6 +601,10 @@ def test_admin_can_review_deployment_readiness(tmp_path, monkeypatch) -> None:
         public_api_base_url = "https://api.studynova.example.com"
         session_secret = "a-long-private-session-secret-for-tests"
         session_ttl_hours = 168
+        email_provider = "resend"
+        resend_api_key = "re_test_private_key"
+        email_from = "StudyNova <accounts@studynova.app>"
+        support_email = "support@studynova.app"
 
         @property
         def cors_origins(self) -> list[str]:
@@ -706,7 +701,7 @@ def test_deployment_readiness_flags_unsafe_production_defaults(tmp_path, monkeyp
     failed_checks = {check["name"] for check in payload["checks"] if check["status"] == "fail"}
     warning_checks = {check["name"] for check in payload["checks"] if check["status"] == "warning"}
     assert payload["ready"] is False
-    assert {"Public API URL", "Session secret", "CORS policy"}.issubset(failed_checks)
+    assert {"Public API URL", "Session secret", "CORS policy", "Transactional email"}.issubset(failed_checks)
     assert "Firebase verification" in warning_checks
 
 

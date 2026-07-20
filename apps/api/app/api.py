@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse, Response
 from app.auth import FirebaseAuthUnavailable, InvalidFirebaseToken, firebase_auth_readiness, verify_firebase_id_token
 from app.config import get_settings
 from app.domain.study_planner import build_rebalanced_study_plan, build_study_plan
+from app.email_delivery import EmailDeliveryError, email_delivery_readiness
 from app.proof_storage import StudyProofStorageError, load_study_proof_image, save_study_proof_image
 from app.schemas import (
     AccountDeletionRequestCreate,
@@ -68,7 +69,12 @@ from app.schemas import (
     TesterFeedbackReviewRequest,
     WeeklyStudyDigest,
 )
-from app.storage import AccountAccessCodeError, get_study_plan_store
+from app.storage import (
+    AccountAccessCodeError,
+    ParentEmailAlreadyVerifiedError,
+    ParentEmailVerificationRateLimitError,
+    get_study_plan_store,
+)
 
 router = APIRouter(prefix="/api/v1")
 
@@ -281,6 +287,18 @@ def _build_deployment_readiness() -> DeploymentReadiness:
         )
     )
 
+    email_status = email_delivery_readiness(settings)
+    email_ready = bool(email_status["configured"])
+    checks.append(
+        _deployment_check(
+            "Transactional email",
+            "pass" if email_ready else "fail",
+            "Resend is configured for parent verification and the public support email is valid."
+            if email_ready
+            else "Configure EMAIL_PROVIDER, RESEND_API_KEY, EMAIL_FROM, and SUPPORT_EMAIL before deployment.",
+        )
+    )
+
     return DeploymentReadiness(
         environment=settings.app_env,
         production=settings.is_production,
@@ -370,7 +388,21 @@ def create_parent_account(payload: ParentAccountCreate) -> ParentAccount:
 
 @router.post("/accounts/parents/{parent_id}/email-verification", response_model=ParentEmailVerificationReceipt)
 def request_parent_email_verification(parent_id: str) -> ParentEmailVerificationReceipt:
-    receipt = get_study_plan_store().request_parent_email_verification(parent_id)
+    try:
+        receipt = get_study_plan_store().request_parent_email_verification(parent_id)
+    except ParentEmailAlreadyVerifiedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ParentEmailVerificationRateLimitError as exc:
+        raise HTTPException(
+            status_code=429,
+            detail=str(exc),
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        ) from exc
+    except EmailDeliveryError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Verification email could not be delivered. Please try again shortly.",
+        ) from exc
     if receipt is None:
         raise HTTPException(status_code=404, detail="Parent account was not found.")
     return receipt
@@ -428,6 +460,8 @@ def sign_in_account(payload: AccountSignInRequest) -> AuthSession:
     session = get_study_plan_store().sign_in(payload)
     if session is None:
         raise HTTPException(status_code=404, detail="No account matched that role, sign-in ID, and access code.")
+    if session.role == "parent" and session.parent is not None and not session.parent.email_verified:
+        raise HTTPException(status_code=403, detail="Verify the parent email before signing in.")
     return _with_session_token(session)
 
 
@@ -589,9 +623,20 @@ def firebase_sign_in_account(payload: FirebaseSignInRequest) -> AuthSession:
     except InvalidFirebaseToken as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
-    session = get_study_plan_store().firebase_sign_in(payload.role, identity.uid, identity.login_id)
+    verified_email = identity.email if identity.email and identity.email_verified else None
+    session = get_study_plan_store().firebase_sign_in(
+        payload.role,
+        identity.uid,
+        identity.login_id,
+        verified_email=verified_email,
+    )
     if session is None:
         raise HTTPException(status_code=404, detail="No StudyNova account matched this Google sign-in.")
+    if session.role == "parent" and session.parent is not None and not session.parent.email_verified:
+        raise HTTPException(
+            status_code=403,
+            detail="Use the verified Gmail saved on the parent account, or complete email verification first.",
+        )
     return _with_session_token(session)
 
 

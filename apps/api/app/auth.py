@@ -22,6 +22,7 @@ class FirebaseIdentity:
     login_id: str
     email: str | None = None
     phone_number: str | None = None
+    email_verified: bool = False
 
 
 def firebase_auth_readiness() -> dict[str, object]:
@@ -78,9 +79,16 @@ def verify_firebase_id_token(id_token: str) -> FirebaseIdentity:
     uid = str(decoded.get("uid") or decoded.get("sub") or "")
     email = decoded.get("email")
     phone_number = decoded.get("phone_number")
+    email_verified = bool(decoded.get("email_verified"))
     login_id = str(email or phone_number or "")
 
     if not uid or not login_id:
         raise InvalidFirebaseToken("Firebase token is missing an account identity.")
 
-    return FirebaseIdentity(uid=uid, login_id=login_id, email=email, phone_number=phone_number)
+    return FirebaseIdentity(
+        uid=uid,
+        login_id=login_id,
+        email=email,
+        phone_number=phone_number,
+        email_verified=email_verified,
+    )

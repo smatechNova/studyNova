@@ -6,7 +6,8 @@ This runbook gets StudyNova into Google Play testing before the full public laun
 
 - App name: StudyNova
 - Android package: `com.studynova.app`
-- Version name: `0.1.0`
+- Version name: `1.0.0`
+- Android target: API 36 through Expo SDK 55
 - Version code: managed remotely by EAS and auto-incremented for store builds
 - Build artifact for Play Store: Android App Bundle (`.aab`)
 - Testing target: Google Play internal testing first, then closed testing
@@ -29,6 +30,7 @@ The Android package name becomes permanent after the first Play Console upload. 
 12. Backend deployment readiness checked using `infra/api-production-readiness.md`.
 13. Data safety draft reviewed using `docs/play-store-data-safety.md`.
 14. Store listing pack reviewed using `docs/play-store-listing-pack.md`.
+15. Parent verification and Firebase password-reset delivery configured using `docs/production-email-delivery.md`.
 
 See `infra/api-persistent-disk.md` for the fastest backend path for closed testing.
 See `infra/render-closed-test-deployment.md` for the hosted Render execution path.
@@ -55,6 +57,10 @@ PUBLIC_API_BASE_URL=https://your-api-host
 ALLOWED_ORIGINS=<production mobile web/admin origin if used>
 ALLOWED_ORIGIN_REGEX=
 FIREBASE_SERVICE_ACCOUNT_JSON=<optional Firebase Admin JSON>
+EMAIL_PROVIDER=resend
+RESEND_API_KEY=<private Resend API key>
+EMAIL_FROM=StudyNova <accounts@your-verified-domain>
+SUPPORT_EMAIL=support@studynova.app
 ```
 
 Do not use the default development database path or default admin code for a public build. The support admin screen can load storage health, list backup files, create a SQLite backup, and mark account recovery requests as reviewed after the admin code is entered.
@@ -68,7 +74,7 @@ curl.exe -H "X-Admin-Code: <admin-code>" https://your-api-host/api/v1/admin/depl
 Or run the guarded repository preflight:
 
 ```powershell
-npm run closed-test:preflight -- https://your-api-host <admin-code>
+npm run closed-test:preflight -- https://your-api-host <admin-code> https://studynova.app
 ```
 
 That command runs the mobile release check, smoke-tests the hosted API, confirms the backend is production-ready, and writes `apps/mobile/.env.local`.
@@ -124,7 +130,7 @@ npx eas-cli@latest build --platform android --profile preview
 From the repository root, the same guarded commands are:
 
 ```powershell
-npm run closed-test:preflight -- https://your-api-host <admin-code>
+npm run closed-test:preflight -- https://your-api-host <admin-code> https://studynova.app
 npm run mobile:release-check
 npm run mobile:build:closed-test
 npm run mobile:submit:closed-test
@@ -171,7 +177,7 @@ Use the in-app Tester feedback screen for normal closed-test notes. Use `docs/te
 
 - Backend must be deployed permanently.
 - Google sign-in must be tested with real Firebase credentials on an Android build.
-- App icon, feature graphic, and screenshots must be final.
+- Actual Android phone screenshots must be captured from the final release candidate; approved icon and feature artwork are already tracked.
 - Privacy policy must be hosted on a public URL.
 - Terms of Use should be hosted on a public URL for schools, parents, and testers.
 - The `/delete-account` public request page must be hosted on a public URL.

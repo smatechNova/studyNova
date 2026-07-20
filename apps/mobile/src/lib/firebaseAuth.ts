@@ -40,6 +40,10 @@ export function isFirebaseClientConfigured() {
   return getFirebaseClientReadiness().configured;
 }
 
+export function isFirebasePasswordResetConfigured() {
+  return Boolean(getFirebaseClientConfig().apiKey);
+}
+
 export function getFirebaseClientReadiness(): FirebaseClientReadiness {
   const config = getFirebaseClientConfig();
   const missingKeys: string[] = [];

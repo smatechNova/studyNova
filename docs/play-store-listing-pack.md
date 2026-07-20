@@ -1,8 +1,8 @@
 # StudyNova Play Store Listing Pack
 
-Last updated: June 2, 2026
+Last updated: July 19, 2026
 
-This pack contains ready-to-use Google Play listing copy and creative direction for the StudyNova closed-test build. Keep the listing accurate, general-audience friendly, and aligned with the actual app experience.
+This pack contains ready-to-use Google Play listing copy and creative direction for StudyNova 1.0. Keep the listing accurate and aligned with the actual app experience.
 
 Google Play guidance notes that short descriptions should be 80 characters or less, full descriptions allow up to 4,000 characters, feature graphics should convey the app experience, and screenshots should show the actual in-app experience.
 
@@ -41,19 +41,19 @@ For parents and guardians:
 
 StudyNova is built for students, parents, guardians, and schools that want a calmer way to organize exam preparation. It does not replace teachers, textbooks, or school guidance. It gives students a structured study rhythm and gives parents a clearer view of progress.
 
-Current closed-test features include student accounts, parent accounts, parent-student linking, generated study plans, daily progress tracking, reminders, missed-session catch-up, account recovery support, and account deletion requests.
+StudyNova includes separate student and parent accounts, secure parent-student linking, generated study plans, daily progress tracking, reminders, missed-session catch-up, account recovery, and account deletion requests. Student accounts are intended for ages 13 and older with parent or guardian approval.
 ```
 
 Full description character count target: under 4,000.
 
-## Closed-Test Release Notes
+## Release Notes - 1.0.0
 
 ```text
-Initial StudyNova closed-test build.
+Introducing StudyNova 1.0.
 
 This build includes student and parent accounts, generated study plans, daily progress tracking, study proof, parent-student linking, reminders, missed-session catch-up, light/dark mode, account recovery support, and account deletion requests.
 
-Please test account creation, plan generation, study completion, parent monitoring, reminders, and the overall mobile experience.
+This first release brings guided account creation, parent email verification, plan generation, study completion, parent monitoring, reminders, account recovery, and privacy controls.
 ```
 
 ## Screenshot Checklist
@@ -85,6 +85,8 @@ Screenshot rules:
 ## Feature Graphic Brief
 
 Required size: 1024 x 500 px.
+
+Approved file: `docs/play-store-assets/feature-graphic.png`.
 
 Concept: Calm academic planning for students and parents.
 
@@ -119,15 +121,16 @@ Please use the Play Store test link to install the app, then try:
 4. Create a parent account and link the student with an invite code.
 5. Check reminders, missed-session messages, light/dark mode, and general ease of use.
 
-This is a closed-test build, so some features may still be improving. Please report anything confusing, broken, slow, or uncomfortable to use.
+You are using the StudyNova test release. Please report anything confusing, broken, slow, or uncomfortable to use.
 
 Thank you for helping us shape StudyNova.
 ```
 
 ## Public Launch Copy Notes
 
-- Replace closed-test wording before production release.
-- Add final support email, privacy policy URL, and Terms of Use URL.
-- Add final hosted account deletion URL.
-- Replace placeholder screenshots and feature graphic with designer-approved assets.
+- Support email: `support@studynova.app`.
+- Privacy policy: `https://studynova.app/privacy`.
+- Terms of Use: `https://studynova.app/terms`.
+- Account deletion: `https://studynova.app/delete-account`.
+- Capture actual Android screenshots from the signed release candidate; feature artwork is already approved.
 - Recheck the Data safety form after adding any analytics, crash reporting, remote push notifications, file uploads, or payment features.

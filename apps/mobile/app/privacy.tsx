@@ -27,7 +27,7 @@ const POLICY_SECTIONS: PolicySection[] = [
       "Student name, class, age, school name, login ID, subjects, topics, study resources, exam dates, reading pace, study notes, optional study proof images, study progress, recall notes, and confidence scores.",
       "Parent or guardian name, contact information, relationship to the student, linked student accounts, and progress-monitoring activity.",
       "Account recovery help requests, including login ID, contact information, and optional support notes.",
-      "Closed-test feedback, including optional tester name/contact, device details, rating, recommendation answer, and notes about what worked or failed.",
+      "Optional feedback, including tester contact details, device information, ratings, and notes when the feedback feature is enabled.",
       "Notification permission status checked locally by the app, and scheduled study reminder preferences that may be stored with the study plan."
     ]
   },
@@ -39,8 +39,7 @@ const POLICY_SECTIONS: PolicySection[] = [
       "Show parent or guardian progress dashboards for linked students.",
       "Send local study reminders when enabled.",
       "Help recover account access when users request support.",
-      "Review closed-test feedback and prioritize fixes before public release.",
-      "Improve the app during testing."
+      "Review optional feedback and improve StudyNova's reliability and learning experience."
     ]
   },
   {
@@ -49,19 +48,19 @@ const POLICY_SECTIONS: PolicySection[] = [
   },
   {
     title: "Data Sharing",
-    body: "StudyNova does not sell user data. During testing, app administrators may review account and study progress data to support users, fix issues, and improve the product. StudyNova may use service providers such as backend hosting, Firebase/Google sign-in, and Firebase Storage for optional study proof images to operate the app."
+    body: "StudyNova does not sell user data. Authorized administrators may review account and study progress data to support users, investigate problems, and protect the service. StudyNova uses service providers including Render for backend hosting, Google Firebase for authentication and optional study proof storage, and Resend for account verification email. These providers process data only to deliver StudyNova's services."
   },
   {
     title: "Data Storage",
-    body: "In development and testing, data may be stored in the StudyNova backend database and study proof image storage. Before public launch, StudyNova should use production-grade hosting, access controls, backups, and retention rules. StudyNova does not currently collect location, payment data, device contacts, calendar events, audio recordings, health data, fitness data, SMS/MMS, or browsing history."
+    body: "StudyNova stores account and study data in its secured production backend and may store optional study proof images in Firebase Storage. Access is limited by account role and parent-student links. StudyNova does not currently collect precise location, payment data, device contacts, calendar events, audio recordings, health data, fitness data, SMS/MMS, or browsing history."
   },
   {
     title: "Notifications",
     body: "StudyNova may ask for notification permission to send local study reminders and missed-session prompts. Users can disable reminders in the app or device settings."
   },
   {
-    title: "Children's Privacy",
-    body: "StudyNova may be used by students. Schools, parents, or guardians should supervise student account creation and app use. The production policy should be reviewed for local child privacy requirements before public launch."
+    title: "Age And Parent Approval",
+    body: "StudyNova accounts are currently intended for students aged 13 or older. A parent or guardian must approve a student's account during sign-up and provide a verified parent email. StudyNova does not knowingly permit self-service accounts for children under 13 in this release."
   },
   {
     title: "User Choices",
@@ -73,7 +72,7 @@ const POLICY_SECTIONS: PolicySection[] = [
   },
   {
     title: "Contact",
-    body: "For privacy or account support, contact StudyNova Support at support@example.com. Replace this email with the final support contact before Play Store submission."
+    body: "For privacy or account support, contact StudyNova Support at support@studynova.app."
   }
 ];
 
@@ -96,12 +95,12 @@ export default function PrivacyScreen() {
           <View style={styles.heroCopy}>
             <Text style={styles.kicker}>Public policy</Text>
             <Text style={styles.title}>StudyNova Privacy Policy</Text>
-            <Text style={styles.helper}>Last updated: June 3, 2026</Text>
+            <Text style={styles.helper}>Last updated: July 19, 2026</Text>
           </View>
         </View>
 
         <IllustrationPanel
-          body="StudyNova keeps student and parent roles separate, links progress carefully, and keeps launch policies visible."
+          body="StudyNova keeps student and parent roles separate, limits linked progress access, and explains how account and study data are handled."
           imageSource={brandAssets.privacySecurity}
           kicker="Trust and safety"
           title="Built around careful student data handling"
@@ -110,8 +109,7 @@ export default function PrivacyScreen() {
         <View style={styles.notice}>
           <MaterialCommunityIcons name="information-outline" size={20} color={colors.brand} />
           <Text style={styles.noticeText}>
-            This policy is prepared for the StudyNova closed-test build and should be reviewed with final support
-            contact details before public launch.
+            This policy applies to the StudyNova Android app and its public web account-support pages.
           </Text>
         </View>
 

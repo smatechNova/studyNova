@@ -8,7 +8,7 @@ settings = get_settings()
 
 app = FastAPI(
     title="StudyNova API",
-    version="0.1.0",
+    version="1.0.0",
     description="Smart academic planning and parent monitoring API.",
 )
 

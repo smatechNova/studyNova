@@ -229,7 +229,7 @@ def test_study_plan_store_persists_check_ins_for_parent_summary(tmp_path) -> Non
     parent = store.create_parent_account(
         ParentAccountCreate(
             name="Mrs Olaniyan",
-            contact="08012345678",
+            contact="parent@example.com",
             access_code="4321",
             relationship="Mother",
         )
@@ -285,7 +285,7 @@ def test_study_plan_store_rejects_unlinked_parent_summary(tmp_path) -> None:
     parent = store.create_parent_account(
         ParentAccountCreate(
             name="Mrs Olaniyan",
-            contact="08012345678",
+            contact="parent@example.com",
             access_code="4321",
             relationship="Mother",
         )

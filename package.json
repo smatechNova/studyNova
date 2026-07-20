@@ -1,6 +1,6 @@
 {
   "name": "studynova",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "workspaces": [
     "apps/mobile"
@@ -18,10 +18,17 @@
     "mobile:codespace:tunnel": "npm --workspace @studynova/mobile run start:codespace -- --tunnel",
     "mobile:codespace:clear": "npm --workspace @studynova/mobile run start:codespace -- --tunnel --clear",
     "mobile:android": "npm --workspace @studynova/mobile run android",
+    "mobile:export:web": "node scripts/export-mobile-web.mjs",
     "mobile:assets": "node scripts/generate-mobile-assets.mjs",
     "mobile:release-check": "node scripts/mobile-release-check.mjs",
+    "security:release": "npm audit --omit=dev --audit-level=high",
     "mobile:build:closed-test": "npm --workspace @studynova/mobile run build:closed-test",
     "mobile:submit:closed-test": "npm --workspace @studynova/mobile run submit:closed-test",
     "mobile:typecheck": "npm --workspace @studynova/mobile run typecheck"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.7",
+    "shell-quote": "^1.10.0",
+    "ws": "^7.5.13"
   }
 }

@@ -1,6 +1,6 @@
 # StudyNova Play Store Data Safety Draft
 
-Last updated: June 2, 2026
+Last updated: July 19, 2026
 
 This document prepares the Google Play Console Data safety form for StudyNova. Review it before submission and keep it aligned with the app, backend, privacy policy, and any third-party SDKs used in the Android build.
 
@@ -11,7 +11,7 @@ Google Play requires developers to declare how the app collects, shares, protect
 | Play Console question | Draft answer | StudyNova note |
 | --- | --- | --- |
 | Does the app collect or share any required user data types? | Yes | StudyNova collects student, parent, study plan, progress, and support data through the app and backend. |
-| Is all collected user data encrypted in transit? | Yes, after production API is HTTPS-only | Do not submit a production/closed-test build that points to plain HTTP. Firebase/Google auth and the hosted API must use HTTPS/TLS. |
+| Is all collected user data encrypted in transit? | Yes | The release gate rejects non-HTTPS production endpoints. Firebase/Google auth, Resend, and the hosted API use HTTPS/TLS. |
 | Does the app provide a way to request data deletion? | Yes | Signed-in users can request deletion in-app, and the hosted `/delete-account` page provides a public request path for users who cannot sign in. |
 | Is data shared with third parties? | No, if Firebase/Google auth and hosting are used only as service providers | Revisit this if analytics, ads, crash reporting, marketing pixels, or non-service-provider SDKs are added. |
 | Is data processed ephemerally only? | No | StudyNova stores account, plan, progress, support, and deletion records in the backend. |
@@ -61,6 +61,8 @@ Do not select these unless the product changes:
 | --- | --- | --- |
 | Hosted StudyNova API | First-party backend | Declared as collection because data is transmitted from the app to StudyNova servers. |
 | Firebase/Google sign-in | Authentication service provider | Auth identity data is collected for account management. Treat as not shared if used only as a service provider on StudyNova's behalf. |
+| Firebase Storage | Optional study proof image storage | Optional photos are collected for app functionality and parent-linked progress review. |
+| Resend | Verification and recovery email delivery | Parent email and delivery metadata are processed for account management and security. |
 | Expo/EAS build services | Build/distribution tooling | Not a runtime data collector for the production app by itself. Recheck if Expo push notifications or analytics are added. |
 | expo-notifications | Local reminders in current build | No remote push token collection in the current implementation. Recheck if remote push is added. |
 | Hosting provider | Service provider | Backend host processes StudyNova data on StudyNova's behalf. Ensure contract and HTTPS are production-ready. |
@@ -75,6 +77,7 @@ Before submitting the Play Console Data safety form:
 - Confirm no ads, third-party analytics SDK, crash reporting, remote push, contacts, calendar, location, payment, video, audio, or document-upload SDK has been added since this document was updated.
 - Confirm Firebase/Google sign-in configuration and backend token verification are ready for the Android build.
 - Confirm the privacy policy names StudyNova, includes a privacy contact, and describes retention/deletion behavior.
+- Confirm the target audience is 13 or older and the sign-up flow requires parent or guardian approval.
 - Export or screenshot the submitted Data safety form after Play Console submission and store it with release records.
 
 ## Privacy Policy Alignment

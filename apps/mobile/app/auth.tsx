@@ -23,6 +23,7 @@ import {
   getFirebaseClientReadiness,
   getFirebaseClientConfig,
   isFirebaseClientConfigured,
+  isFirebasePasswordResetConfigured,
   sendFirebasePasswordResetEmail
 } from "@/lib/firebaseAuth";
 import { saveAuthSession } from "@/lib/session";
@@ -182,7 +183,7 @@ export default function AuthScreen() {
 
     try {
       const recoveryEmail = recoveryContact.trim();
-      const canSendFirebaseReset = firebaseReady;
+      const canSendFirebaseReset = isFirebasePasswordResetConfigured();
       let firebaseResetSent = false;
 
       if (canSendFirebaseReset) {
@@ -209,8 +210,8 @@ export default function AuthScreen() {
       });
       setMessage(
         firebaseResetSent
-          ? "If this email uses StudyNova password sign-in, a reset link has been sent. Support recovery was also received."
-          : receipt.message
+          ? "A password reset link was requested for this email. We also saved a support recovery request in case the account uses an access code."
+          : `${receipt.message} Accounts that use a 4 to 6 digit access code are recovered through StudyNova support.`
       );
       setRecoveryNote("");
     } catch {

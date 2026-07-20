@@ -10,6 +10,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.config import get_settings
+from app.email_delivery import EmailDeliveryError, send_parent_verification_email
 from app.proof_storage import delete_study_proof_image
 from app.schemas import (
     AccountDeletionRequestCreate,
@@ -62,6 +63,16 @@ from app.schemas import (
 
 class AccountAccessCodeError(Exception):
     pass
+
+
+class ParentEmailAlreadyVerifiedError(Exception):
+    pass
+
+
+class ParentEmailVerificationRateLimitError(Exception):
+    def __init__(self, retry_after_seconds: int) -> None:
+        self.retry_after_seconds = max(1, retry_after_seconds)
+        super().__init__(f"Please wait {self.retry_after_seconds} seconds before requesting another code.")
 
 
 class StudyPlanStore:
@@ -892,7 +903,13 @@ class StudyPlanStore:
 
         return receipts
 
-    def firebase_sign_in(self, role: str, auth_uid: str, login_id: str) -> AuthSession | None:
+    def firebase_sign_in(
+        self,
+        role: str,
+        auth_uid: str,
+        login_id: str,
+        verified_email: str | None = None,
+    ) -> AuthSession | None:
         if role == "student":
             if self.parent_account_by_auth_uid(auth_uid) is not None:
                 return None
@@ -916,6 +933,10 @@ class StudyPlanStore:
 
         if not parent.auth_uid:
             self._bind_parent_auth_uid(parent.id, auth_uid)
+            parent = self.parent_account_by_id(parent.id) or parent
+
+        if verified_email and _contact_key(parent.contact) == _contact_key(verified_email):
+            self._mark_parent_email_verified(parent.id)
             parent = self.parent_account_by_id(parent.id) or parent
 
         family = self.parent_family(parent.id)
@@ -985,10 +1006,45 @@ class StudyPlanStore:
         if parent is None:
             return None
 
+        if parent.email_verified:
+            raise ParentEmailAlreadyVerifiedError("This parent email is already verified.")
+
+        settings = get_settings()
         now = datetime.now(timezone.utc)
-        expires_at = now + timedelta(minutes=20)
+        ttl_minutes = max(5, min(settings.email_verification_ttl_minutes, 60))
+        cooldown_seconds = max(15, min(settings.email_verification_resend_cooldown_seconds, 3600))
+        max_requests_per_hour = max(1, min(settings.email_verification_max_requests_per_hour, 20))
+        expires_at = now + timedelta(minutes=ttl_minutes)
+        resend_available_at = now + timedelta(seconds=cooldown_seconds)
         verification_code = f"{secrets.randbelow(1_000_000):06d}"
+        verification_id = str(uuid4())
+
         with self._connect() as connection:
+            recent_rows = connection.execute(
+                """
+                select created_at
+                from parent_email_verifications
+                where parent_id = ?
+                  and delivery_status = 'sent'
+                  and created_at >= ?
+                order by created_at desc
+                """,
+                (parent.id, (now - timedelta(hours=1)).isoformat()),
+            ).fetchall()
+
+            if recent_rows:
+                latest_created_at = _parse_datetime(recent_rows[0]["created_at"])
+                next_allowed_at = latest_created_at + timedelta(seconds=cooldown_seconds)
+                if next_allowed_at > now:
+                    raise ParentEmailVerificationRateLimitError(
+                        int((next_allowed_at - now).total_seconds()) + 1
+                    )
+
+            if len(recent_rows) >= max_requests_per_hour:
+                oldest_created_at = _parse_datetime(recent_rows[-1]["created_at"])
+                next_allowed_at = oldest_created_at + timedelta(hours=1)
+                raise ParentEmailVerificationRateLimitError(int((next_allowed_at - now).total_seconds()) + 1)
+
             connection.execute(
                 """
                 insert into parent_email_verifications (
@@ -997,21 +1053,70 @@ class StudyPlanStore:
                     code_hash,
                     created_at,
                     expires_at,
-                    consumed_at
+                    consumed_at,
+                    attempt_count,
+                    delivery_status,
+                    delivery_provider,
+                    provider_message_id
                 )
-                values (?, ?, ?, ?, ?, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    str(uuid4()),
+                    verification_id,
                     parent.id,
                     _hash_access_code(verification_code),
                     now.isoformat(),
                     expires_at.isoformat(),
                     None,
+                    0,
+                    "pending",
+                    "",
+                    None,
                 ),
             )
 
-        settings = get_settings()
+        try:
+            delivery = send_parent_verification_email(
+                recipient=parent.contact,
+                verification_code=verification_code,
+                expires_at=expires_at,
+                idempotency_key=f"parent-verification/{verification_id}",
+            )
+        except EmailDeliveryError:
+            with self._connect() as connection:
+                connection.execute(
+                    """
+                    update parent_email_verifications
+                    set delivery_status = 'failed', consumed_at = ?
+                    where id = ?
+                    """,
+                    (datetime.now(timezone.utc).isoformat(), verification_id),
+                )
+            raise
+
+        with self._connect() as connection:
+            connection.execute(
+                """
+                update parent_email_verifications
+                set consumed_at = ?
+                where parent_id = ?
+                  and id <> ?
+                  and consumed_at is null
+                  and delivery_status = 'sent'
+                """,
+                (now.isoformat(), parent.id, verification_id),
+            )
+            connection.execute(
+                """
+                update parent_email_verifications
+                set delivery_status = 'sent',
+                    delivery_provider = ?,
+                    provider_message_id = ?
+                where id = ?
+                """,
+                (delivery.provider, delivery.message_id, verification_id),
+            )
+
         return ParentEmailVerificationReceipt(
             parent_id=parent.id,
             email=parent.contact,
@@ -1021,6 +1126,7 @@ class StudyPlanStore:
                 else "Development verification code generated for this parent email."
             ),
             expires_at=expires_at,
+            resend_available_at=resend_available_at,
             dev_code=None if settings.is_production else verification_code,
         )
 
@@ -1034,12 +1140,15 @@ class StudyPlanStore:
             return None
 
         now = datetime.now(timezone.utc)
+        max_attempts = max(1, min(get_settings().email_verification_max_attempts, 10))
         with self._connect() as connection:
             row = connection.execute(
                 """
-                select id, code_hash, expires_at
+                select id, code_hash, expires_at, attempt_count
                 from parent_email_verifications
-                where parent_id = ? and consumed_at is null
+                where parent_id = ?
+                  and consumed_at is null
+                  and delivery_status = 'sent'
                 order by created_at desc
                 limit 1
                 """,
@@ -1050,7 +1159,24 @@ class StudyPlanStore:
                 return None
 
             expires_at = _parse_datetime(row["expires_at"])
-            if expires_at <= now or not hmac.compare_digest(row["code_hash"], _hash_access_code(code)):
+            if expires_at <= now:
+                connection.execute(
+                    "update parent_email_verifications set consumed_at = ? where id = ?",
+                    (now.isoformat(), row["id"]),
+                )
+                return None
+
+            if not hmac.compare_digest(row["code_hash"], _hash_access_code(code)):
+                next_attempt_count = int(row["attempt_count"] or 0) + 1
+                connection.execute(
+                    """
+                    update parent_email_verifications
+                    set attempt_count = ?,
+                        consumed_at = case when ? >= ? then ? else consumed_at end
+                    where id = ?
+                    """,
+                    (next_attempt_count, next_attempt_count, max_attempts, now.isoformat(), row["id"]),
+                )
                 return None
 
             connection.execute(
@@ -1469,6 +1595,19 @@ class StudyPlanStore:
                 where id = ? and (auth_uid is null or auth_uid = '')
                 """,
                 (auth_uid, parent_id),
+            )
+
+    def _mark_parent_email_verified(self, parent_id: str) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                update parent_accounts
+                set email_verified = 1,
+                    email_verified_at = coalesce(email_verified_at, ?)
+                where id = ?
+                """,
+                (now, parent_id),
             )
 
     def _ensure_student_access_code(self, student_id: str, access_code_hash: str, access_code: str) -> None:
@@ -2373,10 +2512,31 @@ class StudyPlanStore:
                     code_hash text not null,
                     created_at text not null,
                     expires_at text not null,
-                    consumed_at text
+                    consumed_at text,
+                    attempt_count integer not null default 0,
+                    delivery_status text not null default 'sent',
+                    delivery_provider text not null default '',
+                    provider_message_id text
                 )
                 """
             )
+            parent_email_verification_columns = {
+                row["name"] for row in connection.execute("pragma table_info(parent_email_verifications)").fetchall()
+            }
+            if "attempt_count" not in parent_email_verification_columns:
+                connection.execute(
+                    "alter table parent_email_verifications add column attempt_count integer not null default 0"
+                )
+            if "delivery_status" not in parent_email_verification_columns:
+                connection.execute(
+                    "alter table parent_email_verifications add column delivery_status text not null default 'sent'"
+                )
+            if "delivery_provider" not in parent_email_verification_columns:
+                connection.execute(
+                    "alter table parent_email_verifications add column delivery_provider text not null default ''"
+                )
+            if "provider_message_id" not in parent_email_verification_columns:
+                connection.execute("alter table parent_email_verifications add column provider_message_id text")
             connection.execute(
                 """
                 create index if not exists idx_parent_email_verifications_parent_created

@@ -6,7 +6,8 @@ Use this before every Play Store test build.
 
 - App name: StudyNova
 - Android package: `com.studynova.app`
-- Version name: `0.1.0`
+- Version name: `1.0.0`
+- Android target: API 36 through Expo SDK 55
 - EAS version source: remote
 - Closed-test artifact: Android App Bundle (`.aab`)
 
@@ -22,13 +23,13 @@ The mobile app has committed assets under `apps/mobile/assets`:
 - `splash.png`
 - `notification-icon.png`
 
-Regenerate the current placeholder assets from the repository root with:
+Regenerate the app icon derivatives from the repository root with:
 
 ```powershell
 npm run mobile:assets
 ```
 
-These assets are good enough for a closed-test build. Before public production, replace them with final designer-approved Play Store artwork, feature graphic, and screenshots.
+Approved Play Store artwork is tracked under `docs/play-store-assets`. Actual phone screenshots must be captured from the final Android release candidate without real student data.
 
 ## Preflight Command
 
@@ -40,7 +41,7 @@ npm run mobile:release-check
 
 This validates the app config, EAS profiles, required Android assets, notification setup, hosted API preparation files, and Play Store docs references.
 
-Before submitting to Play Store, host these policy and store-readiness documents or routes publicly:
+Before submitting to Play Store, deploy the public web build so these routes are reachable without signing in:
 
 - `docs/privacy-policy-draft.md`
 - `docs/terms-of-use-draft.md`
@@ -48,10 +49,13 @@ Before submitting to Play Store, host these policy and store-readiness documents
 - `docs/play-store-data-safety.md`
 - `docs/play-store-listing-pack.md`
 - `docs/play-store-screenshot-capture.md`
+- `docs/production-email-delivery.md`
 
 ## Hosted API Preflight
 
 Closed-test builds must point to a hosted HTTPS API, not localhost, Codespaces, or an Expo tunnel.
+
+Parent sign-up also requires working Resend delivery. Configure the API variables in `docs/production-email-delivery.md`; hosted preflight now fails when production email delivery is missing.
 
 Use the Render execution path first:
 
@@ -61,10 +65,10 @@ Use the Render execution path first:
 After the backend is deployed, run from the repository root:
 
 ```powershell
-npm run closed-test:preflight -- https://your-api-host <admin-code>
+npm run closed-test:preflight -- https://your-api-host <admin-code> https://studynova.app
 ```
 
-That command validates the mobile release setup, smoke-tests the hosted API, and writes `apps/mobile/.env.local` for local Expo testing.
+That command validates the mobile release setup, smoke-tests the hosted API, verifies the public privacy/terms/deletion pages, and writes `apps/mobile/.env.local` for local Expo testing.
 
 If you need to debug one part at a time, use:
 

@@ -1,58 +1,53 @@
-# StudyNova Terms Of Use Draft
+# StudyNova Terms Of Use
 
-Last updated: June 3, 2026
+Last updated: July 19, 2026
 
-This draft must be reviewed before public launch. It is written for the StudyNova closed-test build and is represented in-app by the public `/terms` route. Host that route on a public webpage before Play Store submission if you want users, schools, and guardians to review terms outside the app.
+Public URL: `https://studynova.app/terms`
 
 ## Overview
 
-StudyNova is an academic planning app for students, parents, guardians, and schools. By using StudyNova, users agree to use the app for lawful, educational, and supportive study-planning purposes.
+StudyNova is an academic planning app for students, parents, guardians, and schools. By creating or using an account, users and approving parents or guardians agree to use StudyNova for lawful, educational, and supportive study-planning purposes.
 
 ## Accounts
 
 - Students and parents or guardians have separate accounts.
-- Students should use their own student account and should not access another student's dashboard.
-- Parents or guardians can only monitor students who have been linked through the app's linking or invite-code flow.
-- Users are responsible for keeping login IDs and access codes private.
+- Students must use their own account and must not access another student's dashboard.
+- Parents or guardians can monitor only students linked through StudyNova's secure linking flow.
+- Users are responsible for protecting login IDs, passwords, and access codes.
+
+## Age And Parent Approval
+
+Student accounts in this release are intended for students aged 13 or older. A parent or guardian must approve student sign-up and verify a parent email. Users must provide accurate information and must not create an account for an ineligible person.
 
 ## Parent And School Supervision
 
-StudyNova may be used by students. Parents, guardians, and schools should supervise student account creation, parent-student linking, and study-plan use where appropriate.
+Parents, guardians, and schools should supervise student account creation, parent-student linking, and study-plan use where appropriate.
 
 ## Study Plans
 
-StudyNova generates study plans from the information provided by the student or guardian, including subjects, topics, pages, reading pace, available study time, and exam dates. Study plans are guidance tools, not guarantees of exam performance.
+StudyNova generates guidance from the information provided, including subjects, topics, pages, reading pace, available study time, and exam dates. Study plans do not guarantee examination results.
 
 ## Study Proof And Progress
 
-Students may record study proof, recall notes, confidence scores, and completed sessions. These records should be honest and respectful. Parent dashboards are intended to encourage support, not pressure or punishment.
+Students may record recall notes, confidence scores, completed sessions, and optional study proof images. These records should be honest and respectful. Parent dashboards are intended to encourage support rather than pressure or punishment.
 
 ## Acceptable Use
 
-Users should not:
-
-- Submit false, harmful, abusive, or unlawful content.
-- Attempt to access another user's account or data.
-- Misuse account recovery, account deletion, tester feedback, or support forms.
-- Interfere with the app, backend, or testing process.
+Users must not submit harmful or unlawful content, access another user's data, misuse account or support workflows, or interfere with the app or backend.
 
 ## Privacy And Deletion
 
-StudyNova's privacy practices are described in the Privacy Policy. Users can request account deletion in-app or through the public `/delete-account` page when they cannot sign in.
+StudyNova's privacy practices are described at `https://studynova.app/privacy`. Users can request account deletion in-app or at `https://studynova.app/delete-account` when they cannot sign in.
 
-## Closed-Test Status
+## Service Availability
 
-The current StudyNova build is prepared for closed testing. Features, wording, hosting, and support processes may change before public launch.
+StudyNova may update, improve, suspend, or discontinue features when necessary for maintenance, safety, legal compliance, or product development. We will make reasonable efforts to protect saved study data and communicate material service changes.
 
 ## Changes To These Terms
 
-StudyNova may update these terms as the app grows. Continued use of the app after updates means users accept the updated terms.
+StudyNova may update these terms as the service grows. Continued use after an update means the user accepts the revised terms.
 
 ## Contact
 
-For support or questions about these terms, contact:
-
 StudyNova Support  
-Email: support@example.com
-
-Replace this email with the final support contact before Play Store submission.
+Email: support@studynova.app

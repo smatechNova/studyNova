@@ -31,6 +31,10 @@ const TERMS_SECTIONS: TermsSection[] = [
     ]
   },
   {
+    title: "Age And Parent Approval",
+    body: "Student accounts in this release are intended for students aged 13 or older. A parent or guardian must approve student sign-up and verify a parent email. Users must provide accurate account information and must not create an account for an ineligible person."
+  },
+  {
     title: "Parent And School Supervision",
     body: "StudyNova may be used by students. Parents, guardians, and schools should supervise student account creation, parent-student linking, and study-plan use where appropriate."
   },
@@ -56,8 +60,8 @@ const TERMS_SECTIONS: TermsSection[] = [
     body: "StudyNova's privacy practices are described in the Privacy Policy. Users can request account deletion in-app or through the public /delete-account page when they cannot sign in."
   },
   {
-    title: "Closed-Test Status",
-    body: "The current StudyNova build is prepared for closed testing. Features, wording, hosting, and support processes may change before public launch."
+    title: "Service Availability",
+    body: "StudyNova may update, improve, suspend, or discontinue features when necessary for maintenance, safety, legal compliance, or product development. We will make reasonable efforts to protect saved study data and communicate material service changes."
   },
   {
     title: "Changes To These Terms",
@@ -65,7 +69,7 @@ const TERMS_SECTIONS: TermsSection[] = [
   },
   {
     title: "Contact",
-    body: "For support or questions about these terms, contact StudyNova Support at support@example.com. Replace this email with the final support contact before Play Store submission."
+    body: "For support or questions about these terms, contact StudyNova Support at support@studynova.app."
   }
 ];
 
@@ -88,12 +92,12 @@ export default function TermsScreen() {
           <View style={styles.heroCopy}>
             <Text style={styles.kicker}>Public terms</Text>
             <Text style={styles.title}>StudyNova Terms of Use</Text>
-            <Text style={styles.helper}>Last updated: June 3, 2026</Text>
+            <Text style={styles.helper}>Last updated: July 19, 2026</Text>
           </View>
         </View>
 
         <IllustrationPanel
-          body="Clear terms help schools, parents, and students understand how StudyNova should be used during testing."
+          body="Clear terms help schools, parents, and students understand how StudyNova should be used."
           imageSource={brandAssets.privacySecurity}
           kicker="Shared expectations"
           title="Simple rules for a focused study app"
@@ -102,8 +106,7 @@ export default function TermsScreen() {
         <View style={styles.notice}>
           <MaterialCommunityIcons name="information-outline" size={20} color={colors.brand} />
           <Text style={styles.noticeText}>
-            These terms are prepared for the StudyNova closed-test build and should be reviewed with final business and
-            support details before public launch.
+            By creating or using an account, users and approving parents or guardians agree to these terms.
           </Text>
         </View>
 

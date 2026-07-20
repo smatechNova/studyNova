@@ -1,7 +1,8 @@
 from datetime import date, datetime
+import re
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class TopicInput(BaseModel):
@@ -104,7 +105,7 @@ class StudentAccountCreate(BaseModel):
     auth_uid: str | None = Field(default=None, max_length=160)
     name: str = Field(min_length=2, max_length=80)
     class_level: str = Field(min_length=1, max_length=40)
-    age: int = Field(ge=3, le=30)
+    age: int = Field(ge=13, le=30)
     school_name: str = Field(default="", max_length=120)
 
 
@@ -126,6 +127,14 @@ class ParentAccountCreate(BaseModel):
     relationship: str = Field(default="Parent", min_length=2, max_length=40)
     auth_uid: str | None = Field(default=None, max_length=160)
 
+    @field_validator("contact")
+    @classmethod
+    def validate_parent_email(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", normalized):
+            raise ValueError("Parent contact must be a valid email address.")
+        return normalized
+
 
 class ParentAccount(BaseModel):
     id: str
@@ -144,6 +153,7 @@ class ParentEmailVerificationReceipt(BaseModel):
     status: Literal["sent"] = "sent"
     message: str
     expires_at: datetime
+    resend_available_at: datetime
     dev_code: str | None = None
 
 

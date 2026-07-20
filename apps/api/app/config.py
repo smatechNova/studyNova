@@ -19,6 +19,14 @@ class Settings(BaseSettings):
     session_ttl_hours: int = 168
     admin_access_code: str = "studynova-admin-dev"
     public_api_base_url: str = ""
+    email_provider: str = "development"
+    resend_api_key: str = ""
+    email_from: str = "StudyNova <accounts@studynova.app>"
+    support_email: str = "support@studynova.app"
+    email_verification_ttl_minutes: int = 20
+    email_verification_resend_cooldown_seconds: int = 60
+    email_verification_max_requests_per_hour: int = 5
+    email_verification_max_attempts: int = 5
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

@@ -10,10 +10,11 @@ const positionalArgs = args.filter((arg) => !["--help", "-h"].includes(arg));
 
 const apiUrl = (positionalArgs[0] || process.env.STUDYNOVA_API_URL || "").trim().replace(/\/$/, "");
 const adminCode = (positionalArgs[1] || process.env.STUDYNOVA_ADMIN_CODE || "").trim();
+const webUrl = (positionalArgs[2] || process.env.STUDYNOVA_WEB_URL || "").trim().replace(/\/$/, "");
 
 function printUsage() {
-  console.error("Usage: node scripts/closed-test-preflight.mjs <https-api-url> <admin-code>");
-  console.error("Or set STUDYNOVA_API_URL and STUDYNOVA_ADMIN_CODE.");
+  console.error("Usage: node scripts/closed-test-preflight.mjs <https-api-url> <admin-code> <https-web-url>");
+  console.error("Or set STUDYNOVA_API_URL, STUDYNOVA_ADMIN_CODE, and STUDYNOVA_WEB_URL.");
 }
 
 function runStep(label, command, args) {
@@ -38,17 +39,40 @@ function runStep(label, command, args) {
   });
 }
 
+async function checkPublicPages(baseUrl) {
+  for (const route of ["/privacy", "/terms", "/delete-account"]) {
+    const url = `${baseUrl}${route}`;
+    const response = await fetch(url, {
+      headers: { "user-agent": "StudyNova-Release-Preflight/1.0" },
+      redirect: "follow",
+      signal: AbortSignal.timeout(20_000)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Public release page failed (${response.status}): ${url}`);
+    }
+
+    const body = await response.text();
+    if (!body.toLowerCase().includes("studynova")) {
+      throw new Error(`Public release page does not contain StudyNova content: ${url}`);
+    }
+
+    console.log(`- ${url} (${response.status})`);
+  }
+}
+
 if (showHelp) {
   printUsage();
   process.exit(0);
 }
 
-if (!apiUrl || !adminCode) {
+if (!apiUrl || !adminCode || !webUrl) {
   printUsage();
   process.exit(1);
 }
 
 let parsedApiUrl;
+let parsedWebUrl;
 
 try {
   parsedApiUrl = new URL(apiUrl);
@@ -57,8 +81,20 @@ try {
   process.exit(1);
 }
 
+try {
+  parsedWebUrl = new URL(webUrl);
+} catch (error) {
+  console.error(`Public web URL is invalid: ${webUrl}`);
+  process.exit(1);
+}
+
 if (parsedApiUrl.protocol !== "https:") {
   console.error("Closed-test preflight requires a hosted HTTPS API URL.");
+  process.exit(1);
+}
+
+if (parsedWebUrl.protocol !== "https:") {
+  console.error("Closed-test preflight requires a public HTTPS web URL.");
   process.exit(1);
 }
 
@@ -68,16 +104,19 @@ if (adminCode === "studynova-admin-dev") {
 }
 
 try {
-  await runStep("1/2 Mobile release configuration", process.execPath, [
+  await runStep("1/3 Mobile release configuration", process.execPath, [
     join(root, "scripts", "mobile-release-check.mjs")
   ]);
 
-  await runStep("2/2 Hosted API readiness", process.execPath, [
+  await runStep("2/3 Hosted API readiness", process.execPath, [
     join(root, "scripts", "api-smoke-test.mjs"),
     apiUrl,
     adminCode,
     "--write-mobile-env"
   ]);
+
+  console.log("\n3/3 Public privacy, terms, and deletion pages");
+  await checkPublicPages(webUrl);
 
   console.log("\nClosed-test preflight passed.");
   console.log("Next set the same URL in EAS, then build:");

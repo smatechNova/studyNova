@@ -1,23 +1,23 @@
 # StudyNova Account Deletion Request
 
-Last updated: June 1, 2026
+Last updated: July 19, 2026
 
 StudyNova lets signed-in students and parents request account deletion from inside the app. Open the student or parent dashboard, go to the privacy/account deletion section, enter a contact method, type `DELETE`, and submit the request.
 
 If you cannot access the app, use the public StudyNova account deletion page:
 
-Production URL to configure before Play submission:
+Public account deletion URL:
 
-`https://YOUR-STUDYNOVA-WEB-HOST/delete-account`
+`https://studynova.app/delete-account`
 
 The page submits a support-reviewed deletion request without requiring sign-in.
 
 If the public page is unavailable, send an account deletion request to:
 
 StudyNova Support  
-Email: support@example.com
+Email: support@studynova.app
 
-Replace this email with the final support contact before Play Store submission.
+This address must remain monitored throughout testing and after release.
 
 ## What To Include
 
@@ -37,6 +37,6 @@ After support verifies the request, StudyNova will complete the deletion process
 
 The deletion request record may be retained for support tracking. Some records may also be retained only where required for safety, legal, dispute, or operational reasons.
 
-## Closed-Test Note
+## Processing
 
-During closed testing, the request workflow records and tracks deletion requests for admin review and scoped backend cleanup. Public production release must use a final support address, hosted privacy policy URL, and hosted account deletion URL using the `/delete-account` route.
+The request workflow records deletion requests for authorized support review and scoped backend cleanup. The public privacy policy and this deletion page remain available without signing in.

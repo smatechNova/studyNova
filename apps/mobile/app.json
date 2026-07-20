@@ -4,7 +4,7 @@
     "slug": "studynova",
     "description": "Smart study planner and parent progress monitor for students.",
     "scheme": "studynova",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -30,21 +30,30 @@
       ],
       "softwareKeyboardLayoutMode": "resize"
     },
-    "notification": {
-      "icon": "./assets/notification-icon.png",
-      "color": "#2563EB"
+    "web": {
+      "output": "static",
+      "favicon": "./assets/icon.png"
     },
     "plugins": [
       "expo-router",
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#2563EB",
+          "defaultChannel": "study-reminders"
+        }
+      ],
       "expo-secure-store",
       [
         "expo-image-picker",
         {
           "cameraPermission": "StudyNova uses the camera only when a student chooses to attach a study proof photo for parent review.",
-          "photosPermission": "StudyNova uses photo access only when a student chooses an image or screenshot as study proof."
+          "photosPermission": "StudyNova uses photo access only when a student chooses an image or screenshot as study proof.",
+          "microphonePermission": false
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

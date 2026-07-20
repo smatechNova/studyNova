@@ -122,6 +122,7 @@ export type ParentEmailVerificationReceipt = {
   status: "sent";
   message: string;
   expires_at: string;
+  resend_available_at: string;
   dev_code?: string | null;
 };
 
