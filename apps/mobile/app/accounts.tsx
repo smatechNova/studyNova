@@ -17,11 +17,9 @@ import { IllustrationPanel } from "@/components/IllustrationPanel";
 import { Screen } from "@/components/Screen";
 import {
   confirmParentEmailVerification,
-  createParentAccount,
-  createStudentAccount,
+  createFamilySignup,
   getLatestParentFamily,
   getParentFamily,
-  linkParentStudent,
   requestParentEmailVerification,
   signInAccount
 } from "@/lib/api";
@@ -127,21 +125,22 @@ export default function AccountsScreen() {
     setMessage("");
 
     try {
-      const student = await createStudentAccount({
-        login_id: form.studentLoginId.trim(),
-        access_code: form.studentAccessCode.trim(),
-        name: form.studentName.trim(),
-        class_level: form.classLevel.trim(),
-        age: Number.parseInt(form.age.trim(), 10),
-        school_name: form.schoolName.trim()
+      const { student, parent, link } = await createFamilySignup({
+        student: {
+          login_id: form.studentLoginId.trim(),
+          access_code: form.studentAccessCode.trim(),
+          name: form.studentName.trim(),
+          class_level: form.classLevel.trim(),
+          age: Number.parseInt(form.age.trim(), 10),
+          school_name: form.schoolName.trim()
+        },
+        parent: {
+          name: form.parentName.trim(),
+          contact: form.parentContact.trim(),
+          access_code: form.parentAccessCode.trim(),
+          relationship: form.relationship.trim()
+        }
       });
-      const parent = await createParentAccount({
-        name: form.parentName.trim(),
-        contact: form.parentContact.trim(),
-        access_code: form.parentAccessCode.trim(),
-        relationship: form.relationship.trim()
-      });
-      const link = await linkParentStudent(parent.id, student.id);
       setParentFamily((current) => ({
         parent,
         students: current?.parent?.id === parent.id ? upsertById(current.students, student) : [student],
@@ -149,8 +148,13 @@ export default function AccountsScreen() {
       }));
       setSetupResult({ studentId: student.id, parentId: parent.id });
       if (!parent.email_verified) {
-        const receipt = await beginParentEmailVerification(parent.id);
-        setMessage(`Verify ${receipt.email} before opening dashboards. Enter the code sent to the parent email.`);
+        try {
+          const receipt = await beginParentEmailVerification(parent.id);
+          setMessage(`Accounts created and linked. Enter the code sent to ${receipt.email} to verify the parent email.`);
+        } catch (verificationError) {
+          const detail = accountSetupErrorMessage(verificationError);
+          setMessage(`Accounts created and linked. The verification email was not sent: ${detail}`);
+        }
         return;
       }
       setMessage("Profiles are linked. Choose which dashboard to open next.");

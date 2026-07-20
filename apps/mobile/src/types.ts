@@ -139,6 +139,17 @@ export type ParentStudentLink = {
   created_at: string;
 };
 
+export type FamilySignupInput = {
+  student: StudentAccountInput;
+  parent: ParentAccountInput;
+};
+
+export type FamilySignupReceipt = {
+  student: StudentAccount;
+  parent: ParentAccount;
+  link: ParentStudentLink;
+};
+
 export type ParentInviteCode = {
   code: string;
   student_id: string;

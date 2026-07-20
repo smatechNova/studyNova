@@ -15,6 +15,8 @@ import type {
   AuthSession,
   DeploymentReadiness,
   FamilyAccount,
+  FamilySignupInput,
+  FamilySignupReceipt,
   FirebaseAuthReadiness,
   FirebaseSignInInput,
   LaunchChecklistItemRecord,
@@ -136,6 +138,22 @@ export async function createParentAccount(payload: ParentAccountInput): Promise<
   }
 
   return response.json() as Promise<ParentAccount>;
+}
+
+export async function createFamilySignup(payload: FamilySignupInput): Promise<FamilySignupReceipt> {
+  const response = await apiFetch(`${API_URL}/api/v1/accounts/family-signup`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw await createApiError(response, "Family sign-up request failed");
+  }
+
+  return response.json() as Promise<FamilySignupReceipt>;
 }
 
 export async function requestParentEmailVerification(parentId: string): Promise<ParentEmailVerificationReceipt> {

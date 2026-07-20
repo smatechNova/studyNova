@@ -177,6 +177,17 @@ class ParentStudentLink(ParentStudentLinkCreate):
     created_at: datetime
 
 
+class FamilySignupCreate(BaseModel):
+    student: StudentAccountCreate
+    parent: ParentAccountCreate
+
+
+class FamilySignupReceipt(BaseModel):
+    student: StudentAccount
+    parent: ParentAccount
+    link: ParentStudentLink
+
+
 class ParentInviteCode(BaseModel):
     code: str
     student_id: str

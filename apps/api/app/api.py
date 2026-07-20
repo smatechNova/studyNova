@@ -37,6 +37,8 @@ from app.schemas import (
     DeploymentCheck,
     DeploymentReadiness,
     FamilyAccount,
+    FamilySignupCreate,
+    FamilySignupReceipt,
     FirebaseAuthReadiness,
     FirebaseSignInRequest,
     LaunchChecklistItemRecord,
@@ -389,6 +391,24 @@ def create_parent_account(payload: ParentAccountCreate) -> ParentAccount:
         return get_study_plan_store().create_parent_account(payload)
     except AccountAccessCodeError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
+@router.post("/accounts/family-signup", response_model=FamilySignupReceipt)
+def create_family_signup(payload: FamilySignupCreate) -> FamilySignupReceipt:
+    store = get_study_plan_store()
+    try:
+        student = store.create_student_account(payload.student)
+        parent = store.create_parent_account(payload.parent)
+    except AccountAccessCodeError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    link = store.link_parent_student(
+        ParentStudentLinkCreate(parent_id=parent.id, student_id=student.id)
+    )
+    if link is None:
+        raise HTTPException(status_code=500, detail="The family profiles could not be linked.")
+
+    return FamilySignupReceipt(student=student, parent=parent, link=link)
 
 
 @router.post("/accounts/parents/{parent_id}/email-verification", response_model=ParentEmailVerificationReceipt)

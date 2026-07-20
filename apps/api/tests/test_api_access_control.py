@@ -77,6 +77,67 @@ def _headers(client: TestClient, role: str, login_id: str, access_code: str = "1
     return {"Authorization": f"Bearer {token}"}
 
 
+def test_family_signup_creates_and_reuses_linked_accounts(tmp_path, monkeypatch) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)
+    client = TestClient(app)
+    payload = {
+        "student": {
+            "login_id": "new.student@example.com",
+            "access_code": "2468",
+            "name": "New Student",
+            "class_level": "SS1",
+            "age": 15,
+            "school_name": "",
+        },
+        "parent": {
+            "name": "New Parent",
+            "contact": "new.parent@example.com",
+            "access_code": "1357",
+            "relationship": "Guardian",
+        },
+    }
+
+    first = client.post("/api/v1/accounts/family-signup", json=payload)
+    repeated = client.post("/api/v1/accounts/family-signup", json=payload)
+
+    assert first.status_code == 200
+    assert repeated.status_code == 200
+    assert repeated.json()["student"]["id"] == first.json()["student"]["id"]
+    assert repeated.json()["parent"]["id"] == first.json()["parent"]["id"]
+    assert repeated.json()["link"]["id"] == first.json()["link"]["id"]
+    assert store.parent_family(first.json()["parent"]["id"]).students[0].id == first.json()["student"]["id"]
+
+
+def test_family_signup_reports_existing_account_code_conflict(tmp_path, monkeypatch) -> None:
+    store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
+    monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)
+    client = TestClient(app)
+    payload = {
+        "student": {
+            "login_id": "existing.student@example.com",
+            "access_code": "2468",
+            "name": "Existing Student",
+            "class_level": "SS1",
+            "age": 15,
+            "school_name": "",
+        },
+        "parent": {
+            "name": "Existing Parent",
+            "contact": "existing.parent@example.com",
+            "access_code": "1357",
+            "relationship": "Guardian",
+        },
+    }
+    assert client.post("/api/v1/accounts/family-signup", json=payload).status_code == 200
+    payload["student"]["access_code"] = "9999"
+
+    response = client.post("/api/v1/accounts/family-signup", json=payload)
+
+    assert response.status_code == 401
+    assert "different access code" in response.json()["detail"]
+
+
 def test_student_cannot_read_another_students_plan(tmp_path, monkeypatch) -> None:
     store = StudyPlanStore(str(tmp_path / "studynova.sqlite3"))
     monkeypatch.setattr(api_module, "get_study_plan_store", lambda: store)
