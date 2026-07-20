@@ -32,6 +32,7 @@ import { useTheme } from "@/themeContext";
 type AccountForm = {
   studentLoginId: string;
   studentAccessCode: string;
+  studentAccessCodeConfirmation: string;
   studentName: string;
   classLevel: string;
   age: string;
@@ -39,6 +40,7 @@ type AccountForm = {
   parentName: string;
   parentContact: string;
   parentAccessCode: string;
+  parentAccessCodeConfirmation: string;
   relationship: string;
 };
 
@@ -182,6 +184,7 @@ export default function AccountsScreen() {
       ...current,
       studentLoginId: "",
       studentAccessCode: "",
+      studentAccessCodeConfirmation: "",
       studentName: "",
       classLevel: "",
       age: "",
@@ -368,12 +371,21 @@ export default function AccountsScreen() {
             </Text>
             <FormField
               keyboardType="number-pad"
-              label="Student access code"
+              label="Student password PIN"
               maxLength={6}
               onChangeText={(value) => updateField("studentAccessCode", value.replace(/\D/g, ""))}
               placeholder="4-6 digits"
               secureTextEntry
               value={form.studentAccessCode}
+            />
+            <FormField
+              keyboardType="number-pad"
+              label="Confirm student password PIN"
+              maxLength={6}
+              onChangeText={(value) => updateField("studentAccessCodeConfirmation", value.replace(/\D/g, ""))}
+              placeholder="Enter the same 4-6 digits"
+              secureTextEntry
+              value={form.studentAccessCodeConfirmation}
             />
             <Pressable accessibilityRole="link" onPress={openGmailSignup} style={styles.gmailLink}>
               <MaterialCommunityIcons name="email-plus-outline" size={18} color={colors.brand} />
@@ -432,12 +444,21 @@ export default function AccountsScreen() {
           </Text>
           <FormField
             keyboardType="number-pad"
-            label="Parent access code"
+            label="Parent password PIN"
             maxLength={6}
             onChangeText={(value) => updateField("parentAccessCode", value.replace(/\D/g, ""))}
             placeholder="4-6 digits"
             secureTextEntry
             value={form.parentAccessCode}
+          />
+          <FormField
+            keyboardType="number-pad"
+            label="Confirm parent password PIN"
+            maxLength={6}
+            onChangeText={(value) => updateField("parentAccessCodeConfirmation", value.replace(/\D/g, ""))}
+            placeholder="Enter the same 4-6 digits"
+            secureTextEntry
+            value={form.parentAccessCodeConfirmation}
           />
           <FormField
             label="Relationship"
@@ -654,23 +675,40 @@ function FormField({
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [isFocused, setIsFocused] = useState(false);
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput
-        autoCapitalize={autoCapitalize ?? (keyboardType === "default" ? "words" : "none")}
-        keyboardType={keyboardType}
-        maxLength={maxLength}
-        onBlur={() => setIsFocused(false)}
-        onChangeText={onChangeText}
-        onFocus={() => setIsFocused(true)}
-        placeholder={isFocused ? "" : placeholder}
-        placeholderTextColor={colors.muted}
-        secureTextEntry={secureTextEntry}
-        style={styles.input}
-        value={value}
-      />
+      <View style={styles.inputWrap}>
+        <TextInput
+          autoCapitalize={autoCapitalize ?? (keyboardType === "default" ? "words" : "none")}
+          keyboardType={keyboardType}
+          maxLength={maxLength}
+          onBlur={() => setIsFocused(false)}
+          onChangeText={onChangeText}
+          onFocus={() => setIsFocused(true)}
+          placeholder={isFocused ? "" : placeholder}
+          placeholderTextColor={colors.muted}
+          secureTextEntry={secureTextEntry && !isPasswordVisible}
+          style={[styles.input, secureTextEntry && styles.inputWithToggle]}
+          value={value}
+        />
+        {secureTextEntry ? (
+          <Pressable
+            accessibilityLabel={isPasswordVisible ? "Hide password" : "Show password"}
+            accessibilityRole="button"
+            onPress={() => setIsPasswordVisible((current) => !current)}
+            style={styles.passwordToggle}
+          >
+            <MaterialCommunityIcons
+              color={colors.muted}
+              name={isPasswordVisible ? "eye-off-outline" : "eye-outline"}
+              size={22}
+            />
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -679,6 +717,7 @@ function createDefaultAccountForm(): AccountForm {
   return {
     studentLoginId: "",
     studentAccessCode: "",
+    studentAccessCodeConfirmation: "",
     studentName: "",
     classLevel: "",
     age: "",
@@ -686,6 +725,7 @@ function createDefaultAccountForm(): AccountForm {
     parentName: "",
     parentContact: "",
     parentAccessCode: "",
+    parentAccessCodeConfirmation: "",
     relationship: ""
   };
 }
@@ -696,7 +736,11 @@ function getAccountValidationError(form: AccountForm) {
   }
 
   if (!isValidAccessCode(form.studentAccessCode)) {
-    return "Create a 4 to 6 digit access code for the student account.";
+    return "Create a 4 to 6 digit password PIN for the student account.";
+  }
+
+  if (form.studentAccessCode !== form.studentAccessCodeConfirmation) {
+    return "The student password PINs do not match.";
   }
 
   if (!isValidPersonName(form.studentName)) {
@@ -720,7 +764,11 @@ function getAccountValidationError(form: AccountForm) {
   }
 
   if (!isValidAccessCode(form.parentAccessCode)) {
-    return "Create a 4 to 6 digit access code for the parent account.";
+    return "Create a 4 to 6 digit password PIN for the parent account.";
+  }
+
+  if (form.parentAccessCode !== form.parentAccessCodeConfirmation) {
+    return "The parent password PINs do not match.";
   }
 
   if (!isValidShortText(form.relationship)) {
@@ -962,6 +1010,12 @@ function createStyles(colors: AppColors) {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm
   },
+  inputWithToggle: {
+    paddingRight: 54
+  },
+  inputWrap: {
+    position: "relative"
+  },
   kicker: {
     color: colors.muted,
     fontSize: 12,
@@ -992,6 +1046,15 @@ function createStyles(colors: AppColors) {
     fontSize: 14,
     fontWeight: "700",
     lineHeight: 20
+  },
+  passwordToggle: {
+    alignItems: "center",
+    height: 44,
+    justifyContent: "center",
+    position: "absolute",
+    right: 4,
+    top: 2,
+    width: 44
   },
   modeCard: {
     alignItems: "center",
