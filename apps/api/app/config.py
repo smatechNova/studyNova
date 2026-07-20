@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     email_verification_resend_cooldown_seconds: int = 60
     email_verification_max_requests_per_hour: int = 5
     email_verification_max_attempts: int = 5
+    account_recovery_ttl_minutes: int = 20
+    account_recovery_resend_cooldown_seconds: int = 60
+    account_recovery_max_requests_per_hour: int = 5
+    account_recovery_max_attempts: int = 5
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

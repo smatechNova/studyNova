@@ -21,6 +21,10 @@ from app.schemas import (
     AccountDeletionRequestReceipt,
     AccountDeletionRequestRecord,
     AccountDeletionReviewRequest,
+    AccountAccessRecoveryConfirm,
+    AccountAccessRecoveryCreate,
+    AccountAccessRecoveryReceipt,
+    AccountAccessRecoveryResult,
     AccountRecoveryRequestCreate,
     AccountRecoveryRequestRecord,
     AccountRecoveryRequestReceipt,
@@ -71,6 +75,7 @@ from app.schemas import (
 )
 from app.storage import (
     AccountAccessCodeError,
+    AccountRecoveryRateLimitError,
     ParentEmailAlreadyVerifiedError,
     ParentEmailVerificationRateLimitError,
     get_study_plan_store,
@@ -468,6 +473,28 @@ def sign_in_account(payload: AccountSignInRequest) -> AuthSession:
 @router.post("/accounts/recovery-requests", response_model=AccountRecoveryRequestReceipt)
 def create_account_recovery_request(payload: AccountRecoveryRequestCreate) -> AccountRecoveryRequestReceipt:
     return get_study_plan_store().create_account_recovery_request(payload)
+
+
+@router.post("/accounts/access-code-recovery", response_model=AccountAccessRecoveryReceipt)
+def request_access_code_recovery(payload: AccountAccessRecoveryCreate) -> AccountAccessRecoveryReceipt:
+    try:
+        return get_study_plan_store().request_access_code_recovery(payload)
+    except AccountRecoveryRateLimitError as exc:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Please wait {exc.retry_after_seconds} seconds before requesting another code.",
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        ) from exc
+    except EmailDeliveryError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/accounts/access-code-recovery/confirm", response_model=AccountAccessRecoveryResult)
+def confirm_access_code_recovery(payload: AccountAccessRecoveryConfirm) -> AccountAccessRecoveryResult:
+    result = get_study_plan_store().confirm_access_code_recovery(payload)
+    if result is None:
+        raise HTTPException(status_code=400, detail="The reset code is invalid, expired, or has been used.")
+    return result
 
 
 @router.post("/accounts/deletion-requests", response_model=AccountDeletionRequestReceipt)

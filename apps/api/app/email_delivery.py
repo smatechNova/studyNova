@@ -118,6 +118,70 @@ def send_parent_verification_email(
     return EmailDeliveryResult(provider="resend", message_id=message_id)
 
 
+def send_account_recovery_email(
+    *,
+    recipient: str,
+    recovery_code: str,
+    expires_at: datetime,
+    account_role: str,
+    idempotency_key: str,
+) -> EmailDeliveryResult:
+    settings = get_settings()
+    provider = settings.email_provider.strip().lower()
+    if not settings.is_production and provider != "resend":
+        return EmailDeliveryResult(provider="development")
+
+    readiness = email_delivery_readiness(settings)
+    if not readiness["configured"]:
+        raise EmailDeliveryError("Account recovery email delivery is not configured.")
+    if not EMAIL_PATTERN.fullmatch(recipient.strip().lower()):
+        raise EmailDeliveryError("The recovery address is not a valid email.")
+
+    expiry_text = expires_at.strftime("%H:%M UTC")
+    safe_code = html.escape(recovery_code)
+    safe_role = html.escape(account_role)
+    safe_support_email = html.escape(settings.support_email.strip())
+    payload = {
+        "from": settings.email_from.strip(),
+        "to": [recipient.strip().lower()],
+        "subject": "Reset your StudyNova access code",
+        "text": (
+            f"Your StudyNova {account_role} recovery code is {recovery_code}. "
+            f"It expires at {expiry_text}. Do not share this code. "
+            f"If you did not request this reset, ignore this email."
+        ),
+        "html": (
+            "<div style=\"font-family:Arial,sans-serif;color:#102A43;line-height:1.5\">"
+            "<h2 style=\"margin-bottom:8px\">Reset your StudyNova access code</h2>"
+            f"<p>Use this code to reset the {safe_role} account:</p>"
+            f"<p style=\"font-size:32px;font-weight:700;letter-spacing:8px;color:#2563EB\">{safe_code}</p>"
+            f"<p>This code expires at {expiry_text}. Do not share it with anyone.</p>"
+            f"<p style=\"color:#52667A\">Did not request this? Ignore this email or contact {safe_support_email}.</p>"
+            "</div>"
+        ),
+    }
+    try:
+        response = httpx.post(
+            RESEND_EMAILS_URL,
+            headers={
+                "Authorization": f"Bearer {settings.resend_api_key.strip()}",
+                "Content-Type": "application/json",
+                "Idempotency-Key": idempotency_key,
+            },
+            json=payload,
+            timeout=10.0,
+        )
+    except httpx.HTTPError as exc:
+        raise EmailDeliveryError("The recovery email service could not be reached.") from exc
+    if response.status_code < 200 or response.status_code >= 300:
+        raise EmailDeliveryError("The recovery email service rejected the message.")
+    try:
+        message_id = str(response.json().get("id") or "") or None
+    except ValueError:
+        message_id = None
+    return EmailDeliveryResult(provider="resend", message_id=message_id)
+
+
 def _contains_valid_email(value: str) -> bool:
     if "<" in value and value.endswith(">"):
         value = value.rsplit("<", 1)[1][:-1].strip()

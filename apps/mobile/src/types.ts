@@ -180,6 +180,32 @@ export type AccountRecoveryRequestReceipt = {
   created_at: string;
 };
 
+export type AccountAccessRecoveryInput = {
+  role: AuthRole;
+  login_id: string;
+  email: string;
+};
+
+export type AccountAccessRecoveryReceipt = {
+  recovery_id: string;
+  status: "sent";
+  message: string;
+  expires_at: string;
+  resend_available_at: string;
+  dev_code?: string | null;
+};
+
+export type AccountAccessRecoveryConfirmInput = {
+  recovery_id: string;
+  code: string;
+  new_access_code: string;
+};
+
+export type AccountAccessRecoveryResult = {
+  reset: boolean;
+  message: string;
+};
+
 export type AccountRecoveryRequestRecord = {
   id: string;
   role: AuthRole;

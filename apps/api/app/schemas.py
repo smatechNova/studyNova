@@ -220,6 +220,32 @@ class AccountRecoveryRequestReceipt(BaseModel):
     created_at: datetime
 
 
+class AccountAccessRecoveryCreate(BaseModel):
+    role: Literal["student", "parent"]
+    login_id: str = Field(min_length=5, max_length=120)
+    email: str = Field(min_length=5, max_length=120)
+
+
+class AccountAccessRecoveryReceipt(BaseModel):
+    recovery_id: str
+    status: Literal["sent"] = "sent"
+    message: str
+    expires_at: datetime
+    resend_available_at: datetime
+    dev_code: str | None = None
+
+
+class AccountAccessRecoveryConfirm(BaseModel):
+    recovery_id: str = Field(min_length=20, max_length=80)
+    code: str = Field(pattern=r"^\d{6}$")
+    new_access_code: str = Field(min_length=4, max_length=6, pattern=r"^\d{4,6}$")
+
+
+class AccountAccessRecoveryResult(BaseModel):
+    reset: bool = True
+    message: str
+
+
 class AccountRecoveryReviewRequest(BaseModel):
     admin_note: str = Field(default="", max_length=240)
 

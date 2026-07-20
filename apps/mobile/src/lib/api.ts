@@ -1,4 +1,8 @@
 import type {
+  AccountAccessRecoveryConfirmInput,
+  AccountAccessRecoveryInput,
+  AccountAccessRecoveryReceipt,
+  AccountAccessRecoveryResult,
   AccountDeletionRequestInput,
   AccountDeletionRequestReceipt,
   AccountDeletionRequestRecord,
@@ -244,6 +248,34 @@ export async function createAccountRecoveryRequest(
   }
 
   return response.json() as Promise<AccountRecoveryRequestReceipt>;
+}
+
+export async function requestAccessCodeRecovery(
+  payload: AccountAccessRecoveryInput
+): Promise<AccountAccessRecoveryReceipt> {
+  const response = await apiFetch(`${API_URL}/api/v1/accounts/access-code-recovery`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    throw await createApiError(response, "Could not send the reset code");
+  }
+  return response.json() as Promise<AccountAccessRecoveryReceipt>;
+}
+
+export async function confirmAccessCodeRecovery(
+  payload: AccountAccessRecoveryConfirmInput
+): Promise<AccountAccessRecoveryResult> {
+  const response = await apiFetch(`${API_URL}/api/v1/accounts/access-code-recovery/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    throw await createApiError(response, "Could not reset the access code");
+  }
+  return response.json() as Promise<AccountAccessRecoveryResult>;
 }
 
 export async function createAccountDeletionRequest(

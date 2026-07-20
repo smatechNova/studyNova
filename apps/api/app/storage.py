@@ -10,13 +10,17 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.config import get_settings
-from app.email_delivery import EmailDeliveryError, send_parent_verification_email
+from app.email_delivery import EmailDeliveryError, send_account_recovery_email, send_parent_verification_email
 from app.proof_storage import delete_study_proof_image
 from app.schemas import (
     AccountDeletionRequestCreate,
     AccountDeletionRequestReceipt,
     AccountDeletionRequestRecord,
     AccountDeletionReviewRequest,
+    AccountAccessRecoveryConfirm,
+    AccountAccessRecoveryCreate,
+    AccountAccessRecoveryReceipt,
+    AccountAccessRecoveryResult,
     AccountRecoveryRequestCreate,
     AccountRecoveryRequestRecord,
     AccountRecoveryRequestReceipt,
@@ -70,6 +74,12 @@ class ParentEmailAlreadyVerifiedError(Exception):
 
 
 class ParentEmailVerificationRateLimitError(Exception):
+    def __init__(self, retry_after_seconds: int) -> None:
+        self.retry_after_seconds = max(1, retry_after_seconds)
+        super().__init__(f"Please wait {self.retry_after_seconds} seconds before requesting another code.")
+
+
+class AccountRecoveryRateLimitError(Exception):
     def __init__(self, retry_after_seconds: int) -> None:
         self.retry_after_seconds = max(1, retry_after_seconds)
         super().__init__(f"Please wait {self.retry_after_seconds} seconds before requesting another code.")
@@ -289,6 +299,147 @@ class StudyPlanStore:
             )
 
         return receipt
+
+    def request_access_code_recovery(self, payload: AccountAccessRecoveryCreate) -> AccountAccessRecoveryReceipt:
+        settings = get_settings()
+        now = datetime.now(timezone.utc)
+        ttl_minutes = max(5, min(settings.account_recovery_ttl_minutes, 60))
+        cooldown_seconds = max(15, min(settings.account_recovery_resend_cooldown_seconds, 3600))
+        max_requests = max(1, min(settings.account_recovery_max_requests_per_hour, 20))
+        expires_at = now + timedelta(minutes=ttl_minutes)
+        resend_available_at = now + timedelta(seconds=cooldown_seconds)
+        recovery_id = str(uuid4())
+        recovery_code = f"{secrets.randbelow(1_000_000):06d}"
+        account_id, recipient = self._access_recovery_target(payload)
+        request_key = hashlib.sha256(
+            f"{payload.role}:{_contact_key(payload.login_id)}:{_contact_key(payload.email)}".encode("utf-8")
+        ).hexdigest()
+
+        with self._connect() as connection:
+            recent_rows = connection.execute(
+                """
+                select created_at from account_access_recoveries
+                where request_key = ? and delivery_status in ('sent', 'decoy') and created_at >= ?
+                order by created_at desc
+                """,
+                (request_key, (now - timedelta(hours=1)).isoformat()),
+            ).fetchall()
+            if recent_rows:
+                latest = _parse_datetime(recent_rows[0]["created_at"])
+                next_allowed = latest + timedelta(seconds=cooldown_seconds)
+                if next_allowed > now:
+                    raise AccountRecoveryRateLimitError(int((next_allowed - now).total_seconds()) + 1)
+            if len(recent_rows) >= max_requests:
+                oldest = _parse_datetime(recent_rows[-1]["created_at"])
+                raise AccountRecoveryRateLimitError(int((oldest + timedelta(hours=1) - now).total_seconds()) + 1)
+            connection.execute(
+                """
+                insert into account_access_recoveries (
+                    id, request_key, role, account_id, email, code_hash, created_at, expires_at,
+                    consumed_at, attempt_count, delivery_status, delivery_provider, provider_message_id
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, '', null)
+                """,
+                (
+                    recovery_id, request_key, payload.role, account_id, payload.email.strip().lower(),
+                    _hash_access_code(recovery_code), now.isoformat(), expires_at.isoformat(), None,
+                    "pending" if recipient else "decoy",
+                ),
+            )
+
+        delivery = None
+        if recipient:
+            try:
+                delivery = send_account_recovery_email(
+                    recipient=recipient,
+                    recovery_code=recovery_code,
+                    expires_at=expires_at,
+                    account_role=payload.role,
+                    idempotency_key=f"account-recovery/{recovery_id}",
+                )
+            except EmailDeliveryError:
+                with self._connect() as connection:
+                    connection.execute(
+                        "update account_access_recoveries set delivery_status = 'failed', consumed_at = ? where id = ?",
+                        (datetime.now(timezone.utc).isoformat(), recovery_id),
+                    )
+                raise
+            with self._connect() as connection:
+                connection.execute(
+                    """
+                    update account_access_recoveries
+                    set delivery_status = 'sent', delivery_provider = ?, provider_message_id = ?
+                    where id = ?
+                    """,
+                    (delivery.provider, delivery.message_id, recovery_id),
+                )
+
+        return AccountAccessRecoveryReceipt(
+            recovery_id=recovery_id,
+            message="If the account and verified recovery email match, a six-digit reset code has been sent.",
+            expires_at=expires_at,
+            resend_available_at=resend_available_at,
+            dev_code=recovery_code if recipient and not settings.is_production else None,
+        )
+
+    def confirm_access_code_recovery(
+        self, payload: AccountAccessRecoveryConfirm
+    ) -> AccountAccessRecoveryResult | None:
+        now = datetime.now(timezone.utc)
+        max_attempts = max(1, min(get_settings().account_recovery_max_attempts, 10))
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                select id, role, account_id, code_hash, expires_at, attempt_count
+                from account_access_recoveries
+                where id = ? and consumed_at is null and delivery_status = 'sent'
+                """,
+                (payload.recovery_id,),
+            ).fetchone()
+            if row is None or not row["account_id"]:
+                return None
+            if _parse_datetime(row["expires_at"]) <= now:
+                connection.execute(
+                    "update account_access_recoveries set consumed_at = ? where id = ?",
+                    (now.isoformat(), row["id"]),
+                )
+                return None
+            if not hmac.compare_digest(row["code_hash"], _hash_access_code(payload.code)):
+                attempts = int(row["attempt_count"] or 0) + 1
+                connection.execute(
+                    """
+                    update account_access_recoveries set attempt_count = ?,
+                    consumed_at = case when ? >= ? then ? else consumed_at end where id = ?
+                    """,
+                    (attempts, attempts, max_attempts, now.isoformat(), row["id"]),
+                )
+                return None
+            table = "student_accounts" if row["role"] == "student" else "parent_accounts"
+            connection.execute(
+                f"update {table} set access_code_hash = ? where id = ?",
+                (_hash_access_code(payload.new_access_code), row["account_id"]),
+            )
+            connection.execute(
+                "update account_access_recoveries set consumed_at = ? where id = ?",
+                (now.isoformat(), row["id"]),
+            )
+        return AccountAccessRecoveryResult(message="Access code updated. You can now sign in with the new code.")
+
+    def _access_recovery_target(self, payload: AccountAccessRecoveryCreate) -> tuple[str | None, str | None]:
+        email_key = _contact_key(payload.email)
+        if payload.role == "parent":
+            parent = self.parent_account_by_contact(payload.login_id)
+            if parent and parent.email_verified and _contact_key(parent.contact) == email_key:
+                return parent.id, parent.contact
+            return None, None
+
+        student = self.student_account_by_login_id(payload.login_id)
+        if student is None:
+            return None, None
+        family = self.student_family(student.id)
+        parent = family.parent
+        if parent and parent.email_verified and _contact_key(parent.contact) == email_key:
+            return student.id, parent.contact
+        return None, None
 
     def account_recovery_requests(self, limit: int = 50) -> list[AccountRecoveryRequestRecord]:
         with self._connect() as connection:
@@ -2614,6 +2765,31 @@ class StudyPlanStore:
                 """
                 create index if not exists idx_account_recovery_requests_status_created
                 on account_recovery_requests (status, created_at desc)
+                """
+            )
+            connection.execute(
+                """
+                create table if not exists account_access_recoveries (
+                    id text primary key,
+                    request_key text not null,
+                    role text not null,
+                    account_id text,
+                    email text not null,
+                    code_hash text not null,
+                    created_at text not null,
+                    expires_at text not null,
+                    consumed_at text,
+                    attempt_count integer not null default 0,
+                    delivery_status text not null,
+                    delivery_provider text not null default '',
+                    provider_message_id text
+                )
+                """
+            )
+            connection.execute(
+                """
+                create index if not exists idx_account_access_recoveries_request_created
+                on account_access_recoveries (request_key, created_at desc)
                 """
             )
             connection.execute(

@@ -16,7 +16,7 @@ import {
 import { AnimatedPressable as Pressable } from "@/components/AnimatedPressable";
 import { IllustrationPanel } from "@/components/IllustrationPanel";
 import { Screen } from "@/components/Screen";
-import { createAccountRecoveryRequest, firebaseSignInAccount, signInAccount } from "@/lib/api";
+import { confirmAccessCodeRecovery, firebaseSignInAccount, requestAccessCodeRecovery, signInAccount } from "@/lib/api";
 import { brandAssets } from "@/lib/brandAssets";
 import {
   exchangeGoogleIdTokenForFirebaseIdToken,
@@ -64,7 +64,10 @@ export default function AuthScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [recoveryContact, setRecoveryContact] = useState("");
-  const [recoveryNote, setRecoveryNote] = useState("");
+  const [recoveryId, setRecoveryId] = useState("");
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [newAccessCode, setNewAccessCode] = useState("");
+  const [confirmAccessCode, setConfirmAccessCode] = useState("");
   const [isRecoveryLoading, setIsRecoveryLoading] = useState(false);
   const firebaseConfig = getFirebaseClientConfig();
   const firebaseReadiness = getFirebaseClientReadiness();
@@ -182,7 +185,8 @@ export default function AuthScreen() {
     setMessage("");
 
     try {
-      const recoveryEmail = recoveryContact.trim();
+      const recoveryEmail = recoveryContact.trim().toLowerCase();
+      const recoveryLoginId = loginId.trim() || recoveryEmail;
       const canSendFirebaseReset = isFirebasePasswordResetConfigured();
       let firebaseResetSent = false;
 
@@ -195,27 +199,55 @@ export default function AuthScreen() {
         }
       }
 
-      const receipt = await createAccountRecoveryRequest({
+      const receipt = await requestAccessCodeRecovery({
         role,
-        login_id: recoveryEmail,
-        contact: recoveryEmail,
-        note: [
-          "Email recovery request from the sign-in screen.",
-          loginId.trim() && loginId.trim() !== recoveryEmail ? `Entered sign-in ID: ${loginId.trim()}.` : "",
-          recoveryNote.trim(),
-          firebaseResetSent ? "Firebase password reset email was requested from the sign-in screen." : ""
-        ]
-          .filter(Boolean)
-          .join(" ")
+        login_id: recoveryLoginId,
+        email: recoveryEmail
       });
+      setRecoveryId(receipt.recovery_id);
+      setRecoveryCode(receipt.dev_code ?? "");
       setMessage(
         firebaseResetSent
-          ? "A password reset link was requested for this email. We also saved a support recovery request in case the account uses an access code."
-          : `${receipt.message} Accounts that use a 4 to 6 digit access code are recovered through StudyNova support.`
+          ? "Check your email for a StudyNova reset code or Firebase password-reset link."
+          : receipt.message
       );
-      setRecoveryNote("");
     } catch {
       setMessage("Could not send the account help request. Check the API connection and try again.");
+    } finally {
+      setIsRecoveryLoading(false);
+    }
+  }
+
+  async function completeAccessCodeReset() {
+    if (!/^\d{6}$/.test(recoveryCode)) {
+      setMessage("Enter the six-digit reset code sent by email.");
+      return;
+    }
+    if (!isValidAccessCode(newAccessCode)) {
+      setMessage("Choose a new 4 to 6 digit access code.");
+      return;
+    }
+    if (newAccessCode !== confirmAccessCode) {
+      setMessage("The new access codes do not match.");
+      return;
+    }
+    setIsRecoveryLoading(true);
+    setMessage("");
+    try {
+      const result = await confirmAccessCodeRecovery({
+        recovery_id: recoveryId,
+        code: recoveryCode,
+        new_access_code: newAccessCode
+      });
+      setMessage(result.message);
+      setAccessCode(newAccessCode);
+      setRecoveryId("");
+      setRecoveryCode("");
+      setNewAccessCode("");
+      setConfirmAccessCode("");
+      setIsHelpOpen(false);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The reset code is invalid or expired.");
     } finally {
       setIsRecoveryLoading(false);
     }
@@ -368,8 +400,8 @@ export default function AuthScreen() {
             <View style={styles.roleCopy}>
               <Text style={styles.sectionTitle}>Email recovery</Text>
               <Text style={styles.helper}>
-                Enter the email linked to this account. If password sign-in is active, StudyNova sends a reset link and
-                also creates a private support recovery record.
+                Receive a secure reset code by email, then choose a new access code. Student codes go to the linked
+                verified parent or guardian email.
               </Text>
             </View>
             <MaterialCommunityIcons
@@ -381,6 +413,8 @@ export default function AuthScreen() {
 
           {isHelpOpen ? (
             <View style={styles.helpBody}>
+              {!recoveryId ? (
+                <>
               <TextInput
                 autoCapitalize="none"
                 keyboardType="email-address"
@@ -393,17 +427,6 @@ export default function AuthScreen() {
                 style={styles.input}
                 value={recoveryContact}
               />
-              <TextInput
-                multiline
-                onChangeText={(value) => {
-                  setMessage("");
-                  setRecoveryNote(value);
-                }}
-                placeholder="Optional note for support"
-                placeholderTextColor={colors.muted}
-                style={[styles.input, styles.noteInput]}
-                value={recoveryNote}
-              />
               <Pressable
                 accessibilityRole="button"
                 disabled={isRecoveryLoading}
@@ -415,10 +438,69 @@ export default function AuthScreen() {
                 ) : (
                   <>
                     <MaterialCommunityIcons name="send-outline" size={18} color={colors.brand} />
-                    <Text style={styles.secondaryButtonText}>Send password reset link</Text>
+                    <Text style={styles.secondaryButtonText}>Email reset code</Text>
                   </>
                 )}
               </Pressable>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.helper}>Enter the code from your email and choose a new private access code.</Text>
+                  <TextInput
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    onChangeText={(value) => setRecoveryCode(value.replace(/\D/g, ""))}
+                    placeholder="6-digit email code"
+                    placeholderTextColor={colors.muted}
+                    style={styles.input}
+                    value={recoveryCode}
+                  />
+                  <TextInput
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    onChangeText={(value) => setNewAccessCode(value.replace(/\D/g, ""))}
+                    placeholder="New 4-6 digit access code"
+                    placeholderTextColor={colors.muted}
+                    secureTextEntry
+                    style={styles.input}
+                    value={newAccessCode}
+                  />
+                  <TextInput
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    onChangeText={(value) => setConfirmAccessCode(value.replace(/\D/g, ""))}
+                    placeholder="Confirm new access code"
+                    placeholderTextColor={colors.muted}
+                    secureTextEntry
+                    style={styles.input}
+                    value={confirmAccessCode}
+                  />
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={isRecoveryLoading}
+                    onPress={() => void completeAccessCodeReset()}
+                    style={[styles.secondaryButton, isRecoveryLoading ? styles.disabledButton : null]}
+                  >
+                    {isRecoveryLoading ? <ActivityIndicator color={colors.brand} /> : (
+                      <>
+                        <MaterialCommunityIcons name="lock-check-outline" size={18} color={colors.brand} />
+                        <Text style={styles.secondaryButtonText}>Set new access code</Text>
+                      </>
+                    )}
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setRecoveryId("");
+                      setRecoveryCode("");
+                      setMessage("");
+                    }}
+                    style={styles.forgotButton}
+                  >
+                    <Text style={styles.forgotButtonText}>Send another code</Text>
+                  </Pressable>
+                </>
+              )}
             </View>
           ) : null}
         </View>
