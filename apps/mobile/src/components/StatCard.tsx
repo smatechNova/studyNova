@@ -14,8 +14,10 @@ export function StatCard({ label, value, icon }: StatCardProps) {
   const { colors } = useTheme();
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.panel, borderColor: colors.border }]}>
-      <MaterialCommunityIcons name={icon} size={22} color={colors.brand} />
+    <View style={[styles.card, { backgroundColor: colors.brandSoft }]}>
+      <View style={[styles.iconWell, { backgroundColor: colors.panel }]}>
+        <MaterialCommunityIcons name={icon} size={20} color={colors.brand} />
+      </View>
       <Text style={[styles.value, { color: colors.text }]} numberOfLines={1} adjustsFontSizeToFit>
         {value}
       </Text>
@@ -27,12 +29,19 @@ export function StatCard({ label, value, icon }: StatCardProps) {
 const styles = StyleSheet.create({
   card: {
     borderRadius: 8,
-    borderWidth: 1,
     flexBasis: "31%",
     flexGrow: 1,
     gap: spacing.xs,
     minWidth: 104,
     padding: spacing.md
+  },
+  iconWell: {
+    alignItems: "center",
+    borderRadius: 8,
+    height: 34,
+    justifyContent: "center",
+    marginBottom: spacing.xs,
+    width: 34
   },
   label: {
     fontSize: 12,

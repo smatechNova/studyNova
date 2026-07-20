@@ -1,6 +1,6 @@
 export const lightColors = {
   background: "#F8FAFC",
-  border: "#D9E2EC",
+  border: "#E5EBF2",
   brand: "#2563EB",
   brandDark: "#1E3A8A",
   brandSoft: "#DBEAFE",
@@ -11,7 +11,7 @@ export const lightColors = {
   secondarySoft: "#CCFBF1",
   success: "#047857",
   successSoft: "#D1FAE5",
-  surface: "#F8FAFC",
+  surface: "#F6F8FC",
   text: "#102A43",
   warning: "#F59E0B",
   warningBorder: "#FDE68A",

@@ -2049,12 +2049,53 @@ function GeneratedPlanView({
 
         <View style={styles.generatedHero}>
           <View style={styles.visualHeroCopy}>
-            <Text style={styles.kicker}>Generated plan</Text>
-            <Text style={styles.title}>{plan.metadata.student_name}</Text>
-            <Text style={styles.helper}>{plan.metadata.recommendation}</Text>
-            {saveMessage ? <Text style={styles.saveStatus}>{saveMessage}</Text> : null}
+            <Text style={styles.heroBrand}>StudyNova</Text>
+            <Text style={styles.heroGreeting}>Hello, {firstName(plan.metadata.student_name)}</Text>
+            <Text style={styles.heroSubtitle}>Here is your smart study plan for today.</Text>
+            <View style={styles.heroMetaRow}>
+              <View style={styles.heroMetaPill}>
+                <MaterialCommunityIcons name="clock-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.heroMetaText}>{formatHours(plannedTodayMinutes)} today</Text>
+              </View>
+              <View style={styles.heroMetaPill}>
+                <MaterialCommunityIcons name="calendar-star" size={16} color="#FFFFFF" />
+                <Text style={styles.heroMetaText}>{plan.metadata.days_until_exam} days to exam</Text>
+              </View>
+            </View>
+            {saveMessage ? <Text style={styles.heroSaveStatus}>{saveMessage}</Text> : null}
           </View>
-          <Image accessibilityIgnoresInvertColors source={brandAssets.generatedPlanHero} style={styles.dashboardArtwork} />
+          <View style={styles.heroProgressBadge}>
+            <Text style={styles.heroProgressValue}>{completion}%</Text>
+            <Text style={styles.heroProgressLabel}>today</Text>
+          </View>
+        </View>
+
+        <View style={styles.todaySection}>
+          <View style={styles.sectionHeadingRow}>
+            <View>
+              <Text style={styles.kicker}>Today</Text>
+              <Text style={styles.sectionTitle}>Your study sessions</Text>
+            </View>
+            <Text style={styles.sessionMeta}>{todayPlan?.sessions.length ?? 0} sessions</Text>
+          </View>
+          <View style={styles.smartSessionList}>
+            {(todayPlan?.sessions ?? []).slice(0, 4).map((session, index) => (
+              <View
+                key={`${session.subject}-${session.topic}-${index}`}
+                style={[styles.smartSessionCard, { backgroundColor: subjectTint(index, colors) }]}
+              >
+                <View style={[styles.subjectDot, { backgroundColor: subjectAccent(index) }]} />
+                <View style={styles.sessionCopy}>
+                  <Text style={styles.smartSessionSubject}>{session.subject}</Text>
+                  <Text style={styles.smartSessionTopic} numberOfLines={1}>{session.topic}</Text>
+                </View>
+                <View style={styles.smartSessionTime}>
+                  <Text style={styles.smartSessionMinutes}>{session.minutes}</Text>
+                  <Text style={styles.smartSessionUnit}>min</Text>
+                </View>
+              </View>
+            ))}
+          </View>
         </View>
 
         <View style={styles.statsGrid}>
@@ -2071,11 +2112,15 @@ function GeneratedPlanView({
           <StatCard label="Countdown" value={`${plan.metadata.days_until_exam}d`} icon="calendar-star" />
         </View>
 
-        <View style={styles.panel}>
+        <View style={styles.countdownPanel}>
           <View style={styles.panelHeader}>
-            <Text style={styles.sectionTitle}>Hours breakdown</Text>
+            <View>
+              <Text style={styles.kicker}>Exam readiness</Text>
+              <Text style={styles.sectionTitle}>{plan.metadata.days_until_exam} days remaining</Text>
+            </View>
             <Text style={styles.metric}>{formatHours(averageDailyMinutes)}/day</Text>
           </View>
+          <ProgressBar value={Math.max(completion, 8)} />
           <Text style={styles.helper}>
             {formatHours(plan.metadata.total_study_minutes)} total reading time divided across{" "}
             {plan.metadata.days_until_exam} days before the exam starts.
@@ -3683,6 +3728,21 @@ function sessionTitle(session: PlanSession, index: number, sessions: PlanSession
   return `${session.topic} - Part ${part}`;
 }
 
+function firstName(fullName: string) {
+  return fullName.trim().split(/\s+/)[0] || "Student";
+}
+
+function subjectAccent(index: number) {
+  return ["#10B981", "#F97316", "#7C3AED", "#2563EB"][index % 4];
+}
+
+function subjectTint(index: number, colors: AppColors) {
+  const isDark = colors.background === "#0F172A";
+  const lightTints = ["#ECFDF5", "#FFF7ED", "#F5F3FF", "#EFF6FF"];
+  const darkTints = ["#12372E", "#3A2517", "#2B2145", "#172D52"];
+  return (isDark ? darkTints : lightTints)[index % 4];
+}
+
 function createStyles(colors: AppColors) {
   return StyleSheet.create({
   addTopicButton: {
@@ -3908,15 +3968,129 @@ function createStyles(colors: AppColors) {
     gap: spacing.sm
   },
   generatedHero: {
-    alignItems: "center",
-    backgroundColor: colors.panel,
-    borderColor: colors.border,
+    alignItems: "flex-end",
+    backgroundColor: colors.brand,
     borderRadius: 8,
-    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.md,
+    justifyContent: "space-between",
+    minHeight: 210,
+    overflow: "hidden",
+    padding: spacing.xl
+  },
+  heroBrand: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "900"
+  },
+  heroGreeting: {
+    color: "#FFFFFF",
+    fontSize: 28,
+    fontWeight: "900",
+    lineHeight: 34
+  },
+  heroSubtitle: {
+    color: "#DBEAFE",
+    fontSize: 15,
+    lineHeight: 22
+  },
+  heroMetaRow: {
     flexDirection: "row",
     flexWrap: "wrap",
+    gap: spacing.sm,
+    marginTop: spacing.sm
+  },
+  heroMetaPill: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderRadius: 999,
+    flexDirection: "row",
+    gap: spacing.xs,
+    minHeight: 34,
+    paddingHorizontal: spacing.md
+  },
+  heroMetaText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  heroProgressBadge: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    justifyContent: "center",
+    minHeight: 86,
+    minWidth: 86,
+    padding: spacing.sm
+  },
+  heroProgressValue: {
+    color: "#2563EB",
+    fontSize: 24,
+    fontWeight: "900"
+  },
+  heroProgressLabel: {
+    color: "#52616B",
+    fontSize: 11,
+    fontWeight: "800"
+  },
+  heroSaveStatus: {
+    color: "#DBEAFE",
+    fontSize: 12,
+    fontWeight: "700"
+  },
+  todaySection: {
     gap: spacing.md,
-    padding: spacing.lg
+    paddingVertical: spacing.xs
+  },
+  sectionHeadingRow: {
+    alignItems: "flex-end",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  smartSessionList: {
+    gap: spacing.sm
+  },
+  smartSessionCard: {
+    alignItems: "center",
+    borderRadius: 8,
+    flexDirection: "row",
+    gap: spacing.md,
+    minHeight: 76,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md
+  },
+  subjectDot: {
+    borderRadius: 999,
+    height: 16,
+    width: 16
+  },
+  smartSessionSubject: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: "900"
+  },
+  smartSessionTopic: {
+    color: colors.muted,
+    fontSize: 12,
+    marginTop: 2
+  },
+  smartSessionTime: {
+    alignItems: "flex-end"
+  },
+  smartSessionMinutes: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: "900"
+  },
+  smartSessionUnit: {
+    color: colors.muted,
+    fontSize: 11
+  },
+  countdownPanel: {
+    backgroundColor: colors.panel,
+    borderRadius: 8,
+    gap: spacing.md,
+    padding: spacing.xl
   },
   accountButton: {
     alignItems: "center",

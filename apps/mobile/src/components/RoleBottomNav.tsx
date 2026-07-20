@@ -40,7 +40,7 @@ export function RoleBottomNav<T extends string>({ activeKey, items, onSelect }: 
             <MaterialCommunityIcons
               name={item.icon}
               size={21}
-              color={item.disabled ? colors.muted : isActive ? "#FFFFFF" : colors.muted}
+              color={item.disabled ? colors.muted : isActive ? colors.brand : colors.muted}
             />
             <Text style={[styles.label, isActive ? styles.labelActive : null, item.disabled ? styles.labelDisabled : null]}>
               {item.label}
@@ -66,7 +66,7 @@ function createStyles(colors: AppColors) {
       paddingVertical: spacing.sm
     },
     itemActive: {
-      backgroundColor: colors.brand
+      backgroundColor: colors.brandSoft
     },
     itemDisabled: {
       opacity: 0.5
@@ -78,7 +78,7 @@ function createStyles(colors: AppColors) {
       textAlign: "center"
     },
     labelActive: {
-      color: "#FFFFFF"
+      color: colors.brand
     },
     labelDisabled: {
       color: colors.muted
