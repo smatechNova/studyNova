@@ -81,6 +81,7 @@ export default function ParentScreen() {
   const [inviteCode, setInviteCode] = useState("");
   const [inviteMessage, setInviteMessage] = useState("");
   const [isInviteRedeeming, setIsInviteRedeeming] = useState(false);
+  const [isStudentLinkOpen, setIsStudentLinkOpen] = useState(false);
   const [isDeletionOpen, setIsDeletionOpen] = useState(false);
   const [deletionContact, setDeletionContact] = useState("");
   const [deletionReason, setDeletionReason] = useState("");
@@ -537,17 +538,37 @@ export default function ParentScreen() {
             }}
             style={styles.linkInvitePanel}
           >
-            <View style={styles.panelHeader}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setIsStudentLinkOpen((current) => !current);
+                setInviteMessage("");
+              }}
+              style={styles.panelHeader}
+            >
               <View style={styles.headerCopy}>
-                <Text style={styles.kicker}>Link a student</Text>
-                <Text style={styles.sectionTitle}>Enter student invite code</Text>
+                <Text style={styles.kicker}>Family</Text>
+                <Text style={styles.sectionTitle}>Add another student</Text>
                 <Text style={styles.helper}>
-                  Ask the student to tap Parent link on their dashboard and share the one-time code shown there.
+                  Your first student was linked during sign-up. Use a one-time code only when adding another student.
                 </Text>
               </View>
-              {isInviteRedeeming ? <ActivityIndicator color={colors.brand} /> : null}
-            </View>
-            <View style={styles.inviteInputRow}>
+              {isInviteRedeeming ? (
+                <ActivityIndicator color={colors.brand} />
+              ) : (
+                <MaterialCommunityIcons
+                  name={isStudentLinkOpen ? "chevron-up" : "account-plus-outline"}
+                  size={22}
+                  color={colors.brand}
+                />
+              )}
+            </Pressable>
+            {isStudentLinkOpen ? (
+              <>
+                <Text style={styles.helper}>
+                  Ask the additional student to open Parent access on their dashboard and share the one-time code.
+                </Text>
+                <View style={styles.inviteInputRow}>
               <TextInput
                 autoCapitalize="characters"
                 onChangeText={(value) => {
@@ -568,8 +589,10 @@ export default function ParentScreen() {
                 <MaterialCommunityIcons name="link-variant-plus" size={18} color={colors.brand} />
                 <Text style={styles.linkButtonText}>Link</Text>
               </Pressable>
-            </View>
-            {inviteMessage ? <Text style={styles.infoText}>{inviteMessage}</Text> : null}
+                </View>
+                {inviteMessage ? <Text style={styles.infoText}>{inviteMessage}</Text> : null}
+              </>
+            ) : null}
           </View>
         ) : null}
 

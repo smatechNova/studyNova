@@ -49,8 +49,6 @@ type SetupResult = {
   parentId: string;
 };
 
-type SetupMode = "studentParent" | "parentOnly";
-
 type AccountAction = "save" | "verify" | "student" | "parent";
 
 export default function AccountsScreen() {
@@ -59,7 +57,6 @@ export default function AccountsScreen() {
   const params = useLocalSearchParams<{ parentId?: string }>();
   const parentId = getParamValue(params.parentId);
   const [form, setForm] = useState<AccountForm>(() => createDefaultAccountForm());
-  const [setupMode, setSetupMode] = useState<SetupMode>("studentParent");
   const [parentFamily, setParentFamily] = useState<ParentFamilyAccount | null>(null);
   const [message, setMessage] = useState("");
   const [activeAction, setActiveAction] = useState<AccountAction | null>(null);
@@ -74,12 +71,7 @@ export default function AccountsScreen() {
   const resendSecondsRemaining = verificationReceipt
     ? Math.max(0, Math.ceil((new Date(verificationReceipt.resend_available_at).getTime() - verificationClock) / 1000))
     : 0;
-  const primaryActionLabel =
-    setupMode === "parentOnly"
-      ? "Sign up parent account"
-      : parentFamily?.parent && form.parentContact.trim() === parentFamily.parent.contact
-      ? "Link this student to parent"
-      : "Sign up student and link parent";
+  const primaryActionLabel = "Create linked family accounts";
 
   useEffect(() => {
     void loadLatestFamily();
@@ -120,7 +112,7 @@ export default function AccountsScreen() {
   }
 
   async function saveAccounts() {
-    const validation = getAccountValidationError(form, setupMode);
+    const validation = getAccountValidationError(form);
     if (validation) {
       setMessage(validation);
       return;
@@ -135,28 +127,6 @@ export default function AccountsScreen() {
     setMessage("");
 
     try {
-      if (setupMode === "parentOnly") {
-        const parent = await createParentAccount({
-          name: form.parentName.trim(),
-          contact: form.parentContact.trim(),
-          access_code: form.parentAccessCode.trim(),
-          relationship: form.relationship.trim()
-        });
-        setParentFamily((current) => ({
-          parent,
-          students: current?.parent?.id === parent.id ? current.students : [],
-          links: current?.parent?.id === parent.id ? current.links : []
-        }));
-        setSetupResult({ parentId: parent.id });
-        if (!parent.email_verified) {
-          const receipt = await beginParentEmailVerification(parent.id);
-          setMessage(`Verify ${receipt.email} before opening dashboards. Enter the code sent to the parent email.`);
-          return;
-        }
-        setMessage("Parent monitoring account is ready. Open the parent dashboard and link students with invite codes.");
-        return;
-      }
-
       const student = await createStudentAccount({
         login_id: form.studentLoginId.trim(),
         access_code: form.studentAccessCode.trim(),
@@ -204,7 +174,6 @@ export default function AccountsScreen() {
       return;
     }
 
-    setSetupMode("studentParent");
     setForm((current) => ({
       ...current,
       studentLoginId: "",
@@ -225,14 +194,6 @@ export default function AccountsScreen() {
 
   function openGmailSignup() {
     void Linking.openURL("https://accounts.google.com/signup");
-  }
-
-  function chooseSetupMode(nextMode: SetupMode) {
-    setSetupMode(nextMode);
-    setMessage("");
-    setSetupResult(null);
-    setVerificationReceipt(null);
-    setVerificationCode("");
   }
 
   async function verifyParentEmail() {
@@ -345,50 +306,18 @@ export default function AccountsScreen() {
             <Text style={styles.kicker}>Sign up</Text>
             <Text style={styles.title}>Student account plus parent monitoring</Text>
             <Text style={styles.helper}>
-              Each student owns one student account. A parent account can link more than one student for monitoring.
+              Create one student and one parent account together. StudyNova links them automatically after the parent
+              email is verified.
             </Text>
           </View>
         </View>
 
         <IllustrationPanel
-          body="Create separate student and parent identities, then connect them only through the approved parent link."
+          body="Create separate student and parent identities in one secure family sign-up. Their dashboards stay private and the family link is created automatically."
           imageSource={brandAssets.accountSetup}
           kicker="Safe linking"
           title="One student account, many parent insights"
         />
-
-        <View style={styles.modeGrid}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => chooseSetupMode("studentParent")}
-            style={[styles.modeCard, setupMode === "studentParent" ? styles.modeCardSelected : null]}
-          >
-            <MaterialCommunityIcons
-              name="account-multiple-plus-outline"
-              size={24}
-              color={setupMode === "studentParent" ? colors.brand : colors.muted}
-            />
-            <View style={styles.modeCopy}>
-              <Text style={styles.modeTitle}>Student plus parent</Text>
-              <Text style={styles.helper}>Create one learner account and link it to parent monitoring.</Text>
-            </View>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => chooseSetupMode("parentOnly")}
-            style={[styles.modeCard, setupMode === "parentOnly" ? styles.modeCardSelected : null]}
-          >
-            <MaterialCommunityIcons
-              name="shield-account-outline"
-              size={24}
-              color={setupMode === "parentOnly" ? colors.brand : colors.muted}
-            />
-            <View style={styles.modeCopy}>
-              <Text style={styles.modeTitle}>Parent only</Text>
-              <Text style={styles.helper}>Create a parent account now, then add students later by invite code.</Text>
-            </View>
-          </Pressable>
-        </View>
 
         {parentFamily?.parent ? (
           <View style={styles.infoPanel}>
@@ -416,8 +345,7 @@ export default function AccountsScreen() {
           </View>
         ) : null}
 
-        {setupMode === "studentParent" ? (
-          <View style={styles.panel}>
+        <View style={styles.panel}>
             <View style={styles.sectionCopy}>
               <Text style={styles.sectionTitle}>Student account</Text>
               <Text style={styles.helper}>This profile belongs to one learner and feeds that learner's dashboard.</Text>
@@ -472,8 +400,7 @@ export default function AccountsScreen() {
               placeholder="Optional"
               value={form.schoolName}
             />
-          </View>
-        ) : null}
+        </View>
 
         <View style={styles.panel}>
           <View style={styles.sectionCopy}>
@@ -685,10 +612,10 @@ export default function AccountsScreen() {
             )}
           </Pressable>
 
-          <Link href={setupMode === "parentOnly" ? "/auth?role=parent" : "/auth?role=student"} asChild>
+          <Link href="/auth?role=student" asChild>
             <Pressable accessibilityRole="button" style={styles.secondaryButton}>
               <Text style={styles.secondaryButtonText}>
-                Sign in to {setupMode === "parentOnly" ? "parent" : "student"} dashboard
+                Already registered? Sign in
               </Text>
               <MaterialCommunityIcons name="chevron-right" size={18} color={colors.brand} />
             </Pressable>
@@ -759,27 +686,25 @@ function createDefaultAccountForm(): AccountForm {
   };
 }
 
-function getAccountValidationError(form: AccountForm, setupMode: SetupMode) {
-  if (setupMode === "studentParent") {
-    if (!isValidLoginId(form.studentLoginId)) {
-      return "Enter a valid student login ID, such as Gmail or phone number.";
-    }
+function getAccountValidationError(form: AccountForm) {
+  if (!isValidLoginId(form.studentLoginId)) {
+    return "Enter a valid student login ID, such as Gmail or phone number.";
+  }
 
-    if (!isValidAccessCode(form.studentAccessCode)) {
-      return "Create a 4 to 6 digit access code for the student account.";
-    }
+  if (!isValidAccessCode(form.studentAccessCode)) {
+    return "Create a 4 to 6 digit access code for the student account.";
+  }
 
-    if (!isValidPersonName(form.studentName)) {
-      return "Enter the student's full name.";
-    }
+  if (!isValidPersonName(form.studentName)) {
+    return "Enter the student's full name.";
+  }
 
-    if (!isValidShortText(form.classLevel)) {
-      return "Enter the student's class.";
-    }
+  if (!isValidShortText(form.classLevel)) {
+    return "Enter the student's class.";
+  }
 
-    if (!isIntegerInRange(form.age, 13, 30)) {
-      return "StudyNova accounts are currently available to students aged 13 to 30.";
-    }
+  if (!isIntegerInRange(form.age, 13, 30)) {
+    return "StudyNova accounts are currently available to students aged 13 to 30.";
   }
 
   if (!isValidPersonName(form.parentName)) {
