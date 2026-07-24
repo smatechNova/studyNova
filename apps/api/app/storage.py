@@ -2289,11 +2289,18 @@ class StudyPlanStore:
         planned_sessions = sum(row["sessions_planned"] for row in rows)
         completion_rate = round((completed_sessions / planned_sessions) * 100, 1) if planned_sessions else 0
         active_days = {datetime.fromisoformat(row["study_date"]).date() for row in rows}
-        today = datetime.now(timezone.utc).date()
         streak_days = 0
-        while today in active_days:
-            streak_days += 1
-            today = today.fromordinal(today.toordinal() - 1)
+        if active_days:
+            utc_today = datetime.now(timezone.utc).date()
+            latest_active_day = max(active_days)
+
+            # Study dates come from the student's local calendar. Accept a one-day
+            # boundary around UTC so a post-midnight check-in does not break a streak.
+            if abs((latest_active_day - utc_today).days) <= 1:
+                streak_cursor = latest_active_day
+                while streak_cursor in active_days:
+                    streak_days += 1
+                    streak_cursor -= timedelta(days=1)
 
         latest_note = rows[-1]["note"] if rows else "No study activity has been recorded yet."
 
