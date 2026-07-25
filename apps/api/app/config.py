@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     session_ttl_hours: int = 168
     admin_access_code: str = "studynova-admin-dev"
     public_api_base_url: str = ""
+    render_external_url: str = ""
     email_provider: str = "development"
     resend_api_key: str = ""
     email_from: str = "StudyNova <accounts@studynova.app>"
@@ -49,6 +50,10 @@ class Settings(BaseSettings):
     @property
     def uses_default_session_secret(self) -> bool:
         return self.session_secret.strip() == "studynova-local-session-secret"
+
+    @property
+    def effective_public_api_base_url(self) -> str:
+        return (self.public_api_base_url or self.render_external_url).strip().rstrip("/")
 
 
 @lru_cache

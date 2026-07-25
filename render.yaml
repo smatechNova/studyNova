@@ -6,16 +6,8 @@ services:
     staticPublishPath: ./apps/mobile/dist
     envVars:
       - key: EXPO_PUBLIC_API_URL
-        sync: false
+        value: https://studynova-api.onrender.com
       - key: EXPO_PUBLIC_FIREBASE_API_KEY
-        sync: false
-      - key: EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN
-        sync: false
-      - key: EXPO_PUBLIC_FIREBASE_PROJECT_ID
-        sync: false
-      - key: EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET
-        sync: false
-      - key: EXPO_PUBLIC_FIREBASE_APP_ID
         sync: false
       - key: EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID
         sync: false
@@ -42,7 +34,8 @@ services:
     name: studynova-api
     runtime: docker
     rootDir: apps/api
-    dockerfilePath: ./Dockerfile
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: ./apps/api
     healthCheckPath: /health
     plan: starter
     disk:
@@ -56,19 +49,27 @@ services:
         value: /var/data/studynova/studynova.sqlite3
       - key: BACKUP_DATA_PATH
         value: /var/data/studynova/backups
+      - key: STUDY_PROOF_STORAGE_BACKEND
+        value: firebase
+      - key: STUDY_PROOF_LOCAL_PATH
+        value: /var/data/studynova/study-proofs
+      - key: STUDY_PROOF_MAX_UPLOAD_MB
+        value: "6"
       - key: SESSION_TTL_HOURS
         value: "168"
       - key: PUBLIC_API_BASE_URL
-        sync: false
+        value: https://studynova-api.onrender.com
       - key: ALLOWED_ORIGINS
-        sync: false
+        value: https://studynova-web.onrender.com
       - key: ALLOWED_ORIGIN_REGEX
-        value: ""
+        value: https://studynova-web(?:-[a-z0-9]+)?\.onrender\.com
       - key: SESSION_SECRET
-        sync: false
+        generateValue: true
       - key: ADMIN_ACCESS_CODE
         sync: false
       - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: FIREBASE_STORAGE_BUCKET
         sync: false
       - key: EMAIL_PROVIDER
         value: resend

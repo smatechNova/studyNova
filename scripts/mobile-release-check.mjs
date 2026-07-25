@@ -257,6 +257,23 @@ if (existsSync(renderBlueprintPath)) {
   requireValue(renderBlueprint.includes("name: studynova-web"), "Render blueprint should include the public web app.");
   requireValue(renderBlueprint.includes("npm run mobile:export:web"), "Render web build should export the Expo static site.");
   requireValue(renderBlueprint.includes("EMAIL_PROVIDER"), "Render API configuration should include production email delivery.");
+  requireValue(
+    renderBlueprint.includes("dockerfilePath: ./apps/api/Dockerfile"),
+    "Render Dockerfile path must be explicit and relative to the repository root."
+  );
+  requireValue(
+    renderBlueprint.includes("dockerContext: ./apps/api"),
+    "Render Docker context must point to the API workspace."
+  );
+  requireValue(
+    renderBlueprint.includes("STUDY_PROOF_STORAGE_BACKEND") &&
+      renderBlueprint.includes("FIREBASE_STORAGE_BUCKET"),
+    "Render API configuration should include production study-proof storage."
+  );
+  requireValue(
+    renderBlueprint.includes("generateValue: true"),
+    "Render should generate the production session secret."
+  );
 }
 
 if (existsSync(closedTestEnvExamplePath)) {

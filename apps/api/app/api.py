@@ -212,7 +212,11 @@ def _build_deployment_readiness() -> DeploymentReadiness:
         )
     )
 
-    public_api_base_url = settings.public_api_base_url.strip().rstrip("/")
+    public_api_base_url = (
+        getattr(settings, "effective_public_api_base_url", "")
+        or getattr(settings, "public_api_base_url", "")
+        or getattr(settings, "render_external_url", "")
+    ).strip().rstrip("/")
     checks.append(
         _deployment_check(
             "Public API URL",
