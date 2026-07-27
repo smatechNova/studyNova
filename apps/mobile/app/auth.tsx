@@ -23,9 +23,17 @@ import {
   getFirebaseClientReadiness,
   getFirebaseClientConfig,
   isFirebaseClientConfigured,
+  isFirebaseEmailPasswordConfigured,
   isFirebasePasswordResetConfigured,
-  sendFirebasePasswordResetEmail
+  sendFirebasePasswordResetEmail,
+  signInFirebaseEmailPassword
 } from "@/lib/firebaseAuth";
+import {
+  clearFirebasePhoneConfirmation,
+  confirmFirebasePhoneCode,
+  isNativeFirebasePhoneAuthAvailable,
+  requestFirebasePhoneCode
+} from "@/lib/firebasePhoneAuth";
 import { saveAuthSession } from "@/lib/session";
 import { spacing, type AppColors } from "@/theme";
 import { useTheme } from "@/themeContext";
@@ -69,9 +77,14 @@ export default function AuthScreen() {
   const [newAccessCode, setNewAccessCode] = useState("");
   const [confirmAccessCode, setConfirmAccessCode] = useState("");
   const [isRecoveryLoading, setIsRecoveryLoading] = useState(false);
+  const [isPhoneSignInOpen, setIsPhoneSignInOpen] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [phoneCode, setPhoneCode] = useState("");
+  const [phoneCodePending, setPhoneCodePending] = useState(false);
   const firebaseConfig = getFirebaseClientConfig();
   const firebaseReadiness = getFirebaseClientReadiness();
   const firebaseReady = isFirebaseClientConfigured();
+  const firebaseEmailPasswordReady = isFirebaseEmailPasswordConfigured();
   const [googleRequest, googleResponse, promptGoogleSignIn] = Google.useIdTokenAuthRequest({
     androidClientId: firebaseConfig.googleAndroidClientId,
     iosClientId: firebaseConfig.googleIosClientId,
@@ -97,8 +110,14 @@ export default function AuthScreen() {
       return;
     }
 
-    if (!isValidAccessCode(accessCode)) {
-      setMessage("Enter the 4 to 6 digit access code for this account.");
+    const useFirebasePassword =
+      firebaseEmailPasswordReady && isValidEmail(loginId) && !isValidAccessCode(accessCode);
+    if (useFirebasePassword ? accessCode.length < 8 : !isValidAccessCode(accessCode)) {
+      setMessage(
+        useFirebasePassword
+          ? "Enter the Firebase password with at least 8 characters."
+          : "Enter the 4 to 6 digit access code for this legacy account."
+      );
       return;
     }
 
@@ -106,10 +125,21 @@ export default function AuthScreen() {
     setMessage("");
 
     try {
+      if (useFirebasePassword) {
+        const credential = await signInFirebaseEmailPassword(loginId, accessCode);
+        const session = await firebaseSignInAccount({ role, id_token: credential.idToken });
+        await routeSession(session);
+        return;
+      }
+
       const session = await signInAccount({ role, login_id: loginId.trim(), access_code: accessCode.trim() });
       await routeSession(session);
-    } catch {
-      setMessage("No account matched that role, login ID, and access code. Check the details or create the account.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "No account matched that role and sign-in details. Check the details or create the account."
+      );
       setIsHelpOpen(true);
     } finally {
       setIsLoading(false);
@@ -142,6 +172,45 @@ export default function AuthScreen() {
       setMessage(
         "Google sign-in worked, but no StudyNova account is linked to that Gmail yet. Create or link the account first."
       );
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function requestStudentPhoneCode() {
+    if (!/^\+[1-9]\d{7,14}$/.test(phoneNumber.trim().replace(/[\s()-]/g, ""))) {
+      setMessage("Enter the student phone with country code, for example +2348012345678.");
+      return;
+    }
+
+    setIsLoading(true);
+    setMessage("");
+    try {
+      await requestFirebasePhoneCode(phoneNumber);
+      setPhoneCodePending(true);
+      setPhoneCode("");
+      setMessage(`Firebase sent a one-time code to ${phoneNumber.trim()}.`);
+    } catch (error) {
+      setMessage(firebasePhoneErrorMessage(error));
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function confirmStudentPhoneSignIn() {
+    if (!/^\d{6}$/.test(phoneCode.trim())) {
+      setMessage("Enter the 6 digit SMS code.");
+      return;
+    }
+
+    setIsLoading(true);
+    setMessage("");
+    try {
+      const credential = await confirmFirebasePhoneCode(phoneCode);
+      const session = await firebaseSignInAccount({ role: "student", id_token: credential.idToken });
+      await routeSession(session);
+    } catch (error) {
+      setMessage(firebasePhoneErrorMessage(error));
     } finally {
       setIsLoading(false);
     }
@@ -291,6 +360,10 @@ export default function AuthScreen() {
                   setRole(option.role);
                   setAccessCode("");
                   setMessage("");
+                  setIsPhoneSignInOpen(false);
+                  setPhoneCodePending(false);
+                  setPhoneCode("");
+                  clearFirebasePhoneConfirmation();
                 }}
                 style={[styles.roleCard, isSelected ? styles.roleCardSelected : null]}
               >
@@ -332,12 +405,96 @@ export default function AuthScreen() {
           <Text style={styles.helper}>{firebaseReadiness.warnings[0]}</Text>
         ) : null}
 
+        {role === "student" ? (
+          <View style={styles.helpPanel}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                if (!isNativeFirebasePhoneAuthAvailable()) {
+                  setMessage("Phone OTP sign-in is available in the installed StudyNova Android app, not the web preview.");
+                  return;
+                }
+                setIsPhoneSignInOpen((current) => !current);
+                setMessage("");
+              }}
+              style={styles.helpHeader}
+            >
+              <View style={styles.helpIcon}>
+                <MaterialCommunityIcons name="cellphone-key" size={20} color={colors.brand} />
+              </View>
+              <View style={styles.roleCopy}>
+                <Text style={styles.sectionTitle}>Sign in with phone OTP</Text>
+                <Text style={styles.helper}>For student accounts created with a verified mobile number.</Text>
+              </View>
+              <MaterialCommunityIcons
+                name={isPhoneSignInOpen ? "chevron-up" : "chevron-down"}
+                size={22}
+                color={colors.muted}
+              />
+            </Pressable>
+            {isPhoneSignInOpen ? (
+              <View style={styles.helpBody}>
+                <TextInput
+                  autoCapitalize="none"
+                  keyboardType="phone-pad"
+                  onChangeText={(value) => {
+                    setMessage("");
+                    setPhoneNumber(value);
+                    setPhoneCodePending(false);
+                    setPhoneCode("");
+                    clearFirebasePhoneConfirmation();
+                  }}
+                  placeholder="+2348012345678"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                  value={phoneNumber}
+                />
+                {phoneCodePending ? (
+                  <>
+                    <TextInput
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      onChangeText={(value) => {
+                        setMessage("");
+                        setPhoneCode(value.replace(/\D/g, ""));
+                      }}
+                      placeholder="6 digit SMS code"
+                      placeholderTextColor={colors.muted}
+                      style={styles.input}
+                      value={phoneCode}
+                    />
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={isLoading}
+                      onPress={() => void confirmStudentPhoneSignIn()}
+                      style={[styles.secondaryButton, isLoading ? styles.disabledButton : null]}
+                    >
+                      <MaterialCommunityIcons name="shield-check-outline" size={18} color={colors.brand} />
+                      <Text style={styles.secondaryButtonText}>Verify code and sign in</Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={isLoading}
+                    onPress={() => void requestStudentPhoneCode()}
+                    style={[styles.secondaryButton, isLoading ? styles.disabledButton : null]}
+                  >
+                    <MaterialCommunityIcons name="message-text-lock-outline" size={18} color={colors.brand} />
+                    <Text style={styles.secondaryButtonText}>Send one-time code</Text>
+                  </Pressable>
+                )}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
         <View style={styles.panel}>
           <Text style={styles.sectionTitle}>{role === "student" ? "Student login ID" : "Parent login ID"}</Text>
           <Text style={styles.helper}>
             {role === "student"
-              ? "Use the student's Gmail or phone number, plus their private access code."
-              : "Use the parent email, plus the parent access code."}
+              ? "Use the student's email and Firebase password. Existing PIN accounts can still use their login ID."
+              : "Use the parent email and Firebase password. Existing PIN accounts remain supported during migration."}
           </Text>
           <TextInput
             autoCapitalize="none"
@@ -352,13 +509,15 @@ export default function AuthScreen() {
             value={loginId}
           />
           <TextInput
-            keyboardType="number-pad"
-            maxLength={6}
             onChangeText={(value) => {
               setMessage("");
-              setAccessCode(value.replace(/\D/g, ""));
+              setAccessCode(value);
             }}
-            placeholder="4-6 digit access code"
+            placeholder={
+              firebaseEmailPasswordReady && isValidEmail(loginId)
+                ? "Password (8+ characters)"
+                : "Password or legacy access code"
+            }
             placeholderTextColor={colors.muted}
             secureTextEntry
             style={styles.input}
@@ -560,6 +719,23 @@ function isValidEmail(value: string) {
 
 function isValidAccessCode(value: string) {
   return /^\d{4,6}$/.test(value.trim());
+}
+
+function firebasePhoneErrorMessage(error: unknown) {
+  const detail = error instanceof Error ? error.message : "";
+  if (/invalid-phone-number/i.test(detail)) {
+    return "Enter a valid phone number with country code, for example +2348012345678.";
+  }
+  if (/too-many-requests/i.test(detail)) {
+    return "Too many SMS attempts. Wait a little, then request a fresh code.";
+  }
+  if (/invalid-verification-code/i.test(detail)) {
+    return "That SMS code is incorrect. Check the message and try again.";
+  }
+  if (/session-expired|code-expired/i.test(detail)) {
+    return "That SMS code has expired. Request a fresh code.";
+  }
+  return detail || "Firebase phone sign-in could not be completed.";
 }
 
 function createStyles(colors: AppColors) {

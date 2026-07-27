@@ -15,6 +15,7 @@ from app.auth import FirebaseAuthUnavailable, InvalidFirebaseToken, firebase_aut
 from app.config import get_settings
 from app.domain.study_planner import build_rebalanced_study_plan, build_study_plan
 from app.email_delivery import EmailDeliveryError, email_delivery_readiness
+from app.firestore_sync import FirestoreSyncError, delete_document, firestore_readiness, sync_document
 from app.proof_storage import StudyProofStorageError, load_study_proof_image, save_study_proof_image
 from app.schemas import (
     AccountDeletionRequestCreate,
@@ -298,6 +299,18 @@ def _build_deployment_readiness() -> DeploymentReadiness:
         )
     )
 
+    firestore_status = firestore_readiness()
+    firestore_ready = bool(firestore_status["configured"])
+    checks.append(
+        _deployment_check(
+            "Firestore persistence",
+            "pass" if firestore_ready else "fail",
+            "Firestore is configured as the required cloud record store."
+            if firestore_ready
+            else "Set FIREBASE_PROJECT_ID, Firebase credentials, FIRESTORE_ENABLED=true, and FIRESTORE_REQUIRED=true.",
+        )
+    )
+
     email_status = email_delivery_readiness(settings)
     email_ready = bool(email_status["configured"])
     checks.append(
@@ -384,17 +397,25 @@ def _require_student_plan_owner(plan_id: str, session: SessionIdentity) -> Saved
 @router.post("/accounts/students", response_model=StudentAccount)
 def create_student_account(payload: StudentAccountCreate) -> StudentAccount:
     try:
-        return get_study_plan_store().create_student_account(payload)
+        student = get_study_plan_store().create_student_account(payload)
+        sync_document("students", student.id, student)
+        return student
     except AccountAccessCodeError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except FirestoreSyncError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.post("/accounts/parents", response_model=ParentAccount)
 def create_parent_account(payload: ParentAccountCreate) -> ParentAccount:
     try:
-        return get_study_plan_store().create_parent_account(payload)
+        parent = get_study_plan_store().create_parent_account(payload)
+        sync_document("parents", parent.id, parent)
+        return parent
     except AccountAccessCodeError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except FirestoreSyncError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.post("/accounts/family-signup", response_model=FamilySignupReceipt)
@@ -412,7 +433,14 @@ def create_family_signup(payload: FamilySignupCreate) -> FamilySignupReceipt:
     if link is None:
         raise HTTPException(status_code=500, detail="The family profiles could not be linked.")
 
-    return FamilySignupReceipt(student=student, parent=parent, link=link)
+    receipt = FamilySignupReceipt(student=student, parent=parent, link=link)
+    try:
+        sync_document("students", student.id, student)
+        sync_document("parents", parent.id, parent)
+        sync_document("parent_student_links", link.id, link)
+    except FirestoreSyncError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return receipt
 
 
 @router.post("/accounts/parents/{parent_id}/email-verification", response_model=ParentEmailVerificationReceipt)
@@ -448,6 +476,10 @@ def confirm_parent_email_verification(
     receipt = get_study_plan_store().confirm_parent_email_verification(parent_id, payload.code)
     if receipt is None:
         raise HTTPException(status_code=400, detail="Verification code is invalid or expired.")
+    try:
+        sync_document("parents", receipt.parent.id, receipt.parent)
+    except FirestoreSyncError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return receipt
 
 
@@ -456,6 +488,10 @@ def link_parent_student(payload: ParentStudentLinkCreate) -> ParentStudentLink:
     link = get_study_plan_store().link_parent_student(payload)
     if link is None:
         raise HTTPException(status_code=404, detail="Parent or student account was not found.")
+    try:
+        sync_document("parent_student_links", link.id, link)
+    except FirestoreSyncError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return link
 
 
@@ -481,6 +517,10 @@ def redeem_parent_invite_code(
     link = get_study_plan_store().redeem_parent_invite_code(parent_id, payload.code)
     if link is None:
         raise HTTPException(status_code=404, detail="Invite code is invalid, expired, or already used.")
+    try:
+        sync_document("parent_student_links", link.id, link)
+    except FirestoreSyncError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return get_study_plan_store().parent_family(parent_id)
 
 
@@ -688,6 +728,13 @@ def firebase_sign_in_account(payload: FirebaseSignInRequest) -> AuthSession:
             status_code=403,
             detail="Use the verified Gmail saved on the parent account, or complete email verification first.",
         )
+    try:
+        if session.student is not None:
+            sync_document("students", session.student.id, session.student)
+        if session.parent is not None:
+            sync_document("parents", session.parent.id, session.parent)
+    except FirestoreSyncError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return _with_session_token(session)
 
 
@@ -743,7 +790,12 @@ def save_study_plan(
     session: SessionIdentity = Depends(require_session),
 ) -> SavedStudyPlan:
     _require_student_session(session)
-    return get_study_plan_store().save(payload.plan, session.account_id, payload.setup_payload)
+    saved = get_study_plan_store().save(payload.plan, session.account_id, payload.setup_payload)
+    try:
+        sync_document("study_plans", saved.id, saved)
+    except FirestoreSyncError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return saved
 
 
 @router.get("/study-plans/latest", response_model=SavedStudyPlan)
@@ -816,6 +868,10 @@ def update_study_reminder_settings(
     settings = get_study_plan_store().upsert_reminder_settings(plan_id, payload)
     if settings is None:
         raise HTTPException(status_code=404, detail="No saved study plan found.")
+    try:
+        sync_document("study_reminder_settings", plan_id, settings)
+    except FirestoreSyncError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return settings
 
 
@@ -830,7 +886,12 @@ def reschedule_study_plan(
     progress = store.progress(plan_id)
     completed_keys = set(progress.completed_session_keys if progress is not None else [])
     rebalanced_plan = build_rebalanced_study_plan(saved_plan.plan, completed_keys)
-    return store.save(rebalanced_plan, saved_plan.student_id, saved_plan.setup_payload)
+    rebalanced = store.save(rebalanced_plan, saved_plan.student_id, saved_plan.setup_payload)
+    try:
+        sync_document("study_plans", rebalanced.id, rebalanced)
+    except FirestoreSyncError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return rebalanced
 
 
 @router.post(
@@ -845,7 +906,12 @@ def complete_study_session(
     store = get_study_plan_store()
     _require_student_plan_owner(plan_id, session)
 
-    return store.complete_session(plan_id, payload)
+    completion = store.complete_session(plan_id, payload)
+    try:
+        sync_document("study_session_completions", completion.id, completion)
+    except FirestoreSyncError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return completion
 
 
 @router.post(
@@ -886,6 +952,10 @@ def upload_study_proof_image(
     if completion is None:
         raise HTTPException(status_code=404, detail="Complete the study session before attaching proof.")
 
+    try:
+        sync_document("study_session_completions", completion.id, completion)
+    except FirestoreSyncError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return completion
 
 
@@ -926,7 +996,14 @@ def delete_study_session_completion(
     session: SessionIdentity = Depends(require_session),
 ) -> DeleteResponse:
     _require_student_plan_owner(plan_id, session)
-    deleted = get_study_plan_store().delete_completion(plan_id, session_key)
+    store = get_study_plan_store()
+    completion = store.completion_for_plan_session(plan_id, session_key)
+    deleted = store.delete_completion(plan_id, session_key)
+    if deleted and completion is not None:
+        try:
+            delete_document("study_session_completions", completion.id)
+        except FirestoreSyncError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
     return DeleteResponse(deleted=deleted)
 
 

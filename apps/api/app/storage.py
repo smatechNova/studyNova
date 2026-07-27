@@ -253,13 +253,21 @@ class StudyPlanStore:
     def sign_in(self, payload: AccountSignInRequest) -> AuthSession | None:
         if payload.role == "student":
             student = self.student_account_by_login_id(payload.login_id)
-            if student is None or not self._student_access_code_matches(student.id, payload.access_code):
+            if (
+                student is None
+                or student.auth_uid
+                or not self._student_access_code_matches(student.id, payload.access_code)
+            ):
                 return None
 
             return AuthSession(role="student", student=student)
 
         parent = self.parent_account_by_contact(payload.login_id)
-        if parent is None or not self._parent_access_code_matches(parent.id, payload.access_code):
+        if (
+            parent is None
+            or parent.auth_uid
+            or not self._parent_access_code_matches(parent.id, payload.access_code)
+        ):
             return None
 
         family = self.parent_family(parent.id)

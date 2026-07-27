@@ -23,6 +23,10 @@ const screenshotCaptureDocPath = join(root, "docs", "play-store-screenshot-captu
 const termsDocPath = join(root, "docs", "terms-of-use-draft.md");
 const renderEnvExamplePath = join(root, "infra", "render-env.closed-test.example");
 const renderBlueprintPath = join(root, "render.yaml");
+const firebaseConfigPath = join(root, "firebase.json");
+const firestoreRulesPath = join(root, "firestore.rules");
+const firestoreIndexesPath = join(root, "firestore.indexes.json");
+const firebaseSetupDocPath = join(root, "docs", "firebase-backend-setup.md");
 const webExportScriptPath = join(root, "scripts", "export-mobile-web.mjs");
 const featureGraphicPath = join(root, "docs", "play-store-assets", "feature-graphic.png");
 const screenshotCoverPath = join(root, "docs", "play-store-assets", "screenshot-cover.png");
@@ -106,6 +110,7 @@ const docs = [
   listingPackDocPath,
   playChecklistPath,
   publicationRunbookPath,
+  firebaseSetupDocPath,
   privacyPolicyDocPath,
   productionEmailDocPath,
   screenshotCaptureDocPath,
@@ -186,6 +191,10 @@ requireRootFile(productionEmailDocPath, "Production email delivery guide");
 requireRootFile(screenshotCaptureDocPath, "Play Store screenshot capture plan");
 requireRootFile(renderEnvExamplePath, "Render closed-test env example");
 requireRootFile(renderBlueprintPath, "Render deployment blueprint");
+requireRootFile(firebaseConfigPath, "Firebase CLI configuration");
+requireRootFile(firestoreRulesPath, "Firestore security rules");
+requireRootFile(firestoreIndexesPath, "Firestore index configuration");
+requireRootFile(firebaseSetupDocPath, "Firebase backend setup guide");
 requireRootFile(webExportScriptPath, "Monorepo-safe Expo web export launcher");
 requireRootFile(publicationRunbookPath, "Play Store publication runbook");
 requireRootFile(featureGraphicPath, "Play Store feature graphic");
@@ -271,6 +280,12 @@ if (existsSync(renderBlueprintPath)) {
     "Render API configuration should include production study-proof storage."
   );
   requireValue(
+    renderBlueprint.includes("FIRESTORE_ENABLED") &&
+      renderBlueprint.includes("FIRESTORE_REQUIRED") &&
+      renderBlueprint.includes("FIREBASE_PROJECT_ID"),
+    "Render API configuration should require Firestore persistence."
+  );
+  requireValue(
     renderBlueprint.includes("generateValue: true"),
     "Render should generate the production session secret."
   );
@@ -286,6 +301,14 @@ if (existsSync(closedTestEnvExamplePath)) {
   requireValue(
     Boolean(readEnvValue(closedTestEnvExample, "EXPO_PUBLIC_FIREBASE_API_KEY")),
     "apps/mobile/.env.closed-test.example should document EXPO_PUBLIC_FIREBASE_API_KEY."
+  );
+  requireValue(
+    Boolean(readEnvValue(closedTestEnvExample, "EXPO_PUBLIC_FIREBASE_PROJECT_ID")),
+    "apps/mobile/.env.closed-test.example should document EXPO_PUBLIC_FIREBASE_PROJECT_ID."
+  );
+  requireValue(
+    Boolean(readEnvValue(closedTestEnvExample, "EXPO_PUBLIC_FIREBASE_APP_ID")),
+    "apps/mobile/.env.closed-test.example should document EXPO_PUBLIC_FIREBASE_APP_ID."
   );
   requireValue(
     Boolean(readEnvValue(closedTestEnvExample, "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID")),

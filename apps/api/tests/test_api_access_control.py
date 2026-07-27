@@ -699,6 +699,18 @@ def test_admin_can_review_deployment_readiness(tmp_path, monkeypatch) -> None:
             "warnings": [],
         },
     )
+    monkeypatch.setattr(
+        api_module,
+        "firestore_readiness",
+        lambda: {
+            "enabled": True,
+            "required": True,
+            "project_configured": True,
+            "credentials_configured": True,
+            "configured": True,
+            "warnings": [],
+        },
+    )
     client = TestClient(app)
 
     response = client.get("/api/v1/admin/deployment/readiness", headers={"X-Admin-Code": "admin-test-code"})
@@ -753,6 +765,18 @@ def test_deployment_readiness_flags_unsafe_production_defaults(tmp_path, monkeyp
             "warnings": ["Configure Firebase."],
         },
     )
+    monkeypatch.setattr(
+        api_module,
+        "firestore_readiness",
+        lambda: {
+            "enabled": False,
+            "required": True,
+            "project_configured": False,
+            "credentials_configured": False,
+            "configured": False,
+            "warnings": ["Configure Firestore."],
+        },
+    )
     client = TestClient(app)
 
     response = client.get("/api/v1/admin/deployment/readiness", headers={"X-Admin-Code": "admin-test-code"})
@@ -762,7 +786,13 @@ def test_deployment_readiness_flags_unsafe_production_defaults(tmp_path, monkeyp
     failed_checks = {check["name"] for check in payload["checks"] if check["status"] == "fail"}
     warning_checks = {check["name"] for check in payload["checks"] if check["status"] == "warning"}
     assert payload["ready"] is False
-    assert {"Public API URL", "Session secret", "CORS policy", "Transactional email"}.issubset(failed_checks)
+    assert {
+        "Public API URL",
+        "Session secret",
+        "CORS policy",
+        "Transactional email",
+        "Firestore persistence",
+    }.issubset(failed_checks)
     assert "Firebase verification" in warning_checks
 
 

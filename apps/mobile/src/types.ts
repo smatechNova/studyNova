@@ -89,6 +89,7 @@ export type SavedStudyPlan = {
 export type StudentAccountInput = {
   login_id: string;
   access_code: string;
+  auth_uid?: string | null;
   name: string;
   class_level: string;
   age: number;
@@ -105,6 +106,7 @@ export type ParentAccountInput = {
   name: string;
   contact: string;
   access_code: string;
+  auth_uid?: string | null;
   relationship: string;
 };
 

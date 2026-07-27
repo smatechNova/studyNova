@@ -18,12 +18,27 @@ import { Screen } from "@/components/Screen";
 import {
   confirmParentEmailVerification,
   createFamilySignup,
+  firebaseSignInAccount,
   getLatestParentFamily,
   getParentFamily,
   requestParentEmailVerification,
   signInAccount
 } from "@/lib/api";
 import { brandAssets } from "@/lib/brandAssets";
+import {
+  createFirebaseEmailPasswordAccount,
+  isFirebaseEmailPasswordConfigured,
+  sendFirebaseEmailVerification,
+  signInFirebaseEmailPassword,
+  type FirebaseEmailCredential
+} from "@/lib/firebaseAuth";
+import {
+  clearFirebasePhoneConfirmation,
+  confirmFirebasePhoneCode,
+  isNativeFirebasePhoneAuthAvailable,
+  requestFirebasePhoneCode,
+  type FirebasePhoneCredential
+} from "@/lib/firebasePhoneAuth";
 import { saveAuthSession } from "@/lib/session";
 import type { ParentEmailVerificationReceipt, ParentFamilyAccount } from "@/types";
 import { spacing, type AppColors } from "@/theme";
@@ -49,7 +64,7 @@ type SetupResult = {
   parentId: string;
 };
 
-type AccountAction = "save" | "verify" | "student" | "parent";
+type AccountAction = "save" | "verify" | "student" | "parent" | "phone";
 
 export default function AccountsScreen() {
   const { colors } = useTheme();
@@ -65,6 +80,9 @@ export default function AccountsScreen() {
   const [verificationReceipt, setVerificationReceipt] = useState<ParentEmailVerificationReceipt | null>(null);
   const [verificationClock, setVerificationClock] = useState(() => Date.now());
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [usingFirebaseSignup, setUsingFirebaseSignup] = useState(false);
+  const [phoneVerificationPending, setPhoneVerificationPending] = useState(false);
+  const [phoneVerificationCode, setPhoneVerificationCode] = useState("");
   const isLoading = activeAction !== null;
   const currentParent = parentFamily?.parent ?? null;
   const isParentVerified = Boolean(currentParent?.email_verified);
@@ -72,6 +90,9 @@ export default function AccountsScreen() {
     ? Math.max(0, Math.ceil((new Date(verificationReceipt.resend_available_at).getTime() - verificationClock) / 1000))
     : 0;
   const primaryActionLabel = "Create linked family accounts";
+  const firebaseSignupEnabled = isFirebaseEmailPasswordConfigured();
+  const studentUsesPhone =
+    firebaseSignupEnabled && form.studentLoginId.trim().length > 0 && !isValidEmail(form.studentLoginId);
 
   useEffect(() => {
     void loadLatestFamily();
@@ -112,7 +133,8 @@ export default function AccountsScreen() {
   }
 
   async function saveAccounts() {
-    const validation = getAccountValidationError(form);
+    const firebaseSignup = firebaseSignupEnabled;
+    const validation = getAccountValidationError(form, firebaseSignup);
     if (validation) {
       setMessage(validation);
       return;
@@ -123,14 +145,77 @@ export default function AccountsScreen() {
       return;
     }
 
+    if (firebaseSignup && studentUsesPhone) {
+      if (!isNativeFirebasePhoneAuthAvailable()) {
+        setMessage("Phone sign-up is available in the installed StudyNova Android app. Use email while testing on web.");
+        return;
+      }
+
+      setActiveAction("phone");
+      setMessage("");
+      try {
+        await requestFirebasePhoneCode(form.studentLoginId);
+        setPhoneVerificationPending(true);
+        setPhoneVerificationCode("");
+        setMessage(`Firebase sent a verification code to ${form.studentLoginId.trim()}.`);
+      } catch (error) {
+        setMessage(firebasePhoneErrorMessage(error));
+      } finally {
+        setActiveAction(null);
+      }
+      return;
+    }
+
+    await completeAccountCreation(firebaseSignup);
+  }
+
+  async function confirmStudentPhoneAndCreateAccounts() {
+    if (!/^\d{6}$/.test(phoneVerificationCode.trim())) {
+      setMessage("Enter the 6 digit code sent to the student's phone.");
+      return;
+    }
+
+    setActiveAction("phone");
+    setMessage("");
+    try {
+      const studentCredential = await confirmFirebasePhoneCode(phoneVerificationCode);
+      setPhoneVerificationPending(false);
+      setPhoneVerificationCode("");
+      await completeAccountCreation(true, studentCredential);
+    } catch (error) {
+      setMessage(firebasePhoneErrorMessage(error));
+      setActiveAction(null);
+    }
+  }
+
+  async function completeAccountCreation(
+    firebaseSignup: boolean,
+    phoneCredential: FirebasePhoneCredential | null = null
+  ) {
     setActiveAction("save");
     setMessage("");
 
     try {
+      let parentCredential: FirebaseEmailCredential | null = null;
+      let studentCredential: FirebaseEmailCredential | FirebasePhoneCredential | null = phoneCredential;
+      let studentLegacyCode = form.studentAccessCode.trim();
+      let parentLegacyCode = form.parentAccessCode.trim();
+
+      if (firebaseSignup) {
+        parentCredential = await getOrCreateFirebaseCredential(form.parentContact, form.parentAccessCode);
+        if (!studentCredential) {
+          studentCredential = await getOrCreateFirebaseCredential(form.studentLoginId, form.studentAccessCode);
+        }
+        await sendFirebaseEmailVerification(parentCredential.idToken);
+        studentLegacyCode = createInternalLegacyCode(studentCredential.uid);
+        parentLegacyCode = createInternalLegacyCode(parentCredential.uid);
+      }
+
       const { student, parent, link } = await createFamilySignup({
         student: {
           login_id: form.studentLoginId.trim(),
-          access_code: form.studentAccessCode.trim(),
+          access_code: studentLegacyCode,
+          auth_uid: studentCredential?.uid ?? null,
           name: form.studentName.trim(),
           class_level: form.classLevel.trim(),
           age: Number.parseInt(form.age.trim(), 10),
@@ -139,7 +224,8 @@ export default function AccountsScreen() {
         parent: {
           name: form.parentName.trim(),
           contact: form.parentContact.trim(),
-          access_code: form.parentAccessCode.trim(),
+          access_code: parentLegacyCode,
+          auth_uid: parentCredential?.uid ?? null,
           relationship: form.relationship.trim()
         }
       });
@@ -149,6 +235,13 @@ export default function AccountsScreen() {
         links: current?.parent?.id === parent.id ? upsertById(current.links, link) : [link]
       }));
       setSetupResult({ studentId: student.id, parentId: parent.id });
+      setUsingFirebaseSignup(firebaseSignup);
+      if (firebaseSignup) {
+        setMessage(
+          `Accounts created and linked. Firebase sent a verification link to ${form.parentContact.trim()}. Verify it, then sign in.`
+        );
+        return;
+      }
       if (!parent.email_verified) {
         try {
           const receipt = await beginParentEmailVerification(parent.id);
@@ -172,6 +265,11 @@ export default function AccountsScreen() {
     setSetupResult(null);
     setVerificationReceipt(null);
     setVerificationCode("");
+    if (field === "studentLoginId") {
+      clearFirebasePhoneConfirmation();
+      setPhoneVerificationPending(false);
+      setPhoneVerificationCode("");
+    }
     setForm((current) => ({ ...current, [field]: value }));
   }
 
@@ -196,6 +294,9 @@ export default function AccountsScreen() {
     setSetupResult(null);
     setVerificationReceipt(null);
     setVerificationCode("");
+    clearFirebasePhoneConfirmation();
+    setPhoneVerificationPending(false);
+    setPhoneVerificationCode("");
     setMessage("Parent monitoring details are ready. Enter one student's details and link that student.");
   }
 
@@ -277,6 +378,24 @@ export default function AccountsScreen() {
     setMessage("");
 
     try {
+      if (usingFirebaseSignup) {
+        if (role === "student" && studentUsesPhone) {
+          router.replace("/auth?role=student");
+          return;
+        }
+        const credential = await signInFirebaseEmailPassword(login_id, access_code);
+        const session = await firebaseSignInAccount({ role, id_token: credential.idToken });
+        await saveAuthSession(session);
+        if (role === "student" && session.student) {
+          router.replace(`/student?studentId=${encodeURIComponent(session.student.id)}`);
+          return;
+        }
+        if (role === "parent" && session.parent) {
+          router.replace(`/parent?parentId=${encodeURIComponent(session.parent.id)}`);
+          return;
+        }
+      }
+
       const session = await signInAccount({ role, login_id, access_code });
       await saveAuthSession(session);
 
@@ -359,34 +478,46 @@ export default function AccountsScreen() {
             </View>
             <FormField
               autoCapitalize="none"
-              keyboardType="email-address"
+              keyboardType={studentUsesPhone ? "phone-pad" : "email-address"}
               label="Student login ID"
               onChangeText={(value) => updateField("studentLoginId", value)}
               placeholder="student@gmail.com or phone number"
               value={form.studentLoginId}
             />
             <Text style={styles.helper}>
-              If the student has no Gmail yet, a phone number can be used for now. Parent email below is still required
-              for verification and recovery.
+              If the student has no email, enter a mobile number with country code, such as +2348012345678. Firebase
+              will verify it by SMS in the Android app. Parent email below is still required.
             </Text>
-            <FormField
-              keyboardType="number-pad"
-              label="Student password PIN"
-              maxLength={6}
-              onChangeText={(value) => updateField("studentAccessCode", value.replace(/\D/g, ""))}
-              placeholder="4-6 digits"
-              secureTextEntry
-              value={form.studentAccessCode}
-            />
-            <FormField
-              keyboardType="number-pad"
-              label="Confirm student password PIN"
-              maxLength={6}
-              onChangeText={(value) => updateField("studentAccessCodeConfirmation", value.replace(/\D/g, ""))}
-              placeholder="Enter the same 4-6 digits"
-              secureTextEntry
-              value={form.studentAccessCodeConfirmation}
-            />
+            {!studentUsesPhone ? (
+              <>
+                <FormField
+                  label={firebaseSignupEnabled ? "Student password" : "Student password PIN"}
+                  maxLength={128}
+                  onChangeText={(value) => updateField("studentAccessCode", value)}
+                  placeholder={firebaseSignupEnabled ? "At least 8 characters" : "4-6 digits"}
+                  secureTextEntry
+                  value={form.studentAccessCode}
+                />
+                <FormField
+                  label={firebaseSignupEnabled ? "Confirm student password" : "Confirm student password PIN"}
+                  maxLength={128}
+                  onChangeText={(value) => updateField("studentAccessCodeConfirmation", value)}
+                  placeholder="Enter the same password"
+                  secureTextEntry
+                  value={form.studentAccessCodeConfirmation}
+                />
+              </>
+            ) : (
+              <View style={styles.phoneModePanel}>
+                <MaterialCommunityIcons name="message-lock-outline" size={22} color={colors.brand} />
+                <View style={styles.infoCopy}>
+                  <Text style={styles.infoTitle}>Secure phone verification</Text>
+                  <Text style={styles.helper}>
+                    No student password is needed. Firebase will send a one-time SMS code when you create the accounts.
+                  </Text>
+                </View>
+              </View>
+            )}
             <Pressable accessibilityRole="link" onPress={openGmailSignup} style={styles.gmailLink}>
               <MaterialCommunityIcons name="email-plus-outline" size={18} color={colors.brand} />
               <Text style={styles.gmailLinkText}>Create Gmail for student</Text>
@@ -443,20 +574,18 @@ export default function AccountsScreen() {
             Use the same Gmail the parent will select on this phone. One parent email can monitor multiple students.
           </Text>
           <FormField
-            keyboardType="number-pad"
-            label="Parent password PIN"
-            maxLength={6}
-            onChangeText={(value) => updateField("parentAccessCode", value.replace(/\D/g, ""))}
-            placeholder="4-6 digits"
+            label={isFirebaseEmailPasswordConfigured() ? "Parent password" : "Parent password PIN"}
+            maxLength={128}
+            onChangeText={(value) => updateField("parentAccessCode", value)}
+            placeholder={isFirebaseEmailPasswordConfigured() ? "At least 8 characters" : "4-6 digits"}
             secureTextEntry
             value={form.parentAccessCode}
           />
           <FormField
-            keyboardType="number-pad"
-            label="Confirm parent password PIN"
-            maxLength={6}
-            onChangeText={(value) => updateField("parentAccessCodeConfirmation", value.replace(/\D/g, ""))}
-            placeholder="Enter the same 4-6 digits"
+            label={isFirebaseEmailPasswordConfigured() ? "Confirm parent password" : "Confirm parent password PIN"}
+            maxLength={128}
+            onChangeText={(value) => updateField("parentAccessCodeConfirmation", value)}
+            placeholder="Enter the same password"
             secureTextEntry
             value={form.parentAccessCodeConfirmation}
           />
@@ -475,7 +604,86 @@ export default function AccountsScreen() {
           </View>
         ) : null}
 
-        {setupResult && !isParentVerified ? (
+        {phoneVerificationPending ? (
+          <View style={styles.verifyPanel}>
+            <View style={styles.readyIcon}>
+              <MaterialCommunityIcons name="cellphone-key" size={24} color={colors.brand} />
+            </View>
+            <View style={styles.readyCopy}>
+              <Text style={styles.sectionTitle}>Verify student phone</Text>
+              <Text style={styles.helper}>
+                Enter the 6 digit SMS code sent to {form.studentLoginId.trim()}. The family accounts are created only
+                after this phone is verified.
+              </Text>
+              <FormField
+                keyboardType="number-pad"
+                label="SMS verification code"
+                maxLength={6}
+                onChangeText={(value) => {
+                  setMessage("");
+                  setPhoneVerificationCode(value.replace(/\D/g, ""));
+                }}
+                placeholder="6 digits"
+                value={phoneVerificationCode}
+              />
+              <View style={styles.readyActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={isLoading}
+                  onPress={() => void confirmStudentPhoneAndCreateAccounts()}
+                  style={[styles.primaryButton, styles.readyButton, isLoading ? styles.disabledButton : null]}
+                >
+                  {activeAction === "phone" ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <MaterialCommunityIcons name="shield-check-outline" size={18} color="#FFFFFF" />
+                      <Text style={styles.primaryButtonText}>Verify and create accounts</Text>
+                    </>
+                  )}
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={isLoading}
+                  onPress={() => {
+                    setPhoneVerificationPending(false);
+                    setPhoneVerificationCode("");
+                    clearFirebasePhoneConfirmation();
+                    setMessage("Phone verification cancelled. You can edit the number or use student email.");
+                  }}
+                  style={[styles.secondaryButton, styles.readyButton, isLoading ? styles.disabledButton : null]}
+                >
+                  <Text style={styles.secondaryButtonText}>Edit phone number</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        ) : null}
+
+        {setupResult && !isParentVerified && usingFirebaseSignup ? (
+          <View style={styles.verifyPanel}>
+            <View style={styles.readyIcon}>
+              <MaterialCommunityIcons name="email-fast-outline" size={24} color={colors.brand} />
+            </View>
+            <View style={styles.readyCopy}>
+              <Text style={styles.sectionTitle}>Verify the parent email</Text>
+              <Text style={styles.helper}>
+                Firebase sent a secure verification link to {form.parentContact.trim()}. Open the link, then return
+                and sign in with the parent email and password.
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.replace("/auth?role=parent")}
+                style={[styles.primaryButton, styles.readyButton]}
+              >
+                <MaterialCommunityIcons name="login-variant" size={18} color="#FFFFFF" />
+                <Text style={styles.primaryButtonText}>Go to sign in</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
+        {setupResult && !isParentVerified && !usingFirebaseSignup ? (
           <View style={styles.verifyPanel}>
             <View style={styles.readyIcon}>
               <MaterialCommunityIcons name="email-check-outline" size={24} color={colors.brand} />
@@ -730,17 +938,27 @@ function createDefaultAccountForm(): AccountForm {
   };
 }
 
-function getAccountValidationError(form: AccountForm) {
+function getAccountValidationError(form: AccountForm, firebaseSignup: boolean) {
   if (!isValidLoginId(form.studentLoginId)) {
     return "Enter a valid student login ID, such as Gmail or phone number.";
   }
 
-  if (!isValidAccessCode(form.studentAccessCode)) {
-    return "Create a 4 to 6 digit password PIN for the student account.";
+  const firebasePhoneStudent = firebaseSignup && !isValidEmail(form.studentLoginId);
+  if (firebasePhoneStudent && !isValidInternationalPhone(form.studentLoginId)) {
+    return "Enter the student phone with country code, for example +2348012345678.";
   }
 
-  if (form.studentAccessCode !== form.studentAccessCodeConfirmation) {
-    return "The student password PINs do not match.";
+  if (
+    !firebasePhoneStudent &&
+    (firebaseSignup ? !isValidFirebasePassword(form.studentAccessCode) : !isValidAccessCode(form.studentAccessCode))
+  ) {
+    return firebaseSignup
+      ? "Create a student password with at least 8 characters, including a letter and number."
+      : "Create a 4 to 6 digit password PIN for the student account.";
+  }
+
+  if (!firebasePhoneStudent && form.studentAccessCode !== form.studentAccessCodeConfirmation) {
+    return "The student passwords do not match.";
   }
 
   if (!isValidPersonName(form.studentName)) {
@@ -763,12 +981,21 @@ function getAccountValidationError(form: AccountForm) {
     return "Enter a valid parent email address. Parent email is required for account verification and recovery.";
   }
 
-  if (!isValidAccessCode(form.parentAccessCode)) {
-    return "Create a 4 to 6 digit password PIN for the parent account.";
+  if (
+    firebaseSignup &&
+    form.studentLoginId.trim().toLowerCase() === form.parentContact.trim().toLowerCase()
+  ) {
+    return "Student and parent accounts need different emails so their dashboards remain private.";
+  }
+
+  if (firebaseSignup ? !isValidFirebasePassword(form.parentAccessCode) : !isValidAccessCode(form.parentAccessCode)) {
+    return firebaseSignup
+      ? "Create a parent password with at least 8 characters, including a letter and number."
+      : "Create a 4 to 6 digit password PIN for the parent account.";
   }
 
   if (form.parentAccessCode !== form.parentAccessCodeConfirmation) {
-    return "The parent password PINs do not match.";
+    return "The parent passwords do not match.";
   }
 
   if (!isValidShortText(form.relationship)) {
@@ -823,8 +1050,36 @@ function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
+function isValidInternationalPhone(value: string) {
+  return /^\+[1-9]\d{7,14}$/.test(value.trim().replace(/[\s()-]/g, ""));
+}
+
 function isValidAccessCode(value: string) {
   return /^\d{4,6}$/.test(value.trim());
+}
+
+function isValidFirebasePassword(value: string) {
+  return value.length >= 8 && /[a-zA-Z]/.test(value) && /\d/.test(value);
+}
+
+async function getOrCreateFirebaseCredential(email: string, password: string) {
+  try {
+    return await createFirebaseEmailPasswordAccount(email, password);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "";
+    if (detail.includes("already uses this email")) {
+      return signInFirebaseEmailPassword(email, password);
+    }
+    throw error;
+  }
+}
+
+function createInternalLegacyCode(uid: string) {
+  let hash = 0;
+  for (let index = 0; index < uid.length; index += 1) {
+    hash = (hash * 31 + uid.charCodeAt(index)) >>> 0;
+  }
+  return String(100000 + (hash % 900000));
 }
 
 function accountSetupErrorMessage(error: unknown) {
@@ -851,6 +1106,23 @@ function accountSetupErrorMessage(error: unknown) {
   }
 
   return "Could not finish sign up. Check the API and confirm any existing account access code.";
+}
+
+function firebasePhoneErrorMessage(error: unknown) {
+  const detail = error instanceof Error ? error.message : "";
+  if (/invalid-phone-number/i.test(detail)) {
+    return "Enter a valid phone number with country code, for example +2348012345678.";
+  }
+  if (/too-many-requests/i.test(detail)) {
+    return "Too many SMS attempts. Wait a little, then request a fresh code.";
+  }
+  if (/invalid-verification-code/i.test(detail)) {
+    return "That SMS code is incorrect. Check the message and try again.";
+  }
+  if (/session-expired|code-expired/i.test(detail)) {
+    return "That SMS code has expired. Request a fresh code.";
+  }
+  return detail || "Firebase phone verification could not be completed.";
 }
 
 function getParamValue(value?: string | string[]) {
@@ -971,6 +1243,16 @@ function createStyles(colors: AppColors) {
     alignItems: "center",
     backgroundColor: colors.successSoft,
     borderColor: colors.success,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  phoneModePanel: {
+    alignItems: "flex-start",
+    backgroundColor: colors.brandSoft,
+    borderColor: colors.brand,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: "row",

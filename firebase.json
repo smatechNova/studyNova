@@ -1,0 +1,19 @@
+{
+  "auth": {
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "StudyNova",
+        "supportEmail": "support@studynova.app"
+      }
+    },
+    "authorizedDomains": [
+      "localhost",
+      "studynova-f6859.firebaseapp.com"
+    ]
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
+}

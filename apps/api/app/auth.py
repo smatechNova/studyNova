@@ -1,7 +1,8 @@
-import json
-import os
 from dataclasses import dataclass
 from typing import Any
+
+from app.config import get_settings
+from app.firebase_admin_app import FirebaseAdminUnavailable, get_firebase_admin_app
 
 
 class FirebaseAuthError(Exception):
@@ -26,6 +27,7 @@ class FirebaseIdentity:
 
 
 def firebase_auth_readiness() -> dict[str, object]:
+    settings = get_settings()
     try:
         import firebase_admin  # noqa: F401
 
@@ -33,9 +35,9 @@ def firebase_auth_readiness() -> dict[str, object]:
     except ImportError:
         admin_sdk_installed = False
 
-    service_account_configured = bool(os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON", "").strip())
-    google_credentials_configured = bool(os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip())
-    project_id_configured = bool(os.getenv("GOOGLE_CLOUD_PROJECT", "").strip())
+    service_account_configured = bool(settings.firebase_service_account_json.strip())
+    google_credentials_configured = bool(settings.google_application_credentials.strip())
+    project_id_configured = bool(settings.firebase_project_id.strip())
     server_verification_ready = admin_sdk_installed and (
         service_account_configured or google_credentials_configured or project_id_configured
     )
@@ -59,20 +61,14 @@ def firebase_auth_readiness() -> dict[str, object]:
 
 def verify_firebase_id_token(id_token: str) -> FirebaseIdentity:
     try:
-        import firebase_admin
-        from firebase_admin import auth, credentials
+        from firebase_admin import auth
     except ImportError as exc:
         raise FirebaseAuthUnavailable("firebase-admin is not installed.") from exc
 
-    if not firebase_admin._apps:
-        service_account_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON", "").strip()
-        if service_account_json:
-            firebase_admin.initialize_app(credentials.Certificate(json.loads(service_account_json)))
-        else:
-            firebase_admin.initialize_app()
-
     try:
-        decoded: dict[str, Any] = auth.verify_id_token(id_token)
+        decoded: dict[str, Any] = auth.verify_id_token(id_token, app=get_firebase_admin_app())
+    except FirebaseAdminUnavailable as exc:
+        raise FirebaseAuthUnavailable(str(exc)) from exc
     except Exception as exc:
         raise InvalidFirebaseToken("Firebase ID token could not be verified.") from exc
 

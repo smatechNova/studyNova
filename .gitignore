@@ -6,6 +6,8 @@ Thumbs.db
 .env.*
 !.env.example
 !.env.*.example
+apps/mobile/google-services.json
+apps/mobile/GoogleService-Info.plist
 
 # Node / Expo
 node_modules/
@@ -38,6 +40,10 @@ apps/api/.data/
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+# Local Codex agent skills
+.agents/
+skills-lock.json
 
 # Local app output
 *.aab

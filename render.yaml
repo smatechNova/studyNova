@@ -9,6 +9,14 @@ services:
         value: https://studynova-api.onrender.com
       - key: EXPO_PUBLIC_FIREBASE_API_KEY
         sync: false
+      - key: EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: EXPO_PUBLIC_FIREBASE_PROJECT_ID
+        sync: false
+      - key: EXPO_PUBLIC_FIREBASE_APP_ID
+        sync: false
+      - key: EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET
+        sync: false
       - key: EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID
         sync: false
       - key: EXPO_PUBLIC_ENABLE_DEMO_ENTRY
@@ -69,8 +77,14 @@ services:
         sync: false
       - key: FIREBASE_SERVICE_ACCOUNT_JSON
         sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
       - key: FIREBASE_STORAGE_BUCKET
         sync: false
+      - key: FIRESTORE_ENABLED
+        value: "true"
+      - key: FIRESTORE_REQUIRED
+        value: "true"
       - key: EMAIL_PROVIDER
         value: resend
       - key: RESEND_API_KEY

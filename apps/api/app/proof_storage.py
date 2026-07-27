@@ -1,11 +1,10 @@
-import json
-import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
 from app.config import get_settings
+from app.firebase_admin_app import FirebaseAdminUnavailable, get_firebase_admin_app
 
 
 class StudyProofStorageError(Exception):
@@ -112,19 +111,14 @@ def _firebase_bucket():
         raise StudyProofStorageError("FIREBASE_STORAGE_BUCKET is not configured.")
 
     try:
-        import firebase_admin
-        from firebase_admin import credentials, storage
+        from firebase_admin import storage
     except ImportError as exc:
         raise StudyProofStorageError("firebase-admin is not installed.") from exc
 
-    if not firebase_admin._apps:
-        service_account_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON", "").strip()
-        if service_account_json:
-            firebase_admin.initialize_app(credentials.Certificate(json.loads(service_account_json)))
-        else:
-            firebase_admin.initialize_app()
-
-    return storage.bucket(settings.firebase_storage_bucket.strip())
+    try:
+        return storage.bucket(settings.firebase_storage_bucket.strip(), app=get_firebase_admin_app())
+    except FirebaseAdminUnavailable as exc:
+        raise StudyProofStorageError(str(exc)) from exc
 
 
 def _local_storage_root() -> Path:

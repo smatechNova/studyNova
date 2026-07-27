@@ -14,7 +14,12 @@ class Settings(BaseSettings):
     study_proof_storage_backend: str = "local"
     study_proof_local_path: str = "apps/api/.data/study-proofs"
     study_proof_max_upload_mb: int = 6
+    firebase_project_id: str = ""
+    firebase_service_account_json: str = ""
     firebase_storage_bucket: str = ""
+    google_application_credentials: str = ""
+    firestore_enabled: bool = False
+    firestore_required: bool = False
     session_secret: str = "studynova-local-session-secret"
     session_ttl_hours: int = 168
     admin_access_code: str = "studynova-admin-dev"

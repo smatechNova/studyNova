@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // StudyNova data is accessed through the authenticated FastAPI service.
+    // Firebase Admin SDK requests bypass these client rules.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
