@@ -1,9 +1,5 @@
-import {
-  getAuth,
-  getIdToken,
-  signInWithPhoneNumber,
-  type ConfirmationResult
-} from "@react-native-firebase/auth";
+type FirebaseAuthModule = typeof import("@react-native-firebase/auth");
+type ConfirmationResult = import("@react-native-firebase/auth").ConfirmationResult;
 
 export type FirebasePhoneCredential = {
   idToken: string;
@@ -20,6 +16,7 @@ export function isNativeFirebasePhoneAuthAvailable() {
 
 export async function requestFirebasePhoneCode(phoneNumber: string): Promise<void> {
   const normalized = normalizePhoneNumber(phoneNumber);
+  const { getAuth, signInWithPhoneNumber } = await loadFirebaseAuth();
   pendingConfirmation = await signInWithPhoneNumber(getAuth(), normalized);
   pendingPhoneNumber = normalized;
 }
@@ -30,6 +27,7 @@ export async function confirmFirebasePhoneCode(code: string): Promise<FirebasePh
   }
 
   const credential = await pendingConfirmation.confirm(code.trim());
+  const { getIdToken } = await loadFirebaseAuth();
   const idToken = await getIdToken(credential.user, true);
   const result = {
     idToken,
@@ -51,4 +49,14 @@ function normalizePhoneNumber(value: string) {
     throw new Error("Enter the phone number with country code, for example +2348012345678.");
   }
   return normalized;
+}
+
+async function loadFirebaseAuth(): Promise<FirebaseAuthModule> {
+  try {
+    return await import("@react-native-firebase/auth");
+  } catch {
+    throw new Error(
+      "Phone verification could not start on this device. Use email sign-in or install the latest StudyNova update."
+    );
+  }
 }
