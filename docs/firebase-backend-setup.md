@@ -12,6 +12,12 @@ service remains the trusted study-planning and authorization boundary.
 - Android display name: `StudyNova`
 - Android Firebase app ID: `1:268039439117:android:747fd7c12306353ebae644`
 - Web Firebase app ID: `1:268039439117:web:c68bbcdc22efbd69bae644`
+- Android OAuth client ID:
+  `268039439117-1hmhe34hnq6udoobj2bdstekoeuash60.apps.googleusercontent.com`
+- EAS signing SHA-1:
+  `F1:6C:A4:BC:91:AA:74:14:74:34:69:86:8F:D9:6B:5B:3B:2A:DF:41`
+- EAS signing SHA-256:
+  `AE:2E:1D:48:4E:09:E2:6D:C0:D0:69:32:8A:A7:B5:9B:1B:21:D9:46:7A:D6:83:AD:58:4C:28:49:BD:E6:F9:AB`
 
 First install the official Firebase agent guidance and CLI:
 
@@ -39,17 +45,17 @@ For EAS builds, store the same file as a secret file variable named
 ## Firebase Console settings
 
 Open `https://console.firebase.google.com/`, select the project matching project
-number `268039439117`, and configure:
+number `268039439117`, and verify:
 
-1. Authentication > Sign-in method: enable **Email/Password**, **Google**, and
-   **Phone**.
+1. Authentication > Sign-in method: **Email/Password**, **Google**, and
+   **Phone** are enabled.
 2. Authentication > Settings > Authorized domains: add the deployed StudyNova
    web host.
-3. Firestore Database: create the production database. Choose a region close to
-   the majority of users and the API deployment.
-4. Project settings > Your apps > Android app: add SHA-1 and SHA-256 fingerprints
-   for the EAS/Play signing certificate. Google and Phone authentication need
-   these fingerprints.
+3. Firestore Database: the default Standard database is provisioned in
+   `africa-south1` with delete protection enabled.
+4. Project settings > Your apps > Android app: the EAS signing SHA-1 and
+   SHA-256 fingerprints listed above are registered. Add the separate Google
+   Play App Signing fingerprints before distributing a Play-signed build.
 5. Project settings > Service accounts: generate a private key for the API.
    Never commit this JSON file.
 
@@ -75,7 +81,7 @@ EXPO_PUBLIC_FIREBASE_PROJECT_ID=
 EXPO_PUBLIC_FIREBASE_APP_ID=
 EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=
 EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=268039439117-3p8tcbgu7h021graqimnd5tu2r5jt1od.apps.googleusercontent.com
-EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=
+EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=268039439117-1hmhe34hnq6udoobj2bdstekoeuash60.apps.googleusercontent.com
 ```
 
 Firebase web configuration and API keys identify the Firebase project; they are
