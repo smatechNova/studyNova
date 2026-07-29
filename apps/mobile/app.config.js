@@ -1,7 +1,7 @@
 const { existsSync } = require("node:fs");
 const { join } = require("node:path");
 
-const baseConfig = require("./app.json");
+const baseConfig = require("./app.base.json");
 
 module.exports = () => {
   const expo = structuredClone(baseConfig.expo);

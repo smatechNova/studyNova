@@ -46,6 +46,7 @@ apps/api/.data/
 skills-lock.json
 
 # Local app output
+.codex-run/
 *.aab
 *.apk
 *.ipa

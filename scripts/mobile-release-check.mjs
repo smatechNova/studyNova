@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const mobileDir = join(root, "apps", "mobile");
-const appConfigPath = join(mobileDir, "app.json");
+const appConfigPath = join(mobileDir, "app.base.json");
 const easConfigPath = join(mobileDir, "eas.json");
 const mobilePackagePath = join(mobileDir, "package.json");
 const babelConfigPath = join(mobileDir, "babel.config.js");
@@ -165,7 +165,7 @@ requireValue(
   notificationsPlugin?.defaultChannel === "study-reminders",
   "expo-notifications plugin should configure the study-reminders channel."
 );
-requireValue(expo.extra?.eas?.projectId, "EAS projectId should be linked in app.json.");
+requireValue(expo.extra?.eas?.projectId, "EAS projectId should be linked in the Expo base config.");
 requireValue(
   imagePickerPlugin !== null,
   "expo-image-picker config plugin should be configured for study proof image permissions."
